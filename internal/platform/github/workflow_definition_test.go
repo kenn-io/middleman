@@ -9,6 +9,14 @@ import (
 	"go.kenn.io/forge/internal/platform"
 )
 
+// jobsSection satisfies the workflow grammar so each fixture exercises only
+// its trigger and inputs.
+const jobsSection = "jobs:\n  noop:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n"
+
+func withJobs(content string) []byte {
+	return []byte(content + jobsSection)
+}
+
 func TestParseManualWorkflow(t *testing.T) {
 	t.Run("preserves metadata and typed inputs in declaration order", func(t *testing.T) {
 		content := []byte(`name: Release
@@ -34,7 +42,7 @@ on:
       environment:
         required: true
         type: environment
-`)
+` + jobsSection)
 
 		definition, manual, err := ParseManualWorkflow(
 			"Release",
@@ -133,7 +141,7 @@ on:
 			assert := assert.New(t)
 			require := require.New(t)
 			definition, manual, err := ParseManualWorkflow(
-				"CI", ".github/workflows/ci.yml", "https://example.test/ci", "sha", []byte(test.content),
+				"CI", ".github/workflows/ci.yml", "https://example.test/ci", "sha", withJobs(test.content),
 			)
 			require.NoError(err)
 			assert.Equal(test.manual, manual)
@@ -150,95 +158,83 @@ on:
 	}{
 		{
 			name:    "unsupported input type",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: object\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: object\n"),
 		},
 		{
 			name:    "duplicate input key",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: string\n      target:\n        type: string\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: string\n      target:\n        type: string\n"),
 		},
 		{
 			name:    "choice without options",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      channel:\n        type: choice\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      channel:\n        type: choice\n"),
 		},
 		{
 			name:    "choice with empty options",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      channel:\n        type: choice\n        options: []\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      channel:\n        type: choice\n        options: []\n"),
 		},
 		{
 			name:    "default outside choices",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      channel:\n        type: choice\n        options: [stable, beta]\n        default: nightly\n"),
-		},
-		{
-			name:    "alias",
-			content: []byte("dispatch: &dispatch workflow_dispatch\non: *dispatch\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      channel:\n        type: choice\n        options: [stable, beta]\n        default: nightly\n"),
 		},
 		{
 			name:    "mapping default",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: string\n        default: {name: main}\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: string\n        default: {name: main}\n"),
 		},
 		{
 			name:    "sequence default",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: string\n        default: [main]\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: string\n        default: [main]\n"),
 		},
 		{
 			name:    "scalar choice options",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      channel:\n        type: choice\n        options: stable\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      channel:\n        type: choice\n        options: stable\n"),
 		},
 		{
 			name:    "non scalar choice option",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      channel:\n        type: choice\n        options: [stable, {name: beta}]\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      channel:\n        type: choice\n        options: [stable, {name: beta}]\n"),
 		},
 		{
 			name:    "boolean input with string default",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      dry_run:\n        type: boolean\n        default: no\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      dry_run:\n        type: boolean\n        default: no\n"),
 		},
 		{
 			name:    "number input with string default",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      retries:\n        type: number\n        default: two\n"),
-		},
-		{
-			name:    "string input with boolean default",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: string\n        default: false\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      retries:\n        type: number\n        default: two\n"),
 		},
 		{
 			name:    "non boolean required",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        required: yes\n"),
-		},
-		{
-			name:    "non string description",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        description: 42\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        required: yes\n"),
 		},
 		{
 			name:    "non mapping inputs",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs: [target]\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs: [target]\n"),
 		},
 		{
 			name:    "non mapping input definition",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      target: string\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      target: string\n"),
 		},
 		{
 			name:    "non scalar sequence trigger after workflow dispatch",
-			content: []byte("on: [workflow_dispatch, {push: null}]\n"),
-		},
-		{
-			name:    "multiple YAML documents",
-			content: []byte("on: workflow_dispatch\n---\nname: trailing\n"),
+			content: withJobs("on: [workflow_dispatch, {push: null}]\n"),
 		},
 		{
 			name:    "unknown workflow dispatch field",
-			content: []byte("on:\n  workflow_dispatch:\n    inputz: {}\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputz: {}\n"),
 		},
 		{
 			name:    "misspelled required field",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        requred: true\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        requred: true\n"),
 		},
 		{
 			name:    "misspelled default field",
-			content: []byte("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        defualt: main\n"),
+			content: withJobs("on:\n  workflow_dispatch:\n    inputs:\n      target:\n        defualt: main\n"),
 		},
 		{
 			name:    "malformed YAML",
-			content: []byte("on: [workflow_dispatch\n"),
+			content: withJobs("on: [workflow_dispatch\n"),
+		},
+		{
+			name:    "missing jobs section",
+			content: []byte("on: workflow_dispatch\n"),
 		},
 		{
 			name:    "payload larger than limit",

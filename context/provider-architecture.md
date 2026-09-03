@@ -84,6 +84,10 @@ Rules:
 - Workflow catalog partial availability is definition-specific: missing or undecodable files
   become unavailable rows, while cancellation, auth, server, transport, and rate failures abort
   the catalog (`internal/github/sync.go::workflowDefinitionReadMustAbort`).
+- actionlint owns the GitHub workflow file grammar; Forge only projects its dispatch inputs
+  and types defaults. Do not hand-parse workflow YAML. The module is pinned to the fork
+  behind rhysd/actionlint#730 until a release compiles against yaml/v4 rc.6
+  (`internal/platform/github/workflow_definition.go::ParseManualWorkflow`, `go.mod`).
 - Provider-backed comment deletes remove synchronized local rows only after upstream
   synchronization observes provider absence. DELETE itself changes no SQLite comment
   state; the UI hides a confirmed deletion while ordinary sync converges. Authoritative

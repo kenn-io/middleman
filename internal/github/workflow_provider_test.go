@@ -157,8 +157,8 @@ func TestGitHubWorkflowProviderCatalogPreservesPartialAvailability(t *testing.T)
 			{ID: new(int64(4)), Name: new("Disabled"), Path: new("disabled.yml"), State: new("disabled_manually")},
 		},
 		definitions: map[string]string{
-			".github/workflows/release.yml":   "on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: environment\n",
-			".github/workflows/ci.yml":        "on: [push]\n",
+			".github/workflows/release.yml":   "on:\n  workflow_dispatch:\n    inputs:\n      target:\n        type: environment\njobs:\n  noop:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n",
+			".github/workflows/ci.yml":        "on: [push]\njobs:\n  noop:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n",
 			".github/workflows/malformed.yml": "on: workflow_dispatch\n---\non: workflow_dispatch\n",
 		},
 		environments: []*gh.Environment{{Name: new("production")}},
@@ -229,7 +229,7 @@ func TestGitHubWorkflowProviderAbortsCatalogOnFatalDefinitionErrors(t *testing.T
 					{ID: new(int64(2)), Name: new("Release"), Path: new(".github/workflows/release.yml"), State: new("active")},
 				},
 				definitions: map[string]string{
-					".github/workflows/release.yml": "on: workflow_dispatch\n",
+					".github/workflows/release.yml": "on: workflow_dispatch\njobs:\n  noop:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n",
 				},
 				definitionErrs: map[string]error{
 					".github/workflows/blocked.yml": test.err,
@@ -275,7 +275,7 @@ func TestGitHubWorkflowProviderKeepsPerDefinitionFailuresPartial(t *testing.T) {
 					{ID: new(int64(2)), Name: new("Release"), Path: new(".github/workflows/release.yml"), State: new("active")},
 				},
 				definitions: map[string]string{
-					".github/workflows/release.yml": "on: workflow_dispatch\n",
+					".github/workflows/release.yml": "on: workflow_dispatch\njobs:\n  noop:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n",
 				},
 				definitionErrs: map[string]error{
 					".github/workflows/broken.yml": test.err,
@@ -391,7 +391,7 @@ func TestRoutedClientRoutesWorkflowOperationsByRepository(t *testing.T) {
 	require := require.New(t)
 	fallback := &workflowProviderFake{}
 	exact := &workflowProviderFake{
-		definitions: map[string]string{"release.yml": "on: workflow_dispatch"},
+		definitions: map[string]string{"release.yml": "on: workflow_dispatch\njobs:\n  noop:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n"},
 		dispatch:    &gh.WorkflowDispatchRunDetails{WorkflowRunID: new(int64(8))},
 	}
 	router, err := NewHostRouter(
