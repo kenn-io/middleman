@@ -59,6 +59,7 @@ type Owner struct {
 	root         string
 	runDir       string
 	admissionDir string
+	reaper       *ownerReaper
 	mu           sync.Mutex
 	servers      map[string]registeredServer
 	closed       bool
@@ -144,6 +145,16 @@ func newAt(root string) (*Owner, error) {
 			admissionDir: admissionDir,
 			servers:      make(map[string]registeredServer),
 		}
+		owner.reaper, err = startOwnerReaper(runDir)
+		if err != nil {
+			cleanupErr := errors.Join(
+				fmt.Errorf("start private tmux owner reaper: %w", err),
+				os.RemoveAll(runDir),
+				os.RemoveAll(admissionDir),
+			)
+			owner = nil
+			return cleanupErr
+		}
 		return nil
 	})
 	return owner, err
@@ -225,38 +236,74 @@ func publishOwnerState(
 // Command registers a private socket before returning a tmux command prefix.
 func (o *Owner) Command(t testing.TB, tmuxPath string) []string {
 	t.Helper()
+	command, server, err := o.register(tmuxPath)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, o.release(server))
+	})
+	return command
+}
+
+// CommandForRun registers a private socket for the lifetime of the owner.
+func (o *Owner) CommandForRun(tmuxPath string) ([]string, error) {
+	command, _, err := o.register(tmuxPath)
+	return command, err
+}
+
+func (o *Owner) register(tmuxPath string) ([]string, registeredServer, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	require.False(t, o.closed, "private tmux owner is cleaning up")
+	if o.closed {
+		return nil, registeredServer{}, errors.New("private tmux owner is cleaning up")
+	}
 
 	nonce, err := randomToken(6)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, registeredServer{}, err
+	}
 	serverDir := filepath.Join(o.runDir, "server-"+nonce)
-	require.NoError(t, os.Mkdir(serverDir, 0o700))
+	if err := os.Mkdir(serverDir, 0o700); err != nil {
+		return nil, registeredServer{}, fmt.Errorf("create tmux test server directory: %w", err)
+	}
+	removeServerDir := true
+	defer func() {
+		if removeServerDir {
+			_ = os.RemoveAll(serverDir)
+		}
+	}()
 	socket := filepath.Join(serverDir, "tmux.sock")
 	executable, err := os.Executable()
-	require.NoError(t, err)
+	if err != nil {
+		return nil, registeredServer{}, fmt.Errorf("resolve tmux test wrapper executable: %w", err)
+	}
 	metadata, err := json.Marshal(wrapperMetadata{
 		TmuxPath:     tmuxPath,
 		AdmissionDir: o.admissionDir,
 	})
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(
+	if err != nil {
+		return nil, registeredServer{}, fmt.Errorf("encode tmux test wrapper metadata: %w", err)
+	}
+	if err := os.WriteFile(
 		filepath.Join(serverDir, wrapperMetadataName), metadata, 0o600,
-	))
+	); err != nil {
+		return nil, registeredServer{}, fmt.Errorf("write tmux test wrapper metadata: %w", err)
+	}
 	wrapperPath := filepath.Join(serverDir, wrapperExecutableName)
-	require.NoError(t, os.Symlink(executable, wrapperPath))
+	if err := os.Symlink(executable, wrapperPath); err != nil {
+		return nil, registeredServer{}, fmt.Errorf("link tmux test wrapper: %w", err)
+	}
 	server := registeredServer{tmuxPath: tmuxPath, socket: socket}
 	o.servers[socket] = server
-	t.Cleanup(func() {
-		require.NoError(t, o.release(server))
-	})
-	return []string{wrapperPath, "-f", "/dev/null", "-S", socket}
+	removeServerDir = false
+	return []string{wrapperPath, "-f", "/dev/null", "-S", socket}, server, nil
 }
 
 // CommandWrapperExitCode runs a private tmux command when the current test
 // binary was invoked through an Owner command wrapper.
 func CommandWrapperExitCode() (int, bool) {
+	if code, ok := ownerReaperExitCode(); ok {
+		return code, true
+	}
 	if filepath.Base(os.Args[0]) != wrapperExecutableName {
 		return 0, false
 	}
@@ -326,6 +373,17 @@ func runWrappedTmux(metadata wrapperMetadata, args []string) int {
 // Cleanup stops every registered server and removes this owner's run.
 func (o *Owner) Cleanup() error {
 	o.cleanup.Do(func() {
+		defer func() {
+			if o.reaper == nil {
+				return
+			}
+			if o.cleanupErr != nil {
+				o.cleanupErr = errors.Join(o.cleanupErr, o.reaper.cancel())
+				return
+			}
+			o.cleanupErr = o.reaper.stop()
+		}()
+
 		o.mu.Lock()
 		o.closed = true
 		o.mu.Unlock()

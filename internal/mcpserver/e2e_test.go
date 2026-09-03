@@ -303,6 +303,20 @@ esac
 	require.NotNil(spawn.Initial)
 	assert.Equal("delivered", spawn.Initial.State)
 	assert.Nil(spawn.LegacyClaim)
+
+	followUp := callTool[struct {
+		WorkspaceID       string `json:"workspace_id"`
+		RuntimeSessionKey string `json:"runtime_session_key"`
+		TargetKey         string `json:"target_key"`
+		MessageBytes      int    `json:"message_bytes"`
+	}](t, session, "kenn_forge_send_agent_message", map[string]any{
+		"workspace_id": workspace.ID, "runtime_session_key": runtimeSession.SessionKey,
+		"message": "keep going",
+	})
+	assert.Equal(workspace.ID, followUp.WorkspaceID)
+	assert.Equal(runtimeSession.SessionKey, followUp.RuntimeSessionKey)
+	assert.Equal("codex", followUp.TargetKey)
+	assert.Equal(10, followUp.MessageBytes)
 }
 
 func connectHTTPMCP(t *testing.T, endpoint, token string) *mcp.ClientSession {

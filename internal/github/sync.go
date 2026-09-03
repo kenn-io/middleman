@@ -4425,10 +4425,7 @@ func clientForRegistry(registry *platform.Registry, repo RepoRef) (Client, error
 	host := repoHost(repo)
 	provider, err := registry.Provider(repoPlatform(repo), host)
 	if err != nil {
-		if errors.Is(err, platform.ErrSyncDisabled) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("no client configured for host %s", host)
+		return nil, err
 	}
 	legacy, ok := provider.(interface{ GitHubClient() Client })
 	if !ok || legacy.GitHubClient() == nil {

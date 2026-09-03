@@ -3,7 +3,11 @@ is_strict: true
 
 shell:
   shell_command: "sh"
-  shell_argument: "-lc"
+  # Not a login shell: on macOS a login sh runs /etc/profile, which calls
+  # path_helper and moves the system directories ahead of the user's own
+  # PATH. The daemon started here hands its environment to every agent it
+  # launches, so keep the PATH process-compose was started with.
+  shell_argument: "-c"
 
 processes:
   backend:

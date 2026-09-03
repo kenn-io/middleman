@@ -293,6 +293,20 @@ describe("PullItem kanban status", () => {
     expect(screen.getByLabelText("Workspace attached (ready)")).toBeTruthy();
   });
 
+  it("shows the stack position and size when the PR belongs to a stack", () => {
+    renderItem(mkPR({ stack: { position: 4, size: 7 } }));
+
+    const indicator = screen.getByLabelText("Stacked: 4/7");
+    expect(indicator.textContent?.trim()).toBe("4/7");
+    expect(indicator.querySelector("svg")).toBeTruthy();
+  });
+
+  it("hides the stack indicator when the PR is not stacked", () => {
+    renderItem(mkPR({}));
+
+    expect(screen.queryByLabelText(/^Stacked:/)).toBeNull();
+  });
+
   it("shows an approved indicator when the PR is approved", () => {
     renderItem(
       mkPR({

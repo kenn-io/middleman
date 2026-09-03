@@ -3,15 +3,21 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import type { components } from "../../src/lib/api/generated/schema.js";
+import type {
+  ListProjectsOutputBody,
+  ListWorktreesOutputBody,
+  ProjectResponse as GeneratedProjectResponse,
+  RegisterProjectInputBody,
+  RegisterWorktreeInputBody,
+} from "../../src/lib/api/generated/models/index.js";
 
 import { startIsolatedE2EServerWithOptions } from "./support/e2eServer";
 
-type ProjectResponse = components["schemas"]["ProjectResponse"];
-type ProjectListResponse = components["schemas"]["ListProjectsOutputBody"];
-type WorktreeListResponse = components["schemas"]["ListWorktreesOutputBody"];
-type RegisterProjectInput = components["schemas"]["RegisterProjectInputBody"];
-type RegisterWorktreeInput = components["schemas"]["RegisterWorktreeInputBody"];
+type ProjectResponse = GeneratedProjectResponse;
+type ProjectListResponse = ListProjectsOutputBody;
+type WorktreeListResponse = ListWorktreesOutputBody;
+type RegisterProjectInput = RegisterProjectInputBody;
+type RegisterWorktreeInput = RegisterWorktreeInputBody;
 
 type SnapshotResponse = {
   hosts: Array<{

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import type { OwnedAppRuntime } from "../app/runtime.js";
 import type { GeneratedClient } from "../api/generated-api.js";
 import { makeTestAppRuntime } from "../testing/effect-layers.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
+import { GeneratedProblemResponse } from "../api/runtime.js";
 import { createSyncStore as createRuntimeSyncStore, type SyncStoreOptions } from "./sync.svelte.js";
 
 let runtime: OwnedAppRuntime | undefined;
@@ -23,7 +25,7 @@ afterEach(async () => {
 
 describe("sync store", () => {
   it("tracks hub availability independently of cached sync status", () => {
-    const store = createSyncStore({ GET: vi.fn(), POST: vi.fn() } as unknown as GeneratedClient);
+    const store = createSyncStore(makeGeneratedClient());
 
     expect(store.getProviderAvailable()).toBe(true);
     store.setSyncStatus({ running: false, last_run_at: "2026-08-05T12:00:00Z", last_error: "" });
@@ -35,17 +37,17 @@ describe("sync store", () => {
 
   it("keeps an acknowledged trigger running through a stale idle status", async () => {
     const baseline = "2026-08-05T12:00:00Z";
-    const get = vi.fn(async (path: string) =>
-      path === "/sync/status"
-        ? { data: { running: false, last_run_at: baseline, last_error: "" } }
-        : { data: { provider_pools: {}, local_ceilings: {} } },
+    const getStatus = vi.fn(async () => ({ running: false, last_run_at: baseline, last_error: "" }));
+    const getRates = vi.fn(async () => ({ provider_pools: {}, local_ceilings: {} }));
+    const post = vi.fn(async () => undefined);
+    const store = createSyncStore(
+      makeGeneratedClient({ SyncService: { getSyncStatus: getStatus, getRateLimits: getRates, triggerSync: post } }),
     );
-    const post = vi.fn(async () => ({ data: undefined, response: new Response(null, { status: 202 }) }));
-    const store = createSyncStore({ GET: get, POST: post } as unknown as GeneratedClient);
     store.setSyncStatus({ running: false, last_run_at: baseline, last_error: "" });
 
     store.triggerSync();
-    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(getStatus).toHaveBeenCalledOnce());
+    expect(getRates).toHaveBeenCalledOnce();
 
     expect(store.getSyncState()).toEqual({
       running: true,
@@ -57,19 +59,19 @@ describe("sync store", () => {
   it("accepts trigger completion when last-run time advances without observing running", async () => {
     const baseline = "2026-08-05T12:00:00Z";
     const completed = "2026-08-05T12:01:00Z";
-    const get = vi.fn(async (path: string) =>
-      path === "/sync/status"
-        ? { data: { running: false, last_run_at: completed, last_error: "" } }
-        : { data: { provider_pools: {}, local_ceilings: {} } },
+    const getStatus = vi.fn(async () => ({ running: false, last_run_at: completed, last_error: "" }));
+    const getRates = vi.fn(async () => ({ provider_pools: {}, local_ceilings: {} }));
+    const post = vi.fn(async () => undefined);
+    const store = createSyncStore(
+      makeGeneratedClient({ SyncService: { getSyncStatus: getStatus, getRateLimits: getRates, triggerSync: post } }),
     );
-    const post = vi.fn(async () => ({ data: undefined, response: new Response(null, { status: 202 }) }));
-    const store = createSyncStore({ GET: get, POST: post } as unknown as GeneratedClient);
     const onComplete = vi.fn();
     store.setSyncStatus({ running: false, last_run_at: baseline, last_error: "" });
     store.subscribeSyncComplete(onComplete);
 
     store.triggerSync();
-    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(getStatus).toHaveBeenCalledOnce());
+    expect(getRates).toHaveBeenCalledOnce();
 
     expect(store.getSyncState()).toEqual({
       running: false,
@@ -82,18 +84,19 @@ describe("sync store", () => {
   it("reads an authoritative baseline before triggering from null local status", async () => {
     const baseline = "2026-08-05T12:00:00Z";
     const events: string[] = [];
-    const accepted = Promise.withResolvers<{ data: undefined; response: Response }>();
-    const get = vi.fn(async (path: string) => {
-      events.push(`GET ${path}`);
-      return path === "/sync/status"
-        ? { data: { running: false, last_run_at: baseline, last_error: "" } }
-        : { data: { provider_pools: {}, local_ceilings: {} } };
+    const accepted = Promise.withResolvers<void>();
+    const getStatus = vi.fn(async () => {
+      events.push("GET /sync/status");
+      return { running: false, last_run_at: baseline, last_error: "" };
     });
+    const getRates = vi.fn(async () => ({ provider_pools: {}, local_ceilings: {} }));
     const post = vi.fn(() => {
       events.push("POST /sync");
       return accepted.promise;
     });
-    const store = createSyncStore({ GET: get, POST: post } as unknown as GeneratedClient);
+    const store = createSyncStore(
+      makeGeneratedClient({ SyncService: { getSyncStatus: getStatus, getRateLimits: getRates, triggerSync: post } }),
+    );
 
     store.triggerSync();
     await vi.waitFor(() => expect(post).toHaveBeenCalledOnce());
@@ -105,28 +108,26 @@ describe("sync store", () => {
       last_error: "",
     });
 
-    accepted.resolve({ data: undefined, response: new Response(null, { status: 202 }) });
-    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(3));
+    accepted.resolve();
+    await vi.waitFor(() => expect(getStatus).toHaveBeenCalledTimes(2));
   });
 
   it("does not publish an idle refresh that started before the trigger", async () => {
     const baseline = "2026-08-05T12:00:00Z";
     const staleCompletion = "2026-08-05T12:00:30Z";
-    const staleStatus = Promise.withResolvers<{
-      data: { running: boolean; last_run_at: string; last_error: string };
-    }>();
-    const accepted = Promise.withResolvers<{ data: undefined; response: Response }>();
+    const staleStatus = Promise.withResolvers<{ running: boolean; last_run_at: string; last_error: string }>();
+    const accepted = Promise.withResolvers<void>();
     let statusReads = 0;
-    const get = vi.fn((path: string) => {
-      if (path !== "/sync/status") {
-        return Promise.resolve({ data: { provider_pools: {}, local_ceilings: {} } });
-      }
+    const getStatus = vi.fn(() => {
       statusReads += 1;
       if (statusReads === 1) return staleStatus.promise;
-      return Promise.resolve({ data: { running: true, last_run_at: baseline, last_error: "" } });
+      return Promise.resolve({ running: true, last_run_at: baseline, last_error: "" });
     });
+    const getRates = vi.fn(async () => ({ provider_pools: {}, local_ceilings: {} }));
     const post = vi.fn(() => accepted.promise);
-    const store = createSyncStore({ GET: get, POST: post } as unknown as GeneratedClient);
+    const store = createSyncStore(
+      makeGeneratedClient({ SyncService: { getSyncStatus: getStatus, getRateLimits: getRates, triggerSync: post } }),
+    );
     store.setSyncStatus({ running: false, last_run_at: baseline, last_error: "" });
     if (runtime === undefined) throw new Error("test runtime was not initialized");
     const refresh = runtime.runCommand(store.refreshSyncStatusEffect, {
@@ -138,9 +139,7 @@ describe("sync store", () => {
 
     store.triggerSync();
     await vi.waitFor(() => expect(post).toHaveBeenCalledOnce());
-    staleStatus.resolve({
-      data: { running: false, last_run_at: staleCompletion, last_error: "" },
-    });
+    staleStatus.resolve({ running: false, last_run_at: staleCompletion, last_error: "" });
     await Effect.runPromise(refresh.await);
 
     expect(store.getSyncState()).toEqual({
@@ -149,23 +148,19 @@ describe("sync store", () => {
       last_error: "",
     });
 
-    accepted.resolve({ data: undefined, response: new Response(null, { status: 202 }) });
+    accepted.resolve();
     await vi.waitFor(() => expect(statusReads).toBe(2));
   });
 
   it("wakes idle polling when a sync starts without an event stream", async () => {
     vi.useFakeTimers();
-    const pendingSync = Promise.withResolvers<{
-      data: undefined;
-      response: Response;
-    }>();
-    const get = vi.fn(async (path: string) =>
-      path === "/sync/status"
-        ? { data: { running: false, last_run_at: "", last_error: "" } }
-        : { data: { provider_pools: {}, local_ceilings: {} } },
-    );
+    const pendingSync = Promise.withResolvers<void>();
+    const getStatus = vi.fn(async () => ({ running: false, last_run_at: "", last_error: "" }));
+    const getRates = vi.fn(async () => ({ provider_pools: {}, local_ceilings: {} }));
     const post = vi.fn(() => pendingSync.promise);
-    const store = createSyncStore({ GET: get, POST: post } as unknown as GeneratedClient);
+    const store = createSyncStore(
+      makeGeneratedClient({ SyncService: { getSyncStatus: getStatus, getRateLimits: getRates, triggerSync: post } }),
+    );
     if (runtime === undefined) throw new Error("test runtime was not initialized");
     const polling = runtime.runCommand(store.pollingEffect, {
       operation: "test sync polling",
@@ -173,34 +168,35 @@ describe("sync store", () => {
       onFailure: () => {},
     });
 
-    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
-    get.mockClear();
+    await vi.waitFor(() => expect(getStatus).toHaveBeenCalledOnce());
+    expect(getRates).toHaveBeenCalledOnce();
+    getStatus.mockClear();
     store.triggerSync();
     await vi.waitFor(() => expect(post).toHaveBeenCalledOnce());
 
     await vi.advanceTimersByTimeAsync(2_000);
 
-    expect(get).toHaveBeenCalled();
+    expect(getStatus).toHaveBeenCalled();
     polling.interrupt();
   });
 
   it("fails stale-event reconciliation when authoritative sync status cannot be read", async () => {
-    const store = createSyncStore({
-      GET: vi.fn(async (path: string) =>
-        path === "/sync/status"
-          ? {
-              error: {
-                code: "serviceUnavailable",
-                detail: "sync status unavailable",
-                title: "Service unavailable",
-                type: "about:blank",
-              },
-              response: new Response(null, { status: 503 }),
-            }
-          : { data: { provider_pools: {}, local_ceilings: {} } },
-      ),
-      POST: vi.fn(),
-    } as unknown as GeneratedClient);
+    const store = createSyncStore(
+      makeGeneratedClient({
+        SyncService: {
+          getSyncStatus: vi.fn(async () => {
+            const problem = {
+              code: "serviceUnavailable",
+              detail: "sync status unavailable",
+              status: 503,
+              title: "Service unavailable",
+              type: "about:blank",
+            };
+            throw new GeneratedProblemResponse(problem, Response.json(problem, { status: 503 }));
+          }),
+        },
+      }),
+    );
     const onFailure = vi.fn();
 
     if (runtime === undefined) throw new Error("test runtime was not initialized");
@@ -215,24 +211,11 @@ describe("sync store", () => {
   });
 
   it("passes selected repo filters as sync priorities", async () => {
-    const post = vi.fn(async () => ({
-      data: undefined,
-      error: undefined,
-      response: new Response(null, { status: 202 }),
-    }));
-    const get = vi.fn(async (path: string) => {
-      if (path === "/sync/status") {
-        return {
-          data: { running: false, last_run_at: "", last_error: "" },
-        };
-      }
-      return { data: { provider_pools: {}, local_ceilings: {} } };
-    });
+    const post = vi.fn(async () => undefined);
+    const getStatus = vi.fn(async () => ({ running: false, last_run_at: "", last_error: "" }));
+    const getRates = vi.fn(async () => ({ provider_pools: {}, local_ceilings: {} }));
     const store = createSyncStore(
-      {
-        GET: get,
-        POST: post,
-      } as unknown as GeneratedClient,
+      makeGeneratedClient({ SyncService: { getSyncStatus: getStatus, getRateLimits: getRates, triggerSync: post } }),
       {
         getPriorityRepos: () => "github|github.com/acme/first, github|github.com/acme/second",
       },
@@ -241,43 +224,24 @@ describe("sync store", () => {
     store.triggerSync();
     await vi.waitFor(() => expect(post).toHaveBeenCalledOnce());
 
-    expect(post).toHaveBeenCalledWith("/sync", {
-      params: {
-        query: {
-          priority_repo: ["github|github.com/acme/first", "github|github.com/acme/second"],
-        },
-      },
+    expect(post).toHaveBeenCalledWith({
+      priority_repo: ["github|github.com/acme/first", "github|github.com/acme/second"],
     });
   });
 
   it("passes one provider-qualified repository as the only sync scope", async () => {
-    const post = vi.fn(async () => ({
-      data: undefined,
-      error: undefined,
-      response: new Response(null, { status: 202 }),
-    }));
-    const get = vi.fn(async (path: string) => {
-      if (path === "/sync/status") {
-        return {
-          data: { running: false, last_run_at: "", last_error: "" },
-        };
-      }
-      return { data: { provider_pools: {}, local_ceilings: {} } };
-    });
-    const store = createSyncStore({
-      GET: get,
-      POST: post,
-    } as unknown as GeneratedClient);
+    const post = vi.fn(async () => undefined);
+    const getStatus = vi.fn(async () => ({ running: false, last_run_at: "", last_error: "" }));
+    const getRates = vi.fn(async () => ({ provider_pools: {}, local_ceilings: {} }));
+    const store = createSyncStore(
+      makeGeneratedClient({ SyncService: { getSyncStatus: getStatus, getRateLimits: getRates, triggerSync: post } }),
+    );
 
     store.triggerRepoSync("gitlab|gitlab.example.com/group/subgroup/project");
     await vi.waitFor(() => expect(post).toHaveBeenCalledOnce());
 
-    expect(post).toHaveBeenCalledWith("/sync", {
-      params: {
-        query: {
-          only_repo: ["gitlab|gitlab.example.com/group/subgroup/project"],
-        },
-      },
+    expect(post).toHaveBeenCalledWith({
+      only_repo: ["gitlab|gitlab.example.com/group/subgroup/project"],
     });
   });
 });

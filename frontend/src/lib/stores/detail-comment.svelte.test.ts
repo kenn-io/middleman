@@ -340,7 +340,7 @@ describe("createDetailStore submitComment", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(postCalls.some((p) => p.includes("/sync"))).toBe(true);
-    expect(loadPulls).toHaveBeenCalled();
+    await vi.waitFor(() => expect(postCalls.some((p) => p.includes("/sync"))).toBe(true));
+    await vi.waitFor(() => expect(loadPulls).toHaveBeenCalled());
   });
 });

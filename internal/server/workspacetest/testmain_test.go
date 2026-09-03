@@ -1,26 +1,25 @@
 package workspacetest
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
-	"time"
 
-	"go.kenn.io/forge/internal/procutil"
 	"go.kenn.io/forge/internal/testutil/gitsafe"
 	"go.kenn.io/forge/internal/testutil/processjob"
 	"go.kenn.io/forge/internal/testutil/testsignal"
+	"go.kenn.io/forge/internal/testutil/testtmux"
 )
 
 var workspaceTestTmuxCommand []string
 
 func TestMain(m *testing.M) {
+	if code, ok := testtmux.CommandWrapperExitCode(); ok {
+		os.Exit(code)
+	}
 	if slices.Contains(os.Args, workspaceRuntimeHelperMarker) {
 		os.Exit(m.Run())
 	}
@@ -33,6 +32,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "configure isolated workspace test tmux: %v\n", err)
 		os.Exit(1)
 	}
+	runAbruptWorkspaceTestTmuxOwnerHelper()
 	runCleanup, stopSignalCleanup := testsignal.Install(cleanupTmux, func(err error) {
 		fmt.Fprintf(os.Stderr, "cleanup isolated workspace test tmux: %v\n", err)
 	})
@@ -55,50 +55,19 @@ func configureWorkspaceTestTmux() (func() error, error) {
 	if err != nil {
 		return nil, fmt.Errorf("find tmux: %w", err)
 	}
-
-	tmuxDir, err := os.MkdirTemp("/tmp", "kenn-forge-workspacetest-tmux-*")
+	if !testtmux.Supported() {
+		return func() error { return nil }, nil
+	}
+	owner, err := testtmux.New()
 	if err != nil {
-		return nil, fmt.Errorf("create tmux socket directory: %w", err)
+		return nil, fmt.Errorf("initialize private test tmux owner: %w", err)
 	}
-	socket := filepath.Join(tmuxDir, "tmux.sock")
-	workspaceTestTmuxCommand = []string{
-		tmuxPath, "-f", "/dev/null", "-S", socket,
+	workspaceTestTmuxCommand, err = owner.CommandForRun(tmuxPath)
+	if err != nil {
+		return nil, errors.Join(
+			fmt.Errorf("register workspace test tmux server: %w", err),
+			owner.Cleanup(),
+		)
 	}
-
-	return func() error {
-		var errs []error
-		if _, statErr := os.Stat(socket); statErr == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			out, killErr := procutil.CombinedOutput(
-				ctx,
-				procutil.CommandContext(
-					ctx, tmuxPath, "-f", "/dev/null", "-S", socket,
-					"kill-server",
-				),
-				"workspace test tmux cleanup",
-			)
-			cancel()
-			msg := strings.TrimSpace(string(out))
-			if killErr != nil && !workspaceTestTmuxServerAbsent(msg) {
-				errs = append(errs, fmt.Errorf(
-					"kill private tmux server: %w: %s",
-					killErr, msg,
-				))
-			}
-		} else if !errors.Is(statErr, os.ErrNotExist) {
-			errs = append(errs, fmt.Errorf("inspect tmux socket: %w", statErr))
-		}
-		if removeErr := os.RemoveAll(tmuxDir); removeErr != nil {
-			errs = append(errs, fmt.Errorf(
-				"remove tmux socket directory: %w", removeErr,
-			))
-		}
-		return errors.Join(errs...)
-	}, nil
-}
-
-func workspaceTestTmuxServerAbsent(msg string) bool {
-	return strings.Contains(msg, "no server running") ||
-		(strings.Contains(msg, "error connecting to") &&
-			strings.Contains(msg, "No such file or directory"))
+	return owner.Cleanup, nil
 }

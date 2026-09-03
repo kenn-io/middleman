@@ -154,8 +154,10 @@ describe("createIssuesStore submitIssueComment", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    const listCallsAfter = getCalls.filter((p) => p === "/issues").length;
-    expect(listCallsAfter).toBeGreaterThan(listCallsBefore);
+    await vi.waitFor(() => {
+      const listCallsAfter = getCalls.filter((p) => p === "/issues").length;
+      expect(listCallsAfter).toBeGreaterThan(listCallsBefore);
+    });
   });
 
   it("does not refresh the issues list when on a different page", async () => {

@@ -17,6 +17,7 @@ import (
 	ghclient "go.kenn.io/forge/internal/github"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 	"go.kenn.io/forge/internal/testutil/servertest"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
@@ -62,12 +63,12 @@ func initLocalOnlyGitRepo(ctx context.Context, dir string) error {
 func initLifecycleRouteRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	runGit(t, dir, "init", "--initial-branch=main")
-	runGit(t, dir, "config", "user.email", "test@example.com")
-	runGit(t, dir, "config", "user.name", "Test User")
+	gitfixture.Run(t, dir, "init", "--initial-branch=main")
+	gitfixture.Run(t, dir, "config", "user.email", "test@example.com")
+	gitfixture.Run(t, dir, "config", "user.name", "Test User")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("# test\n"), 0o644))
-	runGit(t, dir, "add", "README.md")
-	runGit(t, dir, "commit", "-m", "initial")
+	gitfixture.Run(t, dir, "add", "README.md")
+	gitfixture.Run(t, dir, "commit", "-m", "initial")
 	return dir
 }
 

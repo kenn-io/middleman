@@ -1,15 +1,18 @@
 import { afterEach, assert, it, vi } from "@effect/vitest";
 import { Effect, Fiber, Layer } from "effect";
 import { GeneratedApiLive } from "../api/generated-api.js";
-import type { components } from "../api/generated/schema.js";
+import type {
+  SettingsResponse as GeneratedSettingsResponse,
+  UpdateFleetSettingsInputBody,
+} from "../api/generated/models/index.js";
 import { DEFAULT_TERMINAL_SETTINGS } from "../api/types.js";
 import { StreamingFetchLive } from "../browser/streaming-fetch.js";
 import { makeStartupSnapshot } from "../../test/startupSnapshot.js";
 import { StartupWorkflowLive } from "../app/startup-workflow.js";
 import { SettingsWorkflow, SettingsWorkflowLive, settingsErrorMessage } from "./settings-workflow.js";
 
-type SettingsResponse = components["schemas"]["SettingsResponse"];
-type FleetSettingsUpdate = components["schemas"]["UpdateFleetSettingsInputBody"];
+type SettingsResponse = GeneratedSettingsResponse;
+type FleetSettingsUpdate = UpdateFleetSettingsInputBody;
 
 function makeSettings(repos: SettingsResponse["repos"] = []): SettingsResponse {
   return makeStartupSnapshot({

@@ -1,8 +1,8 @@
 import type { RepoPreset } from "../api/types.js";
-import type { components } from "../api/generated/schema.js";
+import type { RepoPresetRepository as GeneratedRepoPresetRepository } from "../api/generated/models/index.js";
 import { parseRepoFilterValue, serializeRepoFilterValue } from "./filter.svelte.js";
 
-export type RepoPresetRepository = components["schemas"]["RepoPresetRepository"];
+export type RepoPresetRepository = GeneratedRepoPresetRepository;
 
 export interface RepoPresetCatalogEntry extends RepoPresetRepository {
   value: string;

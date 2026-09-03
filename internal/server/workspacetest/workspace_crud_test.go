@@ -1,12 +1,9 @@
 package workspacetest
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,49 +16,10 @@ import (
 	"go.kenn.io/forge/internal/apiclient/generated"
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/server"
+	"go.kenn.io/forge/internal/testutil"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
-
-type rawWorkspaceStatusResponse struct {
-	ID           string  `json:"id"`
-	ItemType     string  `json:"item_type"`
-	ItemNumber   int     `json:"item_number"`
-	GitHeadRef   string  `json:"git_head_ref"`
-	Status       string  `json:"status"`
-	ErrorMessage *string `json:"error_message"`
-	Created      bool    `json:"created"`
-}
-
-type rawIssueWorkspaceRef struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
-}
-
-type rawIssueDetailResponse struct {
-	Workspace *rawIssueWorkspaceRef `json:"workspace"`
-}
-
-func doJSON(
-	t *testing.T, srv *server.Server, method, path string, body any,
-) *httptest.ResponseRecorder {
-	t.Helper()
-	var reader io.Reader
-	if body != nil {
-		payload, err := json.Marshal(body)
-		require.NoError(t, err)
-		reader = bytes.NewReader(payload)
-	}
-	req := httptest.NewRequest(method, path, reader)
-	req.Host = "forge.test"
-	if body != nil || method == http.MethodPost || method == http.MethodDelete ||
-		method == http.MethodPut || method == http.MethodPatch {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	rr := httptest.NewRecorder()
-	srv.ServeHTTP(rr, req)
-	return rr
-}
 
 func workspaceGitOutput(t *testing.T, dir string, args ...string) string {
 	t.Helper()
@@ -92,8 +50,7 @@ func seedIssueOnHost(
 }
 
 func TestWorkspaceCRUDE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -108,7 +65,7 @@ func TestWorkspaceCRUDE2E(t *testing.T) {
 	require.Equal(http.StatusOK, listResp.StatusCode())
 	require.NotNil(listResp.JSON200)
 	require.NotNil(listResp.JSON200.Workspaces)
-	assert.Empty(*listResp.JSON200.Workspaces)
+	assert.Empty(listResp.JSON200.Workspaces)
 
 	// 2. Create workspace.
 	createResp, err := client.HTTP.CreateWorkspaceWithResponse(
@@ -153,7 +110,7 @@ func TestWorkspaceCRUDE2E(t *testing.T) {
 	require.Equal(http.StatusOK, listResp2.StatusCode())
 	require.NotNil(listResp2.JSON200)
 	require.NotNil(listResp2.JSON200.Workspaces)
-	assert.Len(*listResp2.JSON200.Workspaces, 1)
+	assert.Len(listResp2.JSON200.Workspaces, 1)
 
 	// 5. Delete workspace (force).
 	force := true
@@ -176,12 +133,11 @@ func TestWorkspaceCRUDE2E(t *testing.T) {
 	require.Equal(http.StatusOK, listResp3.StatusCode())
 	require.NotNil(listResp3.JSON200)
 	require.NotNil(listResp3.JSON200.Workspaces)
-	assert.Empty(*listResp3.JSON200.Workspaces)
+	assert.Empty(listResp3.JSON200.Workspaces)
 }
 
 func TestWorkspaceRetryErroredWorkspaceE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -225,8 +181,7 @@ func TestWorkspaceRetryErroredWorkspaceE2E(t *testing.T) {
 }
 
 func TestWorkspaceRetryReadyWorkspaceConflictE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -283,8 +238,7 @@ func TestWorkspaceRetryReadyWorkspaceConflictE2E(t *testing.T) {
 // reacted to status=ready could read a setup-event list still missing its
 // last row, which made retry-conflict event-count assertions flake on CI.
 func TestWorkspaceReadyStatusImpliesReadySetupEventE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 
@@ -326,8 +280,7 @@ func TestWorkspaceReadyStatusImpliesReadySetupEventE2E(t *testing.T) {
 }
 
 func TestWorkspaceCreateNotFound(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 
@@ -365,8 +318,7 @@ func TestWorkspaceCreateNotFound(t *testing.T) {
 }
 
 func TestWorkspaceCreateHidesRemovedUpstreamItems(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
@@ -410,12 +362,11 @@ func TestWorkspaceCreateHidesRemovedUpstreamItems(t *testing.T) {
 	require.Equal(http.StatusOK, listed.StatusCode())
 	require.NotNil(listed.JSON200)
 	require.NotNil(listed.JSON200.Workspaces)
-	require.Empty(*listed.JSON200.Workspaces)
+	require.Empty(listed.JSON200.Workspaces)
 }
 
 func TestWorkspaceListRetainsWorkspaceWithoutRemovedPullMetadata(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
@@ -447,8 +398,8 @@ func TestWorkspaceListRetainsWorkspaceWithoutRemovedPullMetadata(t *testing.T) {
 	require.Equal(http.StatusOK, listed.StatusCode(), string(listed.Body))
 	require.NotNil(listed.JSON200)
 	require.NotNil(listed.JSON200.Workspaces)
-	require.Len(*listed.JSON200.Workspaces, 1)
-	workspace := (*listed.JSON200.Workspaces)[0]
+	require.Len(listed.JSON200.Workspaces, 1)
+	workspace := listed.JSON200.Workspaces[0]
 	require.Equal("ws-removed-pr", workspace.Id)
 	require.Equal(int64(1), workspace.ItemNumber)
 	require.Nil(workspace.MrTitle)
@@ -462,8 +413,7 @@ func TestWorkspaceListRetainsWorkspaceWithoutRemovedPullMetadata(t *testing.T) {
 }
 
 func TestWorkspaceMRDetailHasWorkspace(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -512,8 +462,7 @@ func TestWorkspaceMRDetailHasWorkspace(t *testing.T) {
 }
 
 func TestWorkspaceCreateDuplicate(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 
@@ -547,8 +496,7 @@ func TestWorkspaceCreateDuplicate(t *testing.T) {
 }
 
 func TestWorkspaceCreateFetchesCloneThroughAPI(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -557,20 +505,20 @@ func TestWorkspaceCreateFetchesCloneThroughAPI(t *testing.T) {
 	ctx := t.Context()
 
 	remoteWork := filepath.Join(t.TempDir(), "remote-work")
-	runGit(t, t.TempDir(), "clone", fixture.remote, remoteWork)
-	runGit(t, remoteWork, "config", "user.email", "test@test.com")
-	runGit(t, remoteWork, "config", "user.name", "Test")
-	runGit(t, remoteWork, "checkout", "feature")
+	gitfixture.Run(t, t.TempDir(), "clone", fixture.remote, remoteWork)
+	gitfixture.Run(t, remoteWork, "config", "user.email", "test@test.com")
+	gitfixture.Run(t, remoteWork, "config", "user.name", "Test")
+	gitfixture.Run(t, remoteWork, "checkout", "feature")
 	require.NoError(os.WriteFile(
 		filepath.Join(remoteWork, "after-fetch.txt"),
 		[]byte("fetched through workspace API\n"),
 		0o644,
 	))
-	runGit(t, remoteWork, "add", ".")
-	runGit(t, remoteWork, "commit", "-m", "feature after fixture clone")
-	runGit(t, remoteWork, "push", "origin", "feature")
+	gitfixture.Run(t, remoteWork, "add", ".")
+	gitfixture.Run(t, remoteWork, "commit", "-m", "feature after fixture clone")
+	gitfixture.Run(t, remoteWork, "push", "origin", "feature")
 	featureSHA := workspaceGitOutput(t, remoteWork, "rev-parse", "HEAD")
-	runGit(t, fixture.remote, "update-ref", "refs/pull/1/head", featureSHA)
+	gitfixture.Run(t, fixture.remote, "update-ref", "refs/pull/1/head", featureSHA)
 
 	createResp, err := fixture.client.HTTP.CreateWorkspaceWithResponse(
 		ctx,
@@ -592,8 +540,7 @@ func TestWorkspaceCreateFetchesCloneThroughAPI(t *testing.T) {
 }
 
 func TestWorkspaceCreateIssueE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -603,7 +550,7 @@ func TestWorkspaceCreateIssueE2E(t *testing.T) {
 
 	seedIssueOnHost(t, fixture.database, "github.com", "acme", "widget", 7, "open", "Test Issue")
 
-	createRR := doJSON(
+	createRR := testutil.DoJSON(
 		t,
 		fixture.server,
 		http.MethodPost,
@@ -612,25 +559,25 @@ func TestWorkspaceCreateIssueE2E(t *testing.T) {
 	)
 	require.Equal(http.StatusAccepted, createRR.Code, createRR.Body.String())
 
-	var created rawWorkspaceStatusResponse
+	var created generated.WorkspaceResponse
 	require.NoError(json.NewDecoder(createRR.Body).Decode(&created))
-	require.NotEmpty(created.ID)
+	require.NotEmpty(created.Id)
 	assert.Equal("issue", created.ItemType)
-	assert.Equal(7, created.ItemNumber)
+	assert.Equal(int64(7), created.ItemNumber)
 	// seedIssue uses title "Test Issue" → slug style appends "-test-issue".
 	assert.Equal("kenn-forge/issue-7-test-issue", created.GitHeadRef)
 
-	ready := waitForWorkspaceReady(t, ctx, fixture.client, created.ID)
+	ready := waitForWorkspaceReady(t, ctx, fixture.client, created.Id)
 	assert.Equal(
 		"kenn-forge/issue-7-test-issue",
 		workspaceGitOutput(t, ready.WorktreePath, "branch", "--show-current"),
 	)
 	assert.Equal(
-		testGitSHA(t, fixture.remote, "refs/heads/main"),
-		testGitSHA(t, ready.WorktreePath, "HEAD"),
+		gitfixture.SHA(t, fixture.remote, "refs/heads/main"),
+		gitfixture.SHA(t, ready.WorktreePath, "HEAD"),
 	)
 
-	getIssueRR := doJSON(
+	getIssueRR := testutil.DoJSON(
 		t,
 		fixture.server,
 		http.MethodGet,
@@ -639,16 +586,15 @@ func TestWorkspaceCreateIssueE2E(t *testing.T) {
 	)
 	require.Equal(http.StatusOK, getIssueRR.Code, getIssueRR.Body.String())
 
-	var issueDetail rawIssueDetailResponse
+	var issueDetail generated.IssueDetailResponse
 	require.NoError(json.NewDecoder(getIssueRR.Body).Decode(&issueDetail))
 	require.NotNil(issueDetail.Workspace)
-	assert.Equal(created.ID, issueDetail.Workspace.ID)
+	assert.Equal(created.Id, issueDetail.Workspace.Id)
 	assert.NotEmpty(issueDetail.Workspace.Status)
 }
 
 func TestWorkspaceCreateIssueUsesTitleSlugInBranch(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -663,7 +609,7 @@ func TestWorkspaceCreateIssueUsesTitleSlugInBranch(t *testing.T) {
 		"open", "Add foo to bar",
 	)
 
-	createRR := doJSON(
+	createRR := testutil.DoJSON(
 		t,
 		fixture.server,
 		http.MethodPost,
@@ -672,11 +618,11 @@ func TestWorkspaceCreateIssueUsesTitleSlugInBranch(t *testing.T) {
 	)
 	require.Equal(http.StatusAccepted, createRR.Code, createRR.Body.String())
 
-	var created rawWorkspaceStatusResponse
+	var created generated.WorkspaceResponse
 	require.NoError(json.NewDecoder(createRR.Body).Decode(&created))
 	assert.Equal("kenn-forge/issue-8-add-foo-to-bar", created.GitHeadRef)
 
-	ready := waitForWorkspaceReady(t, ctx, fixture.client, created.ID)
+	ready := waitForWorkspaceReady(t, ctx, fixture.client, created.Id)
 	assert.Equal(
 		"kenn-forge/issue-8-add-foo-to-bar",
 		workspaceGitOutput(t, ready.WorktreePath, "branch", "--show-current"),
@@ -684,8 +630,7 @@ func TestWorkspaceCreateIssueUsesTitleSlugInBranch(t *testing.T) {
 }
 
 func TestWorkspaceCreateIssueBareStyleConfigOptOut(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -701,7 +646,7 @@ func TestWorkspaceCreateIssueBareStyleConfigOptOut(t *testing.T) {
 		"open", "Add foo to bar",
 	)
 
-	createRR := doJSON(
+	createRR := testutil.DoJSON(
 		t,
 		fixture.server,
 		http.MethodPost,
@@ -710,11 +655,11 @@ func TestWorkspaceCreateIssueBareStyleConfigOptOut(t *testing.T) {
 	)
 	require.Equal(http.StatusAccepted, createRR.Code, createRR.Body.String())
 
-	var created rawWorkspaceStatusResponse
+	var created generated.WorkspaceResponse
 	require.NoError(json.NewDecoder(createRR.Body).Decode(&created))
 	assert.Equal("kenn-forge/issue-9", created.GitHeadRef)
 
-	ready := waitForWorkspaceReady(t, ctx, fixture.client, created.ID)
+	ready := waitForWorkspaceReady(t, ctx, fixture.client, created.Id)
 	assert.Equal(
 		"kenn-forge/issue-9",
 		workspaceGitOutput(t, ready.WorktreePath, "branch", "--show-current"),
@@ -722,8 +667,7 @@ func TestWorkspaceCreateIssueBareStyleConfigOptOut(t *testing.T) {
 }
 
 func TestWorkspaceCreateIssueIsIdempotent(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -734,34 +678,34 @@ func TestWorkspaceCreateIssueIsIdempotent(t *testing.T) {
 
 	path := "/api/v1/issues/gh/acme/widget/7/workspace"
 
-	firstRR := doJSON(
+	firstRR := testutil.DoJSON(
 		t, fixture.server, http.MethodPost, path, map[string]string{},
 	)
 	require.Equal(http.StatusAccepted, firstRR.Code, firstRR.Body.String())
 
-	var first rawWorkspaceStatusResponse
+	var first generated.WorkspaceResponse
 	require.NoError(json.NewDecoder(firstRR.Body).Decode(&first))
-	require.NotEmpty(first.ID)
-	assert.True(first.Created, "the fresh create response must mark itself as newly created")
+	require.NotEmpty(first.Id)
+	require.NotNil(first.Created)
+	assert.True(*first.Created, "the fresh create response must mark itself as newly created")
 
-	secondRR := doJSON(
+	secondRR := testutil.DoJSON(
 		t, fixture.server, http.MethodPost, path, map[string]string{},
 	)
 	require.Equal(http.StatusAccepted, secondRR.Code, secondRR.Body.String())
 
-	var second rawWorkspaceStatusResponse
+	var second generated.WorkspaceResponse
 	require.NoError(json.NewDecoder(secondRR.Body).Decode(&second))
-	assert.Equal(first.ID, second.ID)
+	assert.Equal(first.Id, second.Id)
 	assert.Equal("issue", second.ItemType)
-	assert.Equal(7, second.ItemNumber)
-	assert.False(second.Created, "a reused existing workspace must not be marked as newly created")
+	assert.Equal(int64(7), second.ItemNumber)
+	assert.Nil(second.Created, "a reused existing workspace must not be marked as newly created")
 
-	waitForWorkspaceReady(t, ctx, fixture.client, second.ID)
+	waitForWorkspaceReady(t, ctx, fixture.client, second.Id)
 }
 
 func TestWorkspaceCreateIssueAfterDeleteRecreatesBranch(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -771,7 +715,7 @@ func TestWorkspaceCreateIssueAfterDeleteRecreatesBranch(t *testing.T) {
 
 	seedIssueOnHost(t, fixture.database, "github.com", "acme", "widget", 7, "open", "Test Issue")
 
-	createRR := doJSON(
+	createRR := testutil.DoJSON(
 		t,
 		fixture.server,
 		http.MethodPost,
@@ -780,9 +724,9 @@ func TestWorkspaceCreateIssueAfterDeleteRecreatesBranch(t *testing.T) {
 	)
 	require.Equal(http.StatusAccepted, createRR.Code, createRR.Body.String())
 
-	var created rawWorkspaceStatusResponse
+	var created generated.WorkspaceResponse
 	require.NoError(json.NewDecoder(createRR.Body).Decode(&created))
-	ready := waitForWorkspaceReady(t, ctx, fixture.client, created.ID)
+	ready := waitForWorkspaceReady(t, ctx, fixture.client, created.Id)
 	assert.Equal(
 		"kenn-forge/issue-7-test-issue",
 		workspaceGitOutput(t, ready.WorktreePath, "branch", "--show-current"),
@@ -791,13 +735,13 @@ func TestWorkspaceCreateIssueAfterDeleteRecreatesBranch(t *testing.T) {
 	force := true
 	deleteResp, err := fixture.client.HTTP.DeleteWorkspaceWithResponse(
 		ctx,
-		created.ID,
+		created.Id,
 		&generated.DeleteWorkspaceParams{Force: &force},
 	)
 	require.NoError(err)
 	require.Equal(http.StatusNoContent, deleteResp.StatusCode())
 
-	recreateRR := doJSON(
+	recreateRR := testutil.DoJSON(
 		t,
 		fixture.server,
 		http.MethodPost,
@@ -806,9 +750,9 @@ func TestWorkspaceCreateIssueAfterDeleteRecreatesBranch(t *testing.T) {
 	)
 	require.Equal(http.StatusAccepted, recreateRR.Code, recreateRR.Body.String())
 
-	var recreated rawWorkspaceStatusResponse
+	var recreated generated.WorkspaceResponse
 	require.NoError(json.NewDecoder(recreateRR.Body).Decode(&recreated))
-	recreatedReady := waitForWorkspaceReady(t, ctx, fixture.client, recreated.ID)
+	recreatedReady := waitForWorkspaceReady(t, ctx, fixture.client, recreated.Id)
 	assert.Equal(
 		"kenn-forge/issue-7-test-issue",
 		workspaceGitOutput(t, recreatedReady.WorktreePath, "branch", "--show-current"),
@@ -816,8 +760,7 @@ func TestWorkspaceCreateIssueAfterDeleteRecreatesBranch(t *testing.T) {
 }
 
 func TestWorkspaceCreatePRAndIssueCanCoexistForSameRepoNumber(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -863,5 +806,5 @@ func TestWorkspaceCreatePRAndIssueCanCoexistForSameRepoNumber(t *testing.T) {
 	require.Equal(http.StatusOK, listResp.StatusCode())
 	require.NotNil(listResp.JSON200)
 	require.NotNil(listResp.JSON200.Workspaces)
-	require.Len(*listResp.JSON200.Workspaces, 2)
+	require.Len(listResp.JSON200.Workspaces, 2)
 }

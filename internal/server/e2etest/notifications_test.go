@@ -105,66 +105,66 @@ name = "tools"
 	require.NoError(err)
 	require.NotNil(listResp.JSON200)
 	require.NotNil(listResp.JSON200.Items)
-	require.Len(*listResp.JSON200.Items, 2)
+	require.Len(listResp.JSON200.Items, 2)
 	assert.Equal(int64(2), listResp.JSON200.Summary.Unread)
 	assert.Equal(int64(2), listResp.JSON200.Summary.TotalActive)
 
-	ids := []int64{(*listResp.JSON200.Items)[0].Id, (*listResp.JSON200.Items)[1].Id, 999999}
+	ids := []int64{listResp.JSON200.Items[0].Id, listResp.JSON200.Items[1].Id, 999999}
 	readResp, err := client.HTTP.MarkNotificationsReadWithResponse(
 		t.Context(),
-		generated.MarkNotificationsReadJSONRequestBody{Ids: &ids},
+		generated.MarkNotificationsReadJSONRequestBody{Ids: ids},
 	)
 	require.NoError(err)
 	require.NotNil(readResp.JSON200)
-	require.ElementsMatch(ids[:2], *readResp.JSON200.Succeeded)
-	require.ElementsMatch(ids[:2], *readResp.JSON200.Queued)
-	require.Len(*readResp.JSON200.Failed, 1)
-	assert.Equal(int64(999999), (*readResp.JSON200.Failed)[0].Id)
+	require.ElementsMatch(ids[:2], readResp.JSON200.Succeeded)
+	require.ElementsMatch(ids[:2], readResp.JSON200.Queued)
+	require.Len(readResp.JSON200.Failed, 1)
+	assert.Equal(int64(999999), readResp.JSON200.Failed[0].Id)
 
 	readList, err := client.HTTP.ListNotificationsWithResponse(t.Context(), &generated.ListNotificationsParams{State: new("read")})
 	require.NoError(err)
 	require.NotNil(readList.JSON200)
 	require.NotNil(readList.JSON200.Items)
-	require.Len(*readList.JSON200.Items, 2)
-	for _, item := range *readList.JSON200.Items {
+	require.Len(readList.JSON200.Items, 2)
+	for _, item := range readList.JSON200.Items {
 		assert.False(item.Unread)
 		require.NotNil(item.GithubReadQueuedAt)
 	}
 
 	doneResp, err := client.HTTP.MarkNotificationsDoneWithResponse(
 		t.Context(),
-		generated.MarkNotificationsDoneJSONRequestBody{Ids: &ids},
+		generated.MarkNotificationsDoneJSONRequestBody{Ids: ids},
 	)
 	require.NoError(err)
 	require.NotNil(doneResp.JSON200)
-	require.ElementsMatch(ids[:2], *doneResp.JSON200.Succeeded)
-	require.ElementsMatch(ids[:2], *doneResp.JSON200.Queued)
-	require.Len(*doneResp.JSON200.Failed, 1)
+	require.ElementsMatch(ids[:2], doneResp.JSON200.Succeeded)
+	require.ElementsMatch(ids[:2], doneResp.JSON200.Queued)
+	require.Len(doneResp.JSON200.Failed, 1)
 
 	doneList, err := client.HTTP.ListNotificationsWithResponse(t.Context(), &generated.ListNotificationsParams{State: new("done")})
 	require.NoError(err)
 	require.NotNil(doneList.JSON200)
 	require.NotNil(doneList.JSON200.Items)
-	require.Len(*doneList.JSON200.Items, 2)
-	for _, item := range *doneList.JSON200.Items {
+	require.Len(doneList.JSON200.Items, 2)
+	for _, item := range doneList.JSON200.Items {
 		require.NotNil(item.DoneAt)
 	}
 
 	undoneIDs := []int64{ids[0], ids[1]}
 	undoneResp, err := client.HTTP.MarkNotificationsUndoneWithResponse(
 		t.Context(),
-		generated.MarkNotificationsUndoneJSONRequestBody{Ids: &undoneIDs},
+		generated.MarkNotificationsUndoneJSONRequestBody{Ids: undoneIDs},
 	)
 	require.NoError(err)
 	require.NotNil(undoneResp.JSON200)
-	require.ElementsMatch(undoneIDs, *undoneResp.JSON200.Succeeded)
+	require.ElementsMatch(undoneIDs, undoneResp.JSON200.Succeeded)
 
 	activeList, err := client.HTTP.ListNotificationsWithResponse(t.Context(), &generated.ListNotificationsParams{State: new("active")})
 	require.NoError(err)
 	require.NotNil(activeList.JSON200)
 	require.NotNil(activeList.JSON200.Items)
-	require.Len(*activeList.JSON200.Items, 2)
-	for _, item := range *activeList.JSON200.Items {
+	require.Len(activeList.JSON200.Items, 2)
+	for _, item := range activeList.JSON200.Items {
 		assert.Nil(item.DoneAt)
 	}
 }
@@ -283,10 +283,10 @@ name = "widget"
 	var notificationID int64
 	require.Eventually(func() bool {
 		resp, callErr := client.HTTP.ListNotificationsWithResponse(ctx, &generated.ListNotificationsParams{State: new("unread")})
-		if callErr != nil || resp.JSON200 == nil || resp.JSON200.Items == nil || len(*resp.JSON200.Items) != 1 {
+		if callErr != nil || resp.JSON200 == nil || resp.JSON200.Items == nil || len(resp.JSON200.Items) != 1 {
 			return false
 		}
-		item := (*resp.JSON200.Items)[0]
+		item := resp.JSON200.Items[0]
 		notificationID = item.Id
 		return item.PlatformThreadId == "replacement-thread" && item.RepoOwner == "acme" && item.RepoName == "widget"
 	}, 3*time.Second, 10*time.Millisecond)
@@ -298,20 +298,20 @@ name = "widget"
 	require.NoError(err)
 	require.NotNil(activityResp.JSON200)
 	require.NotNil(activityResp.JSON200.Items)
-	require.Len(*activityResp.JSON200.Items, 1)
-	activity := (*activityResp.JSON200.Items)[0]
+	require.Len(activityResp.JSON200.Items, 1)
+	activity := activityResp.JSON200.Items[0]
 	assert.Equal("notification", activity.ActivityType)
 	assert.Equal(int64(number), activity.ItemNumber)
 	assert.Equal("acme", activity.RepoOwner)
 	assert.Equal("widget", activity.RepoName)
 
 	doneResp, err := client.HTTP.MarkNotificationsDoneWithResponse(
-		ctx, generated.MarkNotificationsDoneJSONRequestBody{Ids: &[]int64{notificationID}},
+		ctx, generated.MarkNotificationsDoneJSONRequestBody{Ids: []int64{notificationID}},
 	)
 	require.NoError(err)
 	require.NotNil(doneResp.JSON200)
-	require.ElementsMatch([]int64{notificationID}, *doneResp.JSON200.Succeeded)
-	require.ElementsMatch([]int64{notificationID}, *doneResp.JSON200.Queued)
+	require.ElementsMatch([]int64{notificationID}, doneResp.JSON200.Succeeded)
+	require.ElementsMatch([]int64{notificationID}, doneResp.JSON200.Queued)
 
 	activityAt.Store(firstActivityAt.Add(time.Hour).UnixNano())
 	syncResp, err = client.HTTP.SyncNotificationsWithResponse(ctx, withJSON)
@@ -327,10 +327,10 @@ name = "widget"
 		}
 		resp, callErr := client.HTTP.ListNotificationsWithResponse(ctx, &generated.ListNotificationsParams{State: new("unread")})
 		if callErr != nil || resp.JSON200 == nil || resp.JSON200.Sync.Running ||
-			resp.JSON200.Items == nil || len(*resp.JSON200.Items) != 1 {
+			resp.JSON200.Items == nil || len(resp.JSON200.Items) != 1 {
 			return false
 		}
-		item := (*resp.JSON200.Items)[0]
+		item := resp.JSON200.Items[0]
 		return item.Id == notificationID && item.DoneAt == nil && item.GithubReadQueuedAt == nil
 	}, 10*time.Second, 10*time.Millisecond)
 }
@@ -412,15 +412,15 @@ name = "alpha"
 	require.NoError(err)
 	require.NotNil(unreadResp.JSON200)
 	require.NotNil(unreadResp.JSON200.Items)
-	require.Len(*unreadResp.JSON200.Items, 1)
-	notificationID := (*unreadResp.JSON200.Items)[0].Id
+	require.Len(unreadResp.JSON200.Items, 1)
+	notificationID := unreadResp.JSON200.Items[0].Id
 	doneResp, err := client.HTTP.MarkNotificationsDoneWithResponse(
-		ctx, generated.MarkNotificationsDoneJSONRequestBody{Ids: &[]int64{notificationID}},
+		ctx, generated.MarkNotificationsDoneJSONRequestBody{Ids: []int64{notificationID}},
 	)
 	require.NoError(err)
 	require.NotNil(doneResp.JSON200)
-	require.ElementsMatch([]int64{notificationID}, *doneResp.JSON200.Succeeded)
-	require.ElementsMatch([]int64{notificationID}, *doneResp.JSON200.Queued)
+	require.ElementsMatch([]int64{notificationID}, doneResp.JSON200.Succeeded)
+	require.ElementsMatch([]int64{notificationID}, doneResp.JSON200.Queued)
 
 	propagationDone := make(chan error, 1)
 	go func() {
@@ -438,8 +438,8 @@ name = "alpha"
 	require.NoError(err)
 	require.NotNil(doneStateResp.JSON200)
 	require.NotNil(doneStateResp.JSON200.Items)
-	require.Len(*doneStateResp.JSON200.Items, 1)
-	item := (*doneStateResp.JSON200.Items)[0]
+	require.Len(doneStateResp.JSON200.Items, 1)
+	item := doneStateResp.JSON200.Items[0]
 	assert.Equal(notificationID, item.Id)
 	assert.Equal("beta", item.RepoName)
 	assert.False(item.Unread)
@@ -457,8 +457,8 @@ name = "alpha"
 	require.NoError(err)
 	require.NotNil(activeResp.JSON200)
 	require.NotNil(activeResp.JSON200.Items)
-	require.Len(*activeResp.JSON200.Items, 1)
-	item = (*activeResp.JSON200.Items)[0]
+	require.Len(activeResp.JSON200.Items, 1)
+	item = activeResp.JSON200.Items[0]
 	assert.Equal(notificationID, item.Id)
 	assert.Equal("beta", item.RepoName)
 	assert.True(item.Unread)
@@ -536,10 +536,10 @@ name = "widget"
 	require.NoError(err)
 	require.NotNil(unreadResp.JSON200)
 	require.NotNil(unreadResp.JSON200.Items)
-	require.Len(*unreadResp.JSON200.Items, 1)
-	notificationID := (*unreadResp.JSON200.Items)[0].Id
+	require.Len(unreadResp.JSON200.Items, 1)
+	notificationID := unreadResp.JSON200.Items[0].Id
 	doneResp, err := client.HTTP.MarkNotificationsDoneWithResponse(
-		ctx, generated.MarkNotificationsDoneJSONRequestBody{Ids: &[]int64{notificationID}},
+		ctx, generated.MarkNotificationsDoneJSONRequestBody{Ids: []int64{notificationID}},
 	)
 	require.NoError(err)
 	require.NotNil(doneResp.JSON200)
@@ -582,8 +582,8 @@ name = "widget"
 	require.NoError(err)
 	require.NotNil(allResp.JSON200)
 	require.NotNil(allResp.JSON200.Items)
-	require.Len(*allResp.JSON200.Items, 1)
-	item := (*allResp.JSON200.Items)[0]
+	require.Len(allResp.JSON200.Items, 1)
+	item := allResp.JSON200.Items[0]
 	assert.Equal(notificationID, item.Id)
 	assert.False(item.Unread)
 	assert.NotNil(item.DoneAt)
@@ -600,8 +600,8 @@ name = "widget"
 	require.NoError(err)
 	require.NotNil(allResp.JSON200)
 	require.NotNil(allResp.JSON200.Items)
-	require.Len(*allResp.JSON200.Items, 1)
-	item = (*allResp.JSON200.Items)[0]
+	require.Len(allResp.JSON200.Items, 1)
+	item = allResp.JSON200.Items[0]
 	assert.False(item.Unread)
 	assert.NotNil(item.DoneAt)
 	assert.Nil(item.GithubReadQueuedAt)
@@ -701,16 +701,16 @@ name = "widget"
 	require.NoError(err)
 	require.NotNil(listResp.JSON200)
 	require.NotNil(listResp.JSON200.Items)
-	require.Len(*listResp.JSON200.Items, 2)
-	ids := []int64{(*listResp.JSON200.Items)[0].Id, (*listResp.JSON200.Items)[1].Id}
+	require.Len(listResp.JSON200.Items, 2)
+	ids := []int64{listResp.JSON200.Items[0].Id, listResp.JSON200.Items[1].Id}
 	readResp, err := client.HTTP.MarkNotificationsReadWithResponse(
 		t.Context(),
-		generated.MarkNotificationsReadJSONRequestBody{Ids: &ids},
+		generated.MarkNotificationsReadJSONRequestBody{Ids: ids},
 	)
 	require.NoError(err)
 	require.NotNil(readResp.JSON200)
-	require.ElementsMatch(ids, *readResp.JSON200.Succeeded)
-	require.ElementsMatch(ids, *readResp.JSON200.Queued)
+	require.ElementsMatch(ids, readResp.JSON200.Succeeded)
+	require.ElementsMatch(ids, readResp.JSON200.Queued)
 
 	err = syncer.ProcessQueuedNotificationReads(t.Context(), platform.KindGitHub, "github.com", 10)
 	require.Error(err)
@@ -812,14 +812,14 @@ name = "widget"
 	require.NoError(err)
 	require.NotNil(unreadResp.JSON200)
 	require.NotNil(unreadResp.JSON200.Items)
-	require.Len(*unreadResp.JSON200.Items, 1)
-	notificationID := (*unreadResp.JSON200.Items)[0].Id
+	require.Len(unreadResp.JSON200.Items, 1)
+	notificationID := unreadResp.JSON200.Items[0].Id
 	doneResp, err := client.HTTP.MarkNotificationsDoneWithResponse(
-		ctx, generated.MarkNotificationsDoneJSONRequestBody{Ids: &[]int64{notificationID}},
+		ctx, generated.MarkNotificationsDoneJSONRequestBody{Ids: []int64{notificationID}},
 	)
 	require.NoError(err)
 	require.NotNil(doneResp.JSON200)
-	require.ElementsMatch([]int64{notificationID}, *doneResp.JSON200.Queued)
+	require.ElementsMatch([]int64{notificationID}, doneResp.JSON200.Queued)
 
 	_, accepted, err = database.ReconcileRepositoryObservation(ctx, db.RepoIdentity{
 		Platform: "github", PlatformHost: "github.com", PlatformRepoID: providerID,

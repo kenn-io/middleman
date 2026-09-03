@@ -54,6 +54,12 @@ func Run(t *testing.T, dir string, args ...string) []byte {
 	return out
 }
 
+// SHA resolves ref in dir and returns the trimmed object ID.
+func SHA(t *testing.T, dir, ref string) string {
+	t.Helper()
+	return strings.TrimSpace(string(Run(t, dir, "rev-parse", ref)))
+}
+
 // AppendFileCommits adds count commits that successively replace path on ref.
 // It uses one fast-import process so boundary-size histories do not exhaust
 // shared subprocess capacity when Go packages run concurrently.

@@ -17,6 +17,7 @@ import (
 	"go.kenn.io/forge/internal/ratelimit"
 	"go.kenn.io/forge/internal/server/httpapi"
 	"go.kenn.io/forge/internal/server/pullapi"
+	"go.kenn.io/forge/internal/testutil"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/tokenauth"
 )
@@ -412,7 +413,7 @@ func TestAPIRepoResponseIncludesOperationsHealthy(t *testing.T) {
 	// Keep merge available so this fixture isolates the healthy path.
 	require.NoError(database.UpdateRepoViewerCanMerge(t.Context(), repoID, true))
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 
 	var resp repoResponse
@@ -439,7 +440,7 @@ func TestAPIRepoResponseIncludesOperationsRateLimited(t *testing.T) {
 	resetAt := time.Now().UTC().Add(30 * time.Minute)
 	rt.UpdateFromRate(ratelimit.Rate{Limit: 5000, Remaining: 0, Reset: resetAt})
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 
 	var resp repoResponse
@@ -492,7 +493,7 @@ func TestAPIRepoResponseIncludesOperationsGraphQLPauseDoesNotBlockREST(t *testin
 	resetAt := time.Now().UTC().Add(30 * time.Minute)
 	gqlRT.UpdateFromRate(ratelimit.Rate{Limit: 5000, Remaining: 0, Reset: resetAt})
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 
 	var resp repoResponse
@@ -535,7 +536,7 @@ func TestAPIRepoResponseApplySuggestionRateBucketsFollowProvider(t *testing.T) {
 		require.NoError(err)
 		gqlRT.UpdateFromRate(ratelimit.Rate{Limit: 5000, Remaining: 0, Reset: resetAt})
 
-		rr := doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+		rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 		require.Equal(http.StatusOK, rr.Code)
 		var resp repoResponse
 		require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -597,10 +598,10 @@ func TestAPIRepoResponseApplySuggestionRateBucketsFollowProvider(t *testing.T) {
 		require.NoError(err)
 		gqlRT.UpdateFromRate(ratelimit.Rate{Limit: 5000, Remaining: 0, Reset: resetAt})
 
-		rr := doJSON(
+		rr := testutil.DoJSON(
 			t, srv, http.MethodGet,
-			"/api/v1/host/gitlab.example.com/repo/gitlab/group/project", nil,
-		)
+			"/api/v1/host/gitlab.example.com/repo/gitlab/group/project", nil)
+
 		require.Equal(http.StatusOK, rr.Code)
 		var resp repoResponse
 		require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -661,10 +662,10 @@ func TestAPIRepoResponseApplySuggestionRateBucketsFollowProvider(t *testing.T) {
 		})
 		require.NoError(err)
 
-		rr := doJSON(
+		rr := testutil.DoJSON(
 			t, srv, http.MethodGet,
-			"/api/v1/host/gitlab.example.com/repo/gitlab/group/project", nil,
-		)
+			"/api/v1/host/gitlab.example.com/repo/gitlab/group/project", nil)
+
 		require.Equal(http.StatusOK, rr.Code)
 		var resp repoResponse
 		require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -722,7 +723,7 @@ func TestAPIRepoResponseOperationsGateOnWriteTrackerWhenSplit(t *testing.T) {
 	resetAt := time.Now().UTC().Add(30 * time.Minute)
 	restRT.UpdateFromRate(ratelimit.Rate{Limit: 5000, Remaining: 0, Reset: resetAt})
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 	var resp repoResponse
 	require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -733,7 +734,7 @@ func TestAPIRepoResponseOperationsGateOnWriteTrackerWhenSplit(t *testing.T) {
 	// mutation (ready-for-review) follows its own write bucket.
 	writeRT.UpdateFromRate(ratelimit.Rate{Limit: 5000, Remaining: 0, Reset: resetAt})
 
-	rr = doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr = testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 	resp = repoResponse{}
 	require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -749,7 +750,7 @@ func TestAPIRepoResponseOperationsGateOnWriteTrackerWhenSplit(t *testing.T) {
 	writeRT.UpdateFromRate(ratelimit.Rate{Limit: 5000, Remaining: 4000, Reset: resetAt})
 	writeGQLRT.UpdateFromRate(ratelimit.Rate{Limit: 5000, Remaining: 0, Reset: resetAt})
 
-	rr = doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr = testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 	resp = repoResponse{}
 	require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -788,7 +789,7 @@ func TestAPIRepoResponseOperationsRequireWriteCredentialWhenSplit(t *testing.T) 
 	require.NoError(err)
 	srv.syncer.SetGitHubRouters(map[string]*ghclient.HostRouter{"github.com": router})
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 	var resp repoResponse
 	require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -806,7 +807,7 @@ func TestAPIRepoResponseOperationsRequireWriteCredentialWhenSplit(t *testing.T) 
 	set.Upsert(splitTestDescriptor(tokenauth.Candidate{
 		Kind: tokenauth.SourceKindEnv, EnvName: "SPLIT_WRITE_CRED_PAT_NEW",
 	}))
-	rr = doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr = testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 	resp = repoResponse{}
 	require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -827,7 +828,7 @@ func TestAPIRepoResponseOperationsDistinguishWriteCredentialErrors(t *testing.T)
 		FilePath: filepath.Join(t.TempDir(), "does-not-exist.token"),
 	})
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 	var resp repoResponse
 	require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -876,7 +877,7 @@ func TestAPIRepoResponseProbesRestartBoundWriteCredential(t *testing.T) {
 	)
 	require.NoError(err)
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 	var resp repoResponse
 	require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -885,7 +886,7 @@ func TestAPIRepoResponseProbesRestartBoundWriteCredential(t *testing.T) {
 	assert.Equal(availabilityCodeWriteCredentialError, merge.Code)
 	assert.Contains(merge.UnavailableReason, "restart")
 
-	rr = doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr = testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 	assert.Equal(1, client.calls, "routed write credential probes must use the TTL cache")
 }
@@ -915,7 +916,7 @@ func TestAPIRepoResponseDisablesWritesWhenConfiguredRouterHasNoRoute(t *testing.
 	)
 	require.NoError(err)
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/other/widget", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/other/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 	var resp repoResponse
 	require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
@@ -992,7 +993,7 @@ func TestAPIRepoResponseIncludesOperationsViewerCannotMerge(t *testing.T) {
 	// merge gate (not the capability gate) decides this case.
 	require.NoError(database.UpdateRepoViewerCanMerge(t.Context(), repoID, false))
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repo/github/acme/widget", nil)
 	require.Equal(http.StatusOK, rr.Code)
 
 	var resp repoResponse
@@ -1027,7 +1028,7 @@ func TestAPIPullDetailOperationsDisableSelfApproval(t *testing.T) {
 	// Keep merge available so this fixture isolates the self-approval gate.
 	require.NoError(database.UpdateRepoViewerCanMerge(t.Context(), repo.ID, true))
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/pulls/github/acme/widget/1", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/pulls/github/acme/widget/1", nil)
 	require.Equal(http.StatusOK, rr.Code)
 
 	var resp pullapi.MergeRequestDetailResponse
@@ -1040,7 +1041,7 @@ func TestAPIPullDetailOperationsDisableSelfApproval(t *testing.T) {
 	assert.Equal("You cannot approve your own pull request", submitReview.UnavailableReason)
 	assert.True(resp.Repo.Operations.MergePR.Available)
 
-	rr = doJSON(t, srv, http.MethodGet, "/api/v1/pulls/github/acme/widget/1", nil)
+	rr = testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/pulls/github/acme/widget/1", nil)
 	require.Equal(http.StatusOK, rr.Code)
 	assert.Equal(1, mock.authenticatedViewerCalls,
 		"provider should cache the authenticated viewer login")
@@ -1057,7 +1058,7 @@ func TestAPIPullDetailOperationsSkipViewerLookupWhenSubmitReviewUnavailable(t *t
 	}, mock)
 	seedPR(t, srv.db, "acme", "widget", 1, withSeedPRAuthor("marius"))
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/pulls/github/acme/widget/1", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/pulls/github/acme/widget/1", nil)
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 
 	var resp pullapi.MergeRequestDetailResponse

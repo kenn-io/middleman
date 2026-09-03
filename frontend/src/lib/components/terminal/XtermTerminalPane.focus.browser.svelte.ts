@@ -37,6 +37,19 @@ class ControlledWebSocket extends EventTarget {
   send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
     if (typeof data === "string" || ArrayBuffer.isView(data)) this.sent.push(data);
   }
+
+  receive(text: string): void {
+    const bytes = new TextEncoder().encode(text);
+    this.dispatchEvent(new MessageEvent("message", { data: bytes.buffer }));
+  }
+
+  receiveControl(text: string): void {
+    this.dispatchEvent(new MessageEvent("message", { data: text }));
+  }
+
+  sentText(): string[] {
+    return this.sent.map((frame) => (typeof frame === "string" ? frame : new TextDecoder().decode(frame)));
+  }
 }
 
 describe("XtermTerminalPane focus", () => {
@@ -50,6 +63,68 @@ describe("XtermTerminalPane focus", () => {
   afterEach(async () => {
     await Effect.runPromise(runtime.disposeEffect);
     vi.unstubAllGlobals();
+  });
+
+  it("claims resize authority and uses active terminal keyboard modes for semantic keys", async () => {
+    vi.stubGlobal("WebSocket", ControlledWebSocket);
+
+    const target = document.createElement("div");
+    target.style.width = "600px";
+    target.style.height = "400px";
+    target.dataset.terminalSoftwareKeyboard = "manual";
+    const composer = document.createElement("textarea");
+    document.body.appendChild(target);
+    document.body.appendChild(composer);
+    const props = $state({
+      runtime,
+      websocketPath: "/ws/v1/workspaces/ws-1/runtime/sessions/s1/terminal",
+      active: true,
+    });
+    const component = mount(XtermTerminalPaneTestHarness, {
+      target,
+      props,
+      context: new Map([[STORES_KEY, { settings: createSettingsStore() }]]),
+    });
+    try {
+      await vi.waitFor(() => {
+        expect(controlledSockets).toHaveLength(1);
+        expect(target.querySelector(".xterm-helper-textarea")).not.toBeNull();
+      });
+      const socket = controlledSockets[0]!;
+
+      socket.sent.length = 0;
+      composer.focus();
+      expect(component.sendKey("ArrowUp")).toBe(false);
+      expect(socket.sent).toEqual([]);
+      expect(document.activeElement).toBe(composer);
+
+      socket.receiveControl(JSON.stringify({ type: "replay_ready" }));
+      socket.sent.length = 0;
+      socket.receive("\x1b[?1h\x1b[?u");
+      await vi.waitFor(() => expect(socket.sentText()).toContain("\x1b[?0u"));
+      socket.sent.length = 0;
+      composer.focus();
+      expect(component.sendKey("ArrowUp")).toBe(true);
+      await vi.waitFor(() => expect(socket.sent.length).toBeGreaterThanOrEqual(2));
+      expect(document.activeElement).toBe(composer);
+      expect(target.querySelector(".xterm-helper-textarea")).toHaveAttribute("inputmode", "none");
+      let frames = socket.sentText();
+      expect(JSON.parse(frames[0]!)).toMatchObject({ type: "claim_resize" });
+      expect(frames.slice(1)).toEqual(["\x1bOA"]);
+
+      socket.receive("\x1b[?1l\x1b[>3u\x1b[?u");
+      await vi.waitFor(() => expect(socket.sentText()).toContain("\x1b[?3u"));
+      socket.sent.length = 0;
+      expect(component.sendKey("ArrowUp")).toBe(true);
+      await vi.waitFor(() => expect(socket.sent.length).toBeGreaterThanOrEqual(3));
+      frames = socket.sentText();
+      expect(JSON.parse(frames[0]!)).toMatchObject({ type: "claim_resize" });
+      expect(frames.slice(1)).toEqual(["\x1b[A", "\x1b[1;1:3A"]);
+    } finally {
+      unmount(component);
+      target.remove();
+      composer.remove();
+    }
   });
 
   it("turns an unscrollable agent wheel gesture into cursor input", async () => {

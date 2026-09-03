@@ -12,17 +12,11 @@ export function loadMobileWorkspaceDetail(
 ): Effect.Effect<WorkspaceDetail, unknown, GeneratedApi> {
   if (hostKey) {
     return executeOpaqueGeneratedApiRequest("load mobile Fleet workspace", (client, signal) =>
-      client.GET("/fleet/hosts/{host_key}/workspaces/{id}", {
-        params: { path: { host_key: hostKey, id: workspaceId } },
-        signal,
-      }),
+      client.FleetService.getFleetWorkspace({ hostKey: hostKey, id: workspaceId }, { signal }),
     ).pipe(Effect.flatMap((payload) => decodeWorkspaceDetail(payload, hostKey)));
   }
   return executeGeneratedApiRequest("load mobile workspace", (client, signal) =>
-    client.GET("/workspaces/{id}", {
-      params: { path: { id: workspaceId } },
-      signal,
-    }),
+    client.WorkspacesService.getWorkspace({ id: workspaceId }, { signal }),
   ).pipe(Effect.flatMap((payload) => decodeWorkspaceDetail(payload)));
 }
 

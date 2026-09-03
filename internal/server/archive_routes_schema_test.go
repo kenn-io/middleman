@@ -8,7 +8,7 @@ import (
 )
 
 func TestArchiveReportResponseTransformSchemaNamesReportSchema(t *testing.T) {
-	t.Parallel()
+	runParallelServerTest(t)
 
 	property := &huma.Schema{}
 	schema := &huma.Schema{

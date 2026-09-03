@@ -47,7 +47,7 @@ export function resolvedPlatformHost(provider: string, platformHost?: string | n
   return platformHost?.trim() || providerDefaultHost(provider) || "";
 }
 
-function shouldUseHostRoute(ref: ProviderRouteRef): boolean {
+export function providerUsesHostRoute(ref: ProviderRouteRef): boolean {
   const provider = canonicalProvider(ref.provider);
   const host = ref.platformHost?.trim();
   return !!host && host !== defaultHost(provider);
@@ -58,9 +58,16 @@ export function providerRouteParams(ref: ProviderRouteRef) {
     provider: canonicalProvider(ref.provider),
     owner: ref.owner,
     name: ref.name,
-    ...(shouldUseHostRoute(ref) && {
+    ...(providerUsesHostRoute(ref) && {
       platform_host: ref.platformHost?.trim(),
     }),
+  };
+}
+
+export function providerHostRouteParams(ref: ProviderRouteRef) {
+  return {
+    ...providerRouteParams(ref),
+    platformHost: ref.platformHost?.trim() ?? "",
   };
 }
 
@@ -121,7 +128,7 @@ export function providerItemPath<S extends PullSuffix>(kind: "pulls", ref: Provi
 export function providerItemPath(kind: "issues", ref: ProviderRouteRef): IssuePath<"">;
 export function providerItemPath<S extends IssueSuffix>(kind: "issues", ref: ProviderRouteRef, suffix: S): IssuePath<S>;
 export function providerItemPath(kind: "pulls" | "issues", ref: ProviderRouteRef, suffix = ""): string {
-  if (shouldUseHostRoute(ref)) {
+  if (providerUsesHostRoute(ref)) {
     return `/host/{platform_host}/${kind}/{provider}/{owner}/{name}/{number}${suffix}`;
   }
   return `/${kind}/{provider}/{owner}/{name}/{number}${suffix}`;
@@ -166,7 +173,7 @@ type RepoPath<S extends RepoSuffix> =
 export function providerRepoPath(ref: ProviderRouteRef): RepoPath<"">;
 export function providerRepoPath<S extends RepoSuffix>(ref: ProviderRouteRef, suffix: S): RepoPath<S>;
 export function providerRepoPath(ref: ProviderRouteRef, suffix = ""): string {
-  if (shouldUseHostRoute(ref)) {
+  if (providerUsesHostRoute(ref)) {
     return `/host/{platform_host}/repo/{provider}/{owner}/{name}${suffix}`;
   }
   return `/repo/{provider}/{owner}/{name}${suffix}`;
@@ -181,7 +188,8 @@ export function providerRepoResourceURL(
   const provider = encodeURIComponent(params.provider);
   const owner = encodeURIComponent(params.owner);
   const name = encodeURIComponent(params.name);
-  const hostPrefix = params.platform_host ? `/host/${encodeURIComponent(params.platform_host)}` : "";
+  const host = providerUsesHostRoute(ref) ? ref.platformHost?.trim() : undefined;
+  const hostPrefix = host ? `/host/${encodeURIComponent(host)}` : "";
   const search = new URLSearchParams(query).toString();
   return configuredAPIPath(`${hostPrefix}/repo/${provider}/${owner}/${name}${suffix}${search ? `?${search}` : ""}`);
 }
@@ -193,7 +201,7 @@ type CollectionPath<K extends CollectionKind> =
 
 export function providerCollectionPath<K extends CollectionKind>(kind: K, ref: ProviderRouteRef): CollectionPath<K>;
 export function providerCollectionPath(kind: CollectionKind, ref: ProviderRouteRef): string {
-  if (shouldUseHostRoute(ref)) {
+  if (providerUsesHostRoute(ref)) {
     return `/host/{platform_host}/${kind}/{provider}/{owner}/{name}`;
   }
   return `/${kind}/{provider}/{owner}/{name}`;

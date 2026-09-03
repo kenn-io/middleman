@@ -95,6 +95,8 @@
         {provider}
         {platformHost}
         {repoPath}
+        itemType="issue"
+        itemNumber={number}
         value={body}
         disabled={isPostingCurrent || disabled}
         oninput={(nextBody) => {

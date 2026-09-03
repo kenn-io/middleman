@@ -142,8 +142,8 @@ func TestRunMainShutdownStopsSignalsBeforeLongCleanup(t *testing.T) {
 		StopSignals: func() {
 			record("signals")
 		},
-		StopNotificationLoops: func(context.Context) error {
-			record("notifications")
+		StopBackgroundLoops: func(context.Context) error {
+			record("background")
 			return nil
 		},
 		ShutdownMCPHTTP: func(context.Context) error {
@@ -178,7 +178,7 @@ func TestRunMainShutdownStopsSignalsBeforeLongCleanup(t *testing.T) {
 	assert.Empty(t, errs)
 	assert.Equal(t, []string{
 		"signals",
-		"notifications",
+		"background",
 		"mcp-http",
 		"primary-http",
 		"syncer",

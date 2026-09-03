@@ -2,10 +2,12 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -262,4 +264,88 @@ func TestMarkdownImageRouteResolvesOpaqueGitLabProjectID(t *testing.T) {
 		"/api/v4/projects/group%2Fproject",
 		"/api/v4/projects/42/uploads/secret/private.png",
 	}, paths)
+}
+
+// Owner/name is a mutable route. When a different repository takes over the
+// route, the cache must not hand it the previous occupant's private bytes.
+func TestMarkdownImageCacheDoesNotFollowRouteReuse(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+	const source = "https://github.com/acme/widget/blob/main/docs/images/search.png?raw=true"
+	fetches := 0
+	mock := &mockGH{getMarkdownImageFn: func(
+		context.Context, string, string, string,
+	) (platform.MarkdownImage, error) {
+		fetches++
+		return platform.MarkdownImage{
+			Content: []byte(fmt.Sprintf("bytes-%d", fetches)), ContentType: "image/png",
+		}, nil
+	}}
+	srv, database := setupTestServerWithMock(t, mock)
+	srv.markdownImages = newMarkdownImageCache(t.TempDir())
+	_, err := database.UpsertRepo(t.Context(), verifiedGitHubRepoIdentity("github.com", "acme", "widget"))
+	require.NoError(err)
+	target := "/api/v1/repo/github/acme/widget/markdown-image?source=" + url.QueryEscape(source)
+
+	first := repoBrowserRequest(t, srv, http.MethodGet, target)
+	require.Equal(http.StatusOK, first.Code, first.Body.String())
+	assert.Equal("bytes-1", first.Body.String())
+
+	replacement := db.GitHubRepoIdentity("github.com", "acme", "widget")
+	replacement.PlatformRepoID = "repo-acme-widget-replacement"
+	_, _, err = database.ReconcileRepositoryObservation(t.Context(), replacement, time.Now().UTC().Add(time.Second))
+	require.NoError(err)
+
+	second := repoBrowserRequest(t, srv, http.MethodGet, target)
+	require.Equal(http.StatusOK, second.Code, second.Body.String())
+	assert.Equal("bytes-2", second.Body.String(), "the replacement repository must fetch its own image")
+	assert.Equal(2, fetches)
+}
+
+// Branch-addressed files change under the same URL, so the browser and the
+// disk cache must both revalidate them soon; attachments stay immutable.
+func TestMarkdownImageRouteCachesMutableImagesBriefly(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+	const mutableSource = "https://github.com/acme/widget/blob/main/docs/images/search.png?raw=true"
+	const immutableSource = "https://github.com/user-attachments/assets/11111111-2222-3333-4444-555555555555"
+	fetches := map[string]int{}
+	mock := &mockGH{getMarkdownImageFn: func(
+		_ context.Context, _, _ string, sourceURL string,
+	) (platform.MarkdownImage, error) {
+		fetches[sourceURL]++
+		return platform.MarkdownImage{
+			Content:     []byte("png-bytes"),
+			ContentType: "image/png",
+			Mutable:     sourceURL == mutableSource,
+		}, nil
+	}}
+	srv, database := setupTestServerWithMock(t, mock)
+	srv.markdownImages = newMarkdownImageCache(t.TempDir())
+	_, err := database.UpsertRepo(t.Context(), verifiedGitHubRepoIdentity("github.com", "acme", "widget"))
+	require.NoError(err)
+	request := func(source string) *httptest.ResponseRecorder {
+		return repoBrowserRequest(t, srv, http.MethodGet,
+			"/api/v1/repo/github/acme/widget/markdown-image?source="+url.QueryEscape(source))
+	}
+
+	mutable := request(mutableSource)
+	require.Equal(http.StatusOK, mutable.Code, mutable.Body.String())
+	assert.Equal("private, max-age=300", mutable.Header().Get("Cache-Control"))
+	immutable := request(immutableSource)
+	require.Equal(http.StatusOK, immutable.Code, immutable.Body.String())
+	assert.Equal("private, max-age=31536000, immutable", immutable.Header().Get("Cache-Control"))
+
+	entries, err := os.ReadDir(srv.markdownImages.root)
+	require.NoError(err)
+	require.Len(entries, 2)
+	aged := time.Now().Add(-markdownImageMutableTTL - time.Minute)
+	for _, entry := range entries {
+		require.NoError(os.Chtimes(filepath.Join(srv.markdownImages.root, entry.Name()), aged, aged))
+	}
+
+	require.Equal(http.StatusOK, request(mutableSource).Code)
+	require.Equal(http.StatusOK, request(immutableSource).Code)
+	assert.Equal(2, fetches[mutableSource], "a mutable entry past its short TTL is fetched again")
+	assert.Equal(1, fetches[immutableSource], "an immutable entry is still served from disk")
 }

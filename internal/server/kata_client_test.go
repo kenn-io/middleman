@@ -16,7 +16,7 @@ import (
 )
 
 func TestKataAPIClientExposesSnapshotEnrichmentMethods(t *testing.T) {
-	t.Parallel()
+	runParallelServerTest(t)
 
 	_ = kataAPIClient.ShowIssueByUIDWithResponse
 	_ = kataAPIClient.PollEventsWithResponse
@@ -24,7 +24,7 @@ func TestKataAPIClientExposesSnapshotEnrichmentMethods(t *testing.T) {
 }
 
 func TestNewKataAPIClientUsesResolvedTargetAuth(t *testing.T) {
-	t.Parallel()
+	runParallelServerTest(t)
 	require := require.New(t)
 
 	var authorization string
@@ -50,7 +50,7 @@ func TestNewKataAPIClientUsesResolvedTargetAuth(t *testing.T) {
 }
 
 func TestKataAPIClientStreamEventsRawDoesNotBuffer(t *testing.T) {
-	t.Parallel()
+	runParallelServerTest(t)
 	require := require.New(t)
 
 	requestHeaders := make(chan http.Header, 1)
@@ -97,7 +97,7 @@ func TestKataAPIClientStreamEventsRawDoesNotBuffer(t *testing.T) {
 }
 
 func TestKataGeneratedHTTPDoerRejectsResponseBeyondEndpointBudget(t *testing.T) {
-	t.Parallel()
+	runParallelServerTest(t)
 	require := require.New(t)
 
 	daemon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -126,7 +126,7 @@ func TestKataGeneratedHTTPDoerRejectsResponseBeyondEndpointBudget(t *testing.T) 
 }
 
 func TestKataGeneratedResponseLimitLeavesRoomForCompleteAuthorities(t *testing.T) {
-	t.Parallel()
+	runParallelServerTest(t)
 	require := require.New(t)
 
 	require.Equal(int64(128<<20), kataGeneratedResponseLimit("/api/v1/issues"))

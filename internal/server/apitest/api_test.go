@@ -150,8 +150,8 @@ func TestAPIPullsHideRemovedUpstreamArchiveRows(t *testing.T) {
 	req.NotNil(stacks.JSON200)
 	req.Len(*stacks.JSON200, 1)
 	req.NotNil((*stacks.JSON200)[0].Members)
-	req.Len(*(*stacks.JSON200)[0].Members, 1)
-	req.EqualValues(1, (*(*stacks.JSON200)[0].Members)[0].Number)
+	req.Len((*stacks.JSON200)[0].Members, 1)
+	req.EqualValues(1, ((*stacks.JSON200)[0].Members)[0].Number)
 }
 
 func TestAPIActivityAndRepoSummariesHideRemovedUpstreamArchiveRows(t *testing.T) {
@@ -238,14 +238,14 @@ func TestAPIActivityAndRepoSummariesHideRemovedUpstreamArchiveRows(t *testing.T)
 	require.Equal(http.StatusOK, activity.StatusCode())
 	require.NotNil(activity.JSON200)
 	require.NotNil(activity.JSON200.Items)
-	require.Len(*activity.JSON200.Items, 4)
-	for _, item := range *activity.JSON200.Items {
+	require.Len(activity.JSON200.Items, 4)
+	for _, item := range activity.JSON200.Items {
 		require.NotEqualValues(2, item.ItemNumber)
 		require.NotEqualValues(4, item.ItemNumber)
 	}
 	require.NotNil(activity.JSON200.ItemActivity)
-	require.NotEmpty(*activity.JSON200.ItemActivity)
-	for _, subject := range *activity.JSON200.ItemActivity {
+	require.NotEmpty(activity.JSON200.ItemActivity)
+	for _, subject := range activity.JSON200.ItemActivity {
 		require.NotEqualValues(2, subject.ItemNumber, "removed parents must not surface as parent-only threads")
 		require.NotEqualValues(4, subject.ItemNumber, "removed parents must not surface as parent-only threads")
 	}
@@ -256,8 +256,8 @@ func TestAPIActivityAndRepoSummariesHideRemovedUpstreamArchiveRows(t *testing.T)
 	require.Equal(http.StatusOK, authors.StatusCode())
 	require.NotNil(authors.JSON200)
 	require.NotNil(authors.JSON200.Authors)
-	require.NotContains(*authors.JSON200.Authors, "removed-pr-author")
-	require.NotContains(*authors.JSON200.Authors, "removed-issue-author")
+	require.NotContains(authors.JSON200.Authors, "removed-pr-author")
+	require.NotContains(authors.JSON200.Authors, "removed-issue-author")
 
 	summaries, err := client.HTTP.ListRepoSummariesWithResponse(ctx)
 	require.NoError(err)
@@ -271,15 +271,15 @@ func TestAPIActivityAndRepoSummariesHideRemovedUpstreamArchiveRows(t *testing.T)
 	require.EqualValues(1, summary.CachedIssueCount)
 	require.EqualValues(1, summary.OpenIssueCount)
 	require.NotNil(summary.ActiveAuthors)
-	require.Len(*summary.ActiveAuthors, 2)
+	require.Len(summary.ActiveAuthors, 2)
 	require.ElementsMatch(
 		[]string{"visible-pr-author", "visible-issue-author"},
-		[]string{(*summary.ActiveAuthors)[0].Login, (*summary.ActiveAuthors)[1].Login},
+		[]string{summary.ActiveAuthors[0].Login, summary.ActiveAuthors[1].Login},
 	)
 	require.NotNil(summary.RecentIssues)
-	require.Len(*summary.RecentIssues, 1)
-	require.EqualValues(3, (*summary.RecentIssues)[0].Number)
-	require.Equal("Visible issue", (*summary.RecentIssues)[0].Title)
+	require.Len(summary.RecentIssues, 1)
+	require.EqualValues(3, summary.RecentIssues[0].Number)
+	require.Equal("Visible issue", summary.RecentIssues[0].Title)
 }
 
 func TestAPIResolveAndAutocompleteHideOnlyRemovedUpstreamItems(t *testing.T) {

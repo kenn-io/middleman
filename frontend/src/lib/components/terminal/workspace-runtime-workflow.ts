@@ -19,6 +19,7 @@ import type { Scope } from "effect/Scope";
 import { ApiProblemError, InvalidExternalPayload, TransientTransportError } from "../../api/effect-errors.js";
 import { GeneratedApi } from "../../api/generated-api.js";
 import { isProblem, type ProblemBody } from "../../api/problems.js";
+import { orvalRequest } from "../../api/runtime.js";
 import { type WorkspaceRuntimeState } from "../../api/workspace-runtime.js";
 import type { LaunchTarget, RuntimeSession, WorkspaceRuntime } from "../../api/types.js";
 import type { WorkspaceItemIdentity } from "../../workspace-inline.js";
@@ -1305,17 +1306,14 @@ const decodeFleetWorkspaceRuntime = Effect.fn("WorkspaceRuntimePort.decodeFleetR
     Effect.mapError((cause) => InvalidExternalPayload.make({ operation: "decode fleet workspace runtime", cause })),
   );
   const runtime: WorkspaceRuntime = {
-    launch_targets:
-      decoded.launch_targets === null
-        ? null
-        : decoded.launch_targets.map((target): LaunchTarget => {
-            const { command, ...rest } = target;
-            return {
-              ...rest,
-              ...(command === undefined ? {} : { command: command === null ? null : [...command] }),
-            };
-          }),
-    sessions: decoded.sessions === null ? null : decoded.sessions.map((session): RuntimeSession => ({ ...session })),
+    launch_targets: (decoded.launch_targets ?? []).map((target): LaunchTarget => {
+      const { command, ...rest } = target;
+      return {
+        ...rest,
+        ...(command === undefined || command === null ? {} : { command: [...command] }),
+      };
+    }),
+    sessions: (decoded.sessions ?? []).map((session): RuntimeSession => ({ ...session })),
   };
   return runtime;
 });
@@ -1343,16 +1341,11 @@ function opaqueRuntimeFailure(
       );
 }
 
-function opaqueResponseData(result: unknown): unknown {
-  return typeof result === "object" && result !== null && "data" in result ? result.data : undefined;
-}
-
-function acceptEmptyRuntimeResponse(
-  operation: string,
-  result: { readonly response: Response; readonly error?: unknown },
-): Effect.Effect<void, ApiProblemError | InvalidExternalPayload> {
-  if (result.response.ok) return Effect.void;
-  return opaqueRuntimeFailure(operation, result.error);
+async function rawResponseBody(response: Response): Promise<unknown> {
+  if ([204, 205, 304].includes(response.status)) return undefined;
+  const text = await response.text();
+  if (text === "") return undefined;
+  return response.headers.get("Content-Type")?.includes("json") ? JSON.parse(text) : text;
 }
 
 export const WorkspaceRuntimePortLive = Effect.gen(function* () {
@@ -1361,25 +1354,13 @@ export const WorkspaceRuntimePortLive = Effect.gen(function* () {
   const read = Effect.fn("WorkspaceRuntimePort.read")(function* (target: WorkspaceRuntimeTarget) {
     const { workspaceId, hostKey } = target;
     if (hostKey !== undefined) {
-      const result = yield* Effect.tryPromise({
-        try: (signal) =>
-          api.client.GET("/fleet/hosts/{host_key}/workspaces/{id}/runtime", {
-            params: { path: { host_key: hostKey, id: workspaceId } },
-            signal,
-          }),
-        catch: (cause) => TransientTransportError.make({ operation: "load fleet workspace runtime", cause }),
-      });
-      const data = opaqueResponseData(result);
-      if (result.response.ok && data !== undefined) {
-        return normalizeWorkspaceRuntime(yield* decodeFleetWorkspaceRuntime(data));
-      }
-      return yield* opaqueRuntimeFailure("load fleet workspace runtime", "error" in result ? result.error : undefined);
+      const data = yield* api.execute("load fleet workspace runtime", (signal) =>
+        api.client.FleetService.getFleetWorkspaceRuntime({ hostKey, id: workspaceId }, { signal }),
+      );
+      return normalizeWorkspaceRuntime(yield* decodeFleetWorkspaceRuntime(data));
     }
     const runtime = yield* api.execute("load workspace runtime", (signal) =>
-      api.client.GET("/workspaces/{id}/runtime", {
-        params: { path: { id: workspaceId } },
-        signal,
-      }),
+      api.client.WorkspacesService.getWorkspaceRuntime({ id: workspaceId }, { signal }),
     );
     return normalizeWorkspaceRuntime(runtime);
   });
@@ -1392,28 +1373,13 @@ export const WorkspaceRuntimePortLive = Effect.gen(function* () {
     const { workspaceId, hostKey } = target;
     const body = { target_key: targetKey, display_region: region };
     if (hostKey !== undefined) {
-      const result = yield* Effect.tryPromise({
-        try: (signal) =>
-          api.client.POST("/fleet/hosts/{host_key}/workspaces/{id}/runtime/sessions", {
-            params: { path: { host_key: hostKey, id: workspaceId } },
-            body,
-            signal,
-          }),
-        catch: (cause) => TransientTransportError.make({ operation: "launch fleet workspace session", cause }),
-      });
-      const data = opaqueResponseData(result);
-      if (result.response.ok && data !== undefined) return yield* decodeFleetRuntimeSession(data);
-      return yield* opaqueRuntimeFailure(
-        "launch fleet workspace session",
-        "error" in result ? result.error : undefined,
+      const data = yield* api.execute("launch fleet workspace session", (signal) =>
+        api.client.FleetService.launchFleetWorkspaceRuntimeSession({ hostKey, id: workspaceId }, body, { signal }),
       );
+      return yield* decodeFleetRuntimeSession(data);
     }
     return yield* api.execute("launch workspace session", (signal) =>
-      api.client.POST("/workspaces/{id}/runtime/sessions", {
-        params: { path: { id: workspaceId } },
-        body,
-        signal,
-      }),
+      api.client.WorkspacesService.launchWorkspaceRuntimeSession({ id: workspaceId }, body, { signal }),
     );
   });
 
@@ -1424,28 +1390,21 @@ export const WorkspaceRuntimePortLive = Effect.gen(function* () {
   ) {
     const { workspaceId, hostKey } = target;
     if (hostKey !== undefined) {
-      const result = yield* Effect.tryPromise({
-        try: (signal) =>
-          api.client.PATCH("/fleet/hosts/{host_key}/workspaces/{id}/runtime/sessions/{session_key}", {
-            params: { path: { host_key: hostKey, id: workspaceId, session_key: sessionKey } },
-            body: { label },
-            signal,
-          }),
-        catch: (cause) => TransientTransportError.make({ operation: "rename fleet workspace session", cause }),
-      });
-      const data = opaqueResponseData(result);
-      if (result.response.ok && data !== undefined) return yield* decodeFleetRuntimeSession(data);
-      return yield* opaqueRuntimeFailure(
-        "rename fleet workspace session",
-        "error" in result ? result.error : undefined,
+      const data = yield* api.execute("rename fleet workspace session", (signal) =>
+        api.client.FleetService.renameFleetWorkspaceRuntimeSession(
+          { hostKey, id: workspaceId, sessionKey },
+          { label },
+          { signal },
+        ),
       );
+      return yield* decodeFleetRuntimeSession(data);
     }
     return yield* api.execute("rename workspace session", (signal) =>
-      api.client.PATCH("/workspaces/{id}/runtime/sessions/{session_key}", {
-        params: { path: { id: workspaceId, session_key: sessionKey } },
-        body: { label },
-        signal,
-      }),
+      api.client.WorkspacesService.renameWorkspaceRuntimeSession(
+        { id: workspaceId, sessionKey: sessionKey },
+        { label },
+        { signal },
+      ),
     );
   });
 
@@ -1453,56 +1412,26 @@ export const WorkspaceRuntimePortLive = Effect.gen(function* () {
     const { workspaceId, hostKey } = target;
     const operation = hostKey === undefined ? "stop workspace session" : "stop fleet workspace session";
     if (hostKey !== undefined) {
-      const result = yield* Effect.tryPromise({
-        try: (signal) =>
-          api.client.DELETE("/fleet/hosts/{host_key}/workspaces/{id}/runtime/sessions/{session_key}", {
-            params: { path: { host_key: hostKey, id: workspaceId, session_key: sessionKey } },
-            headers: { "Content-Type": "application/json" },
-            signal,
-          }),
-        catch: (cause) => TransientTransportError.make({ operation, cause }),
-      });
-      return yield* acceptEmptyRuntimeResponse(operation, result);
+      yield* api.execute(operation, (signal) =>
+        api.client.FleetService.stopFleetWorkspaceRuntimeSession({ hostKey, id: workspaceId, sessionKey }, { signal }),
+      );
+      return;
     }
-    const result = yield* Effect.tryPromise({
-      try: (signal) =>
-        api.client.DELETE("/workspaces/{id}/runtime/sessions/{session_key}", {
-          params: { path: { id: workspaceId, session_key: sessionKey } },
-          headers: { "Content-Type": "application/json" },
-          signal,
-        }),
-      catch: (cause) => TransientTransportError.make({ operation, cause }),
-    });
-    return yield* acceptEmptyRuntimeResponse(operation, result);
+    yield* api.execute(operation, (signal) =>
+      api.client.WorkspacesService.stopWorkspaceRuntimeSession({ id: workspaceId, sessionKey }, { signal }),
+    );
   });
 
   const refresh = Effect.fn("WorkspaceRuntimePort.refresh")(function* (target: WorkspaceRuntimeTarget) {
     const { workspaceId, hostKey } = target;
     if (hostKey !== undefined) {
-      const result = yield* Effect.tryPromise({
-        try: (signal) =>
-          api.client.POST("/fleet/hosts/{host_key}/workspaces/{id}/refresh", {
-            params: { path: { host_key: hostKey, id: workspaceId } },
-            signal,
-          }),
-        catch: (cause) => TransientTransportError.make({ operation: "refresh fleet workspace", cause }),
-      });
-      if ("data" in result) return yield* decodeWorkspaceDetail(result.data, hostKey);
-      if (isProblem(result.error)) {
-        return yield* Effect.fail(new ApiProblemError({ operation: "refresh fleet workspace", problem: result.error }));
-      }
-      return yield* Effect.fail(
-        InvalidExternalPayload.make({
-          operation: "decode refresh fleet workspace error response",
-          cause: result.error,
-        }),
+      const workspace = yield* api.execute("refresh fleet workspace", (signal) =>
+        api.client.FleetService.refreshFleetWorkspace({ hostKey, id: workspaceId }, { signal }),
       );
+      return yield* decodeWorkspaceDetail(workspace, hostKey);
     }
     const workspace = yield* api.execute("refresh workspace", (signal) =>
-      api.client.POST("/workspaces/{id}/refresh", {
-        params: { path: { id: workspaceId } },
-        signal,
-      }),
+      api.client.WorkspacesService.refreshWorkspace({ id: workspaceId }, { signal }),
     );
     return yield* decodeWorkspaceDetail(workspace);
   });
@@ -1510,32 +1439,13 @@ export const WorkspaceRuntimePortLive = Effect.gen(function* () {
   const retry = Effect.fn("WorkspaceRuntimePort.retrySetup")(function* (target: WorkspaceRuntimeTarget) {
     const { workspaceId, hostKey } = target;
     if (hostKey !== undefined) {
-      const result = yield* Effect.tryPromise({
-        try: (signal) =>
-          api.client.POST("/fleet/hosts/{host_key}/workspaces/{id}/retry", {
-            params: { path: { host_key: hostKey, id: workspaceId } },
-            signal,
-          }),
-        catch: (cause) => TransientTransportError.make({ operation: "retry fleet workspace setup", cause }),
-      });
-      if ("data" in result) return yield* decodeWorkspaceDetail(result.data, hostKey);
-      if (isProblem(result.error)) {
-        return yield* Effect.fail(
-          new ApiProblemError({ operation: "retry fleet workspace setup", problem: result.error }),
-        );
-      }
-      return yield* Effect.fail(
-        InvalidExternalPayload.make({
-          operation: "decode retry fleet workspace setup error response",
-          cause: result.error,
-        }),
+      const workspace = yield* api.execute("retry fleet workspace setup", (signal) =>
+        api.client.FleetService.retryFleetWorkspace({ hostKey, id: workspaceId }, { signal }),
       );
+      return yield* decodeWorkspaceDetail(workspace, hostKey);
     }
     const workspace = yield* api.execute("retry workspace setup", (signal) =>
-      api.client.POST("/workspaces/{id}/retry", {
-        params: { path: { id: workspaceId } },
-        signal,
-      }),
+      api.client.WorkspacesService.retryWorkspace({ id: workspaceId }, { signal }),
     );
     return yield* decodeWorkspaceDetail(workspace);
   });
@@ -1546,81 +1456,79 @@ export const WorkspaceRuntimePortLive = Effect.gen(function* () {
   ) {
     const { workspaceId, hostKey } = target;
     if (hostKey !== undefined) {
-      const result = yield* Effect.tryPromise({
+      const response = yield* Effect.tryPromise({
         try: (signal) =>
-          api.client.DELETE("/fleet/hosts/{host_key}/workspaces/{id}", {
-            params: {
-              path: { host_key: hostKey, id: workspaceId },
-              ...(force ? { query: { force: true } } : {}),
+          orvalRequest(
+            api.client.FleetService.getDeleteFleetWorkspaceUrl(
+              { hostKey, id: workspaceId },
+              force ? { force: true } : undefined,
+            ),
+            {
+              method: "DELETE",
+              signal,
             },
-            signal,
-          }),
+          ),
         catch: (cause) => TransientTransportError.make({ operation: "delete fleet workspace", cause }),
       });
-      const error = "error" in result && isProblem(result.error) ? result.error : undefined;
-      return { response: result.response, ...(error === undefined ? {} : { error }) };
+      const body = response.ok
+        ? undefined
+        : yield* Effect.tryPromise({
+            try: () => rawResponseBody(response),
+            catch: (cause) =>
+              TransientTransportError.make({ operation: "decode delete fleet workspace response", cause }),
+          });
+      const error = isProblem(body) ? body : undefined;
+      return { response, ...(error === undefined ? {} : { error }) };
     }
-    const result = yield* Effect.tryPromise({
+    const response = yield* Effect.tryPromise({
       try: (signal) =>
-        api.client.DELETE("/workspaces/{id}", {
-          params: {
-            path: { id: workspaceId },
-            ...(force ? { query: { force: true } } : {}),
+        orvalRequest(
+          api.client.WorkspacesService.getDeleteWorkspaceUrl({ id: workspaceId }, force ? { force: true } : undefined),
+          {
+            method: "DELETE",
+            signal,
           },
-          signal,
-        }),
+        ),
       catch: (cause) => TransientTransportError.make({ operation: "delete workspace", cause }),
     });
-    const error = "error" in result && isProblem(result.error) ? result.error : undefined;
-    return { response: result.response, ...(error === undefined ? {} : { error }) };
+    const body = response.ok
+      ? undefined
+      : yield* Effect.tryPromise({
+          try: () => rawResponseBody(response),
+          catch: (cause) => TransientTransportError.make({ operation: "decode delete workspace response", cause }),
+        });
+    const error = isProblem(body) ? body : undefined;
+    return { response, ...(error === undefined ? {} : { error }) };
   });
 
   const isDeleted = Effect.fn("WorkspaceRuntimePort.isDeleted")(function* (target: WorkspaceRuntimeTarget) {
     const { workspaceId, hostKey } = target;
     if (hostKey !== undefined) {
-      const result = yield* Effect.tryPromise({
+      const response = yield* Effect.tryPromise({
         try: (signal) =>
-          api.client.GET("/fleet/hosts/{host_key}/workspaces/{id}", {
-            params: { path: { host_key: hostKey, id: workspaceId } },
-            signal,
-          }),
+          orvalRequest(api.client.FleetService.getGetFleetWorkspaceUrl({ hostKey, id: workspaceId }), { signal }),
         catch: (cause) => TransientTransportError.make({ operation: "confirm fleet workspace deletion", cause }),
       });
-      if (result.response.status === 404) return true;
-      if ("data" in result && result.data !== undefined) return false;
-      if ("error" in result && isProblem(result.error)) {
-        return yield* Effect.fail(
-          new ApiProblemError({ operation: "confirm fleet workspace deletion", problem: result.error }),
-        );
-      }
-      return yield* Effect.fail(
-        InvalidExternalPayload.make({
-          operation: "decode fleet workspace deletion authority",
-          cause: "error" in result ? result.error : undefined,
-        }),
-      );
+      if (response.status === 404) return true;
+      if (response.ok) return false;
+      const body = yield* Effect.tryPromise({
+        try: () => rawResponseBody(response),
+        catch: (cause) =>
+          TransientTransportError.make({ operation: "decode fleet workspace deletion authority", cause }),
+      });
+      return yield* opaqueRuntimeFailure("confirm fleet workspace deletion", body);
     }
-    const result = yield* Effect.tryPromise({
-      try: (signal) =>
-        api.client.GET("/workspaces/{id}", {
-          params: { path: { id: workspaceId } },
-          signal,
-        }),
+    const response = yield* Effect.tryPromise({
+      try: (signal) => orvalRequest(api.client.WorkspacesService.getGetWorkspaceUrl({ id: workspaceId }), { signal }),
       catch: (cause) => TransientTransportError.make({ operation: "confirm workspace deletion", cause }),
     });
-    if (result.response.status === 404) return true;
-    if ("data" in result && result.data !== undefined) return false;
-    if ("error" in result && isProblem(result.error)) {
-      return yield* Effect.fail(
-        new ApiProblemError({ operation: "confirm workspace deletion", problem: result.error }),
-      );
-    }
-    return yield* Effect.fail(
-      InvalidExternalPayload.make({
-        operation: "decode workspace deletion authority",
-        cause: "error" in result ? result.error : undefined,
-      }),
-    );
+    if (response.status === 404) return true;
+    if (response.ok) return false;
+    const body = yield* Effect.tryPromise({
+      try: () => rawResponseBody(response),
+      catch: (cause) => TransientTransportError.make({ operation: "decode workspace deletion authority", cause }),
+    });
+    return yield* opaqueRuntimeFailure("confirm workspace deletion", body);
   });
 
   return {

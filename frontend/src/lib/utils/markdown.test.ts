@@ -43,6 +43,51 @@ describe("renderMarkdown task lists", () => {
     }
   });
 
+  it("proxies images committed to the repository through the repo-scoped API", async () => {
+    const repo = {
+      provider: "github",
+      platformHost: "github.com",
+      owner: "acme",
+      name: "widgets",
+      repoPath: "acme/widgets",
+    };
+    const sources = [
+      "https://github.com/acme/widgets/blob/feat/search-controls/docs/images/search.png?raw=true",
+      "https://github.com/acme/widgets/raw/main/docs/images/search.png",
+      "https://raw.githubusercontent.com/Acme/Widgets/main/docs/images/search.png",
+    ];
+
+    for (const source of sources) {
+      const html = await renderMarkdown(`![Search options](${source})`, repo);
+      expect(html).toContain(
+        `src="/api/v1/repo/github/acme/widgets/markdown-image?source=${encodeURIComponent(source)}"`,
+      );
+    }
+  });
+
+  it("leaves GitHub images outside the repository on direct loading", async () => {
+    const repo = {
+      provider: "github",
+      platformHost: "github.com",
+      owner: "acme",
+      name: "widgets",
+      repoPath: "acme/widgets",
+    };
+    const sources = [
+      "https://github.com/acme/other/blob/main/docs/images/search.png?raw=true",
+      "https://raw.githubusercontent.com/acme/other/main/docs/images/search.png",
+      "https://github.com/acme/widgets/tree/main/docs/images/search.png",
+      "https://github.com/acme/widgets/blob/main",
+      "https://gist.githubusercontent.com/acme/widgets/main/docs/images/search.png",
+    ];
+
+    for (const source of sources) {
+      const html = await renderMarkdown(`![Search options](${source})`, repo);
+      expect(html).toContain(`src="${source}"`);
+      expect(html).not.toContain("markdown-image");
+    }
+  });
+
   it("proxies private GitLab upload images through the repo-scoped API", async () => {
     const source = "/uploads/0123456789abcdef/private-image.png";
     const canonicalSource = "https://gitlab.example.com/group/project/uploads/0123456789abcdef/private-image.png";

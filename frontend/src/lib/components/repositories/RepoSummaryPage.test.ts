@@ -10,16 +10,16 @@ const mockNavigate = vi.fn();
 const mockSetGlobalRepo = vi.fn();
 const runtimeCapture = vi.hoisted(() => ({ current: undefined as OwnedAppRuntime | undefined }));
 
-vi.mock("../../api/runtime.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../api/runtime.js")>();
+vi.mock("../../app/runtime.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../app/runtime.js")>();
+  const { makeGeneratedClientFromRouteMocks } = await import("../../testing/test/route-mock-client.js");
   const client = {
     GET: (...args: unknown[]) => mockGet(...args),
     POST: (...args: unknown[]) => mockPost(...args),
   };
   return {
     ...actual,
-    client,
-    createRuntimeClient: () => client,
+    makeAppRuntime: () => actual.makeAppRuntime(makeGeneratedClientFromRouteMocks(client)),
   };
 });
 

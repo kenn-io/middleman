@@ -103,7 +103,7 @@ type CrossFolderHit struct {
 	RelPath    string       `json:"rel_path"`
 	Score      int          `json:"score"`
 	HitType    string       `json:"hit_type"` // "filename" | "body"
-	Line       int          `json:"line,omitempty"`
+	Line       int          `json:"line,omitempty,omitzero"`
 	Snippet    *BodySnippet `json:"snippet,omitempty"`
 }
 

@@ -999,13 +999,43 @@ func (m *Manager) git(
 func (m *Manager) RunGitForRepo(
 	ctx context.Context, platform, host, owner, name, dir string, args ...string,
 ) ([]byte, error) {
+	return m.RunGitForRepoRemote(
+		ctx, platform, host, owner, name, "origin", dir, args...,
+	)
+}
+
+// RunGitForRepoRemote runs a networked Git command against a named remote
+// that must match the supplied repository route.
+func (m *Manager) RunGitForRepoRemote(
+	ctx context.Context,
+	platform, host, owner, name, remote, dir string,
+	args ...string,
+) ([]byte, error) {
 	source := m.sourceForRepo(platform, host, owner, name)
 	if source != nil {
-		if err := m.validateOriginIdentity(ctx, dir, host, owner, name); err != nil {
+		if err := m.validateRemoteIdentity(ctx, dir, remote, host, owner, name); err != nil {
 			return nil, err
 		}
 	}
 	return m.gitNetworked(ctx, source, host, dir, nil, args...)
+}
+
+// RunGitForNamedRemote runs a networked Git command with credentials selected
+// from the named remote's validated repository identity.
+func (m *Manager) RunGitForNamedRemote(
+	ctx context.Context,
+	platform, host, routeOwner, routeName, remote, dir string,
+	args ...string,
+) ([]byte, error) {
+	owner, name, err := m.namedRemoteRepository(
+		ctx, platform, host, routeOwner, routeName, remote, dir,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return m.RunGitForRepoRemote(
+		ctx, platform, host, owner, name, remote, dir, args...,
+	)
 }
 
 // RunGitForRemote runs a networked Git command against an explicit hosted
@@ -1041,26 +1071,29 @@ func (m *Manager) RunGitForHost(
 	return m.gitNetworked(ctx, m.fallbackSource(host), host, dir, nil, args...)
 }
 
-func (m *Manager) validateOriginIdentity(
-	ctx context.Context, dir, host, owner, name string,
+func (m *Manager) validateRemoteIdentity(
+	ctx context.Context, dir, remote, host, owner, name string,
 ) error {
 	if strings.TrimSpace(dir) == "" {
 		return nil
+	}
+	if remote == "" || remote[0] == '-' || strings.ContainsAny(remote, " \t\r\n") {
+		return fmt.Errorf("authenticated git rejects unsafe remote name %q", remote)
 	}
 	rewrites, err := m.git(ctx, dir, "config", "--local", "--get-regexp", `^url\..*\.(insteadOf|pushInsteadOf)$`)
 	if err == nil && strings.TrimSpace(string(rewrites)) != "" {
 		return fmt.Errorf("authenticated git rejects repository-local URL rewrites")
 	}
-	for _, key := range []string{"remote.origin.url", "remote.origin.pushurl"} {
+	for _, key := range []string{"remote." + remote + ".url", "remote." + remote + ".pushurl"} {
 		out, err := m.git(ctx, dir, "config", "--get-all", key)
 		if err != nil {
-			if key == "remote.origin.pushurl" {
+			if strings.HasSuffix(key, ".pushurl") {
 				continue
 			}
 			return fmt.Errorf("read %s before authenticated git: %w", key, err)
 		}
 		urls := strings.Fields(string(out))
-		if len(urls) == 0 && key == "remote.origin.pushurl" {
+		if len(urls) == 0 && strings.HasSuffix(key, ".pushurl") {
 			continue
 		}
 		for _, url := range urls {
@@ -1070,6 +1103,60 @@ func (m *Manager) validateOriginIdentity(
 		}
 	}
 	return nil
+}
+
+func (m *Manager) namedRemoteRepository(
+	ctx context.Context,
+	platform, host, routeOwner, routeName, remote, dir string,
+) (string, string, error) {
+	if remote == "" || remote[0] == '-' || strings.ContainsAny(remote, " \t\r\n") {
+		return "", "", fmt.Errorf("authenticated git rejects unsafe remote name %q", remote)
+	}
+	var remoteURLs []string
+	for _, key := range []string{"remote." + remote + ".url", "remote." + remote + ".pushurl"} {
+		out, err := m.git(ctx, dir, "config", "--get-all", key)
+		if err != nil {
+			if strings.HasSuffix(key, ".pushurl") {
+				continue
+			}
+			return "", "", fmt.Errorf("read %s before authenticated git: %w", key, err)
+		}
+		remoteURLs = append(remoteURLs, strings.Fields(string(out))...)
+	}
+	if len(remoteURLs) == 0 {
+		return "", "", fmt.Errorf("read remote.%s.url before authenticated git: no URL configured", remote)
+	}
+	repoPath := gitremote.RemoteRepoPath(remoteURLs[0])
+	index := strings.LastIndex(repoPath, "/")
+	if index <= 0 || index == len(repoPath)-1 {
+		owner, name := strings.TrimSpace(routeOwner), strings.TrimSpace(routeName)
+		if owner == "" || name == "" {
+			return "", "", errors.New("remote repository owner and name are required")
+		}
+		for _, remoteURL := range remoteURLs {
+			if err := m.validateRemoteTransport(platform, host, remoteURL); err != nil {
+				return "", "", err
+			}
+			if err := validateRemoteURLIdentity(host, owner, name, remoteURL); err != nil {
+				return "", "", fmt.Errorf(
+					"validate %q remote before authenticated git: %w", remote, err,
+				)
+			}
+		}
+		return owner, name, nil
+	}
+	owner, name := repoPath[:index], repoPath[index+1:]
+	for _, remoteURL := range remoteURLs {
+		if err := m.validateRemoteTransport(platform, host, remoteURL); err != nil {
+			return "", "", err
+		}
+		if err := validateRemoteURLIdentity(host, owner, name, remoteURL); err != nil {
+			return "", "", fmt.Errorf(
+				"validate %q remote before authenticated git: %w", remote, err,
+			)
+		}
+	}
+	return owner, name, nil
 }
 
 func (m *Manager) gitWithInput(

@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { components } from "../api/generated/schema.js";
+import type { KataEffectiveLink, KataEffectiveLinksResponse } from "../api/generated/models/index.js";
 import type { GeneratedClient } from "../api/generated-api.js";
+import { GeneratedProblemResponse } from "../api/runtime.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
 import { createKataLinksStore, type KataLinksSubject } from "./kata-links.svelte.js";
 
-type EffectiveLinks = components["schemas"]["KataEffectiveLinksResponse"];
+type EffectiveLinks = KataEffectiveLinksResponse;
 
 const workspaceSubject: KataLinksSubject = { kind: "workspace", workspaceID: "workspace-1" };
 const issueSubject: KataLinksSubject = {
@@ -16,7 +18,7 @@ const issueSubject: KataLinksSubject = {
   number: 17,
 };
 
-function link(uid: string, daemonID = "daemon-a"): components["schemas"]["KataEffectiveLink"] {
+function link(uid: string, daemonID = "daemon-a"): KataEffectiveLink {
   return {
     daemon_id: daemonID,
     daemon_health: "ok",
@@ -50,16 +52,50 @@ function deferred<T>() {
 }
 
 function clientWith(get: ReturnType<typeof vi.fn>): GeneratedClient {
-  return {
-    GET: get,
-    POST: vi.fn(),
-    PUT: vi.fn(),
-    PATCH: vi.fn(),
-    DELETE: vi.fn(),
-    OPTIONS: vi.fn(),
-    HEAD: vi.fn(),
-    TRACE: vi.fn(),
-  } as unknown as GeneratedClient;
+  const data = async (path: string, options: Record<string, unknown>) => {
+    const result = await get(path, options);
+    if (result.error !== undefined) {
+      const status = result.response?.status ?? 500;
+      throw new GeneratedProblemResponse(
+        {
+          type: "about:blank",
+          title: result.error.title ?? "Request failed",
+          status,
+          detail: result.error.detail,
+          code: "internalError",
+        },
+        result.response ?? new Response(null, { status }),
+      );
+    }
+    return result.data;
+  };
+  return makeGeneratedClient({
+    KataService: {
+      listWorkspaceKataLinks: (params, options) =>
+        data("/workspaces/{id}/kata-links", {
+          params: { path: { id: params.id } },
+          ...(options?.signal === undefined ? {} : { signal: options.signal }),
+        }),
+      listIssueKataLinksOnHost: (params, options) =>
+        data("/host/{platform_host}/issues/{provider}/{owner}/{name}/{number}/kata-links", {
+          params: {
+            path: {
+              platform_host: params.platformHost,
+              provider: params.provider,
+              owner: params.owner,
+              name: params.name,
+              number: params.number,
+            },
+          },
+          ...(options?.signal === undefined ? {} : { signal: options.signal }),
+        }),
+      getKataIssueDetail: (params, options) =>
+        data("/kata/daemons/{daemon_id}/issues/{issue_uid}", {
+          params: { path: { daemon_id: params.daemonId, issue_uid: params.issueUid } },
+          ...(options?.signal === undefined ? {} : { signal: options.signal }),
+        }),
+    },
+  });
 }
 
 describe("createKataLinksStore", () => {
@@ -174,7 +210,7 @@ describe("createKataLinksStore", () => {
     const store = createKataLinksStore({ client: clientWith(get), subject: workspaceSubject });
 
     const loading = store.loadLinks();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
     const selecting = store.select("daemon-a", "two");
     oldDetail.resolve({ data: detail("one") });
     await Promise.all([loading, selecting]);

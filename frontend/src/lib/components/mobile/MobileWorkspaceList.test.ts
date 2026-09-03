@@ -10,14 +10,15 @@ const mockPost = vi.fn();
 const mockDelete = vi.fn();
 let workspaceEventListener: EventListener | null = null;
 
-vi.mock("../../api/runtime.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../api/runtime.js")>();
+vi.mock("../../app/runtime.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../app/runtime.js")>();
+  const { makeGeneratedClientFromRouteMocks } = await import("../../testing/test/route-mock-client.js");
   const client = {
     DELETE: (...args: unknown[]) => mockDelete(...args),
     GET: (...args: unknown[]) => mockGet(...args),
     POST: (...args: unknown[]) => mockPost(...args),
   };
-  return { ...actual, client, createRuntimeClient: () => client };
+  return { ...actual, makeAppRuntime: () => actual.makeAppRuntime(makeGeneratedClientFromRouteMocks(client)) };
 });
 
 class MockEventSource {
@@ -97,6 +98,22 @@ describe("MobileWorkspaceList", () => {
     expect(onOpen).toHaveBeenCalledWith("ws-1", undefined);
   });
 
+  it("offers the first push when the configured upstream branch is missing", async () => {
+    mockGet.mockImplementation((path: string) => {
+      if (path === "/snapshot") {
+        return Promise.resolve({ data: { hosts: [], workspaces: [{ ...fixture, branch_upstream_missing: true }] } });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    render(MobileWorkspaceList, { props: { onOpen: vi.fn(), onOpenItem: vi.fn() } });
+    await screen.findByText("Build mobile workspaces");
+    await fireEvent.click(screen.getByRole("button", { name: "Workspace actions for Build mobile workspaces" }));
+
+    const actions = await screen.findByRole("dialog", { name: "Workspace actions" });
+    expect(within(actions).getByRole("button", { name: "Push branch" })).toBeTruthy();
+  });
+
   it.each([
     ["working", "Working", "working"],
     ["approval", "Approval", "waiting for approval"],
@@ -120,7 +137,21 @@ describe("MobileWorkspaceList", () => {
     ).toBeTruthy();
   });
 
-  it("does not expose a dead linked-item action for Kata workspaces", async () => {
+  it("leaves the agent state empty when no hook has reported", async () => {
+    localStorage.setItem("kenn-forge:workspaceListSort", "agent-status");
+
+    render(MobileWorkspaceList, { props: { onOpen: vi.fn(), onOpenItem: vi.fn() } });
+
+    await screen.findByText("Build mobile workspaces");
+    expect(screen.queryByText("Unreported")).toBeNull();
+    expect(document.querySelector(".mobile-workspace-row__sort-time")?.getAttribute("datetime")).toBe(
+      fixture.created_at,
+    );
+    expect(screen.getByRole("button", { name: "Open workspace Build mobile workspaces" })).toBeTruthy();
+  });
+
+  it("shows sort timestamps without exposing a dead linked-item action for Kata workspaces", async () => {
+    localStorage.setItem("kenn-forge:workspaceListSort", "created");
     mockGet.mockImplementation((path: string) => {
       if (path === "/snapshot") {
         return Promise.resolve({
@@ -151,6 +182,9 @@ describe("MobileWorkspaceList", () => {
 
     await screen.findByText("Build mobile workspaces");
     expect(screen.queryByRole("button", { name: /Open linked item/ })).toBeNull();
+    expect(document.querySelector(".mobile-workspace-row__sort-time")?.getAttribute("datetime")).toBe(
+      fixture.created_at,
+    );
   });
 
   it("hides actions for a removed workspace source item", async () => {
@@ -223,6 +257,11 @@ describe("MobileWorkspaceList", () => {
     expect(screen.getByRole("dialog", { name: "View workspace options" })).toBeTruthy();
     expect(getTopFrame()?.frameId).toBe("mobile-workspace-view-options");
     expect(screen.getByRole("radio", { name: /^Terminal activity/ })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("radio", { name: /^Created/ }));
+    expect(document.querySelector(".mobile-workspace-row__sort-time")?.getAttribute("datetime")).toBe(
+      fixture.created_at,
+    );
 
     await fireEvent.click(screen.getByRole("switch", { name: "Show organization names" }));
     await waitFor(() => {

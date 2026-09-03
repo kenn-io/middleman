@@ -20,12 +20,14 @@ import (
 	gh "github.com/google/go-github/v89/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.kenn.io/forge/internal/apiclient/generated"
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
 	"go.kenn.io/forge/internal/platform"
 	ptyownerruntime "go.kenn.io/forge/internal/ptyowner/runtime"
 	"go.kenn.io/forge/internal/ptysize"
+	"go.kenn.io/forge/internal/testutil"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/tokenauth"
 	"go.kenn.io/forge/internal/workspace/localruntime"
@@ -659,24 +661,31 @@ func TestConfigReload_UpdatesDocFoldersAndRegistry(t *testing.T) {
 	wantRegistryRoot, err := filepath.EvalSymlinks(updatedRoot)
 	require.NoError(err)
 	assert.Equal(wantRegistryRoot, gotRegistryFolders[0].Path)
-	listRR := doDocsJSON(t, srv, http.MethodGet, "/api/v1/docs/folders", nil)
-	require.Equal(http.StatusOK, listRR.Code, listRR.Body.String())
-	var listBody docsFolderListWire
-	require.NoError(json.NewDecoder(listRR.Body).Decode(&listBody))
+	httpServer := httptest.NewServer(srv)
+	t.Cleanup(httpServer.Close)
+	listResponse, err := httpServer.Client().Get(httpServer.URL + "/api/v1/docs/folders")
+	require.NoError(err)
+	t.Cleanup(func() { listResponse.Body.Close() })
+	require.Equal(http.StatusOK, listResponse.StatusCode)
+	var listBody generated.ListDocsFoldersOutputBody
+	require.NoError(json.NewDecoder(listResponse.Body).Decode(&listBody))
+	require.NotNil(listBody.Folders)
 	require.Len(listBody.Folders, 1)
-	assert.Equal("handbook", listBody.Folders[0].ID)
+	assert.Equal("handbook", listBody.Folders[0].Id)
 	assert.Equal("Handbook", listBody.Folders[0].Name)
 
-	updatedReadRR := doDocsJSON(t, srv, http.MethodGet, "/api/v1/docs/folders/handbook/file?path=guide.md", nil)
-	require.Equal(http.StatusOK, updatedReadRR.Code, updatedReadRR.Body.String())
-	var readBody struct {
-		Content string `json:"content"`
-	}
-	require.NoError(json.NewDecoder(updatedReadRR.Body).Decode(&readBody))
+	updatedReadResponse, err := httpServer.Client().Get(httpServer.URL + "/api/v1/docs/folders/handbook/file?path=guide.md")
+	require.NoError(err)
+	t.Cleanup(func() { updatedReadResponse.Body.Close() })
+	require.Equal(http.StatusOK, updatedReadResponse.StatusCode)
+	var readBody generated.DocsReadFileOutputBody
+	require.NoError(json.NewDecoder(updatedReadResponse.Body).Decode(&readBody))
 	assert.Equal("# Guide\n", readBody.Content)
 
-	oldReadRR := doDocsJSON(t, srv, http.MethodGet, "/api/v1/docs/folders/notes/file?path=old.md", nil)
-	assert.Equal(http.StatusNotFound, oldReadRR.Code, oldReadRR.Body.String())
+	oldReadResponse, err := httpServer.Client().Get(httpServer.URL + "/api/v1/docs/folders/notes/file?path=old.md")
+	require.NoError(err)
+	t.Cleanup(func() { oldReadResponse.Body.Close() })
+	assert.Equal(http.StatusNotFound, oldReadResponse.StatusCode)
 }
 
 func TestConfigReloadSerializesDocsFolderMutation(t *testing.T) {
@@ -888,17 +897,14 @@ command = ["sh"]
 	event := srv.applyConfigChange(t.Context())
 	require.True(event.Valid, event.Error)
 
-	rr := doJSON(
+	rr := testutil.DoJSON(
 		t, srv, http.MethodGet,
-		"/api/v1/projects/"+project.ID+"/launch-targets", nil,
-	)
+		"/api/v1/projects/"+project.ID+"/launch-targets", nil)
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
-	var body struct {
-		LaunchTargets []struct {
-			Key string `json:"key"`
-		} `json:"launch_targets"`
-	}
+	var body generated.ListLaunchTargetsOutputBody
 	require.NoError(json.NewDecoder(rr.Body).Decode(&body))
+	require.NotNil(body.LaunchTargets)
 	keys := make([]string, 0, len(body.LaunchTargets))
 	for _, target := range body.LaunchTargets {
 		keys = append(keys, target.Key)
@@ -1760,6 +1766,7 @@ func (m *fakeRuntimeOwner) Start(
 	_ string,
 	_ []string,
 	stripEnvVars []string,
+	_ map[string]string,
 ) (ptyownerruntime.PTY, error) {
 	m.startedStripEnvVars = append([]string(nil), stripEnvVars...)
 	m.pty = &fakeRuntimePTY{
@@ -2112,10 +2119,10 @@ func TestConfigReload_RouteReuseRefreshThenFailedReloadTracksRenamedRepoOnce(t *
 	defer stream.Close()
 
 	renamed.Store(true)
-	rr := doJSON(
+	rr := testutil.DoJSON(
 		t, srv, http.MethodPost,
-		"/api/v1/repo/gh/acme/*/refresh", nil,
-	)
+		"/api/v1/repo/gh/acme/*/refresh", nil)
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 
 	writeConfigToml(t, cfgPath, validReloadConfigExactPlusGlobChangedActivity)
@@ -2716,12 +2723,13 @@ func TestConfigReload_SettingsSavePreservesRestartRequiredFields(t *testing.T) {
 	require.True(ev.Valid, "reload error: %s", ev.Error)
 	require.True(ev.RestartRequired)
 
-	rr := doJSON(t, srv, http.MethodPut, "/api/v1/settings", updateSettingsRequest{
+	rr := testutil.DoJSON(t, srv, http.MethodPut, "/api/v1/settings", updateSettingsRequest{
 		Activity: &config.Activity{
 			ViewMode:  "flat",
 			TimeRange: "30d",
 		},
 	})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 
 	reloaded, err := config.Load(cfgPath)

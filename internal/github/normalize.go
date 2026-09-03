@@ -146,8 +146,8 @@ func NormalizeReviewEvent(mrID int64, r *gh.PullRequestReview) db.MREvent {
 }
 
 // NormalizeCommitEvent converts a GitHub RepositoryCommit to a db.MREvent.
-// Author is taken from the GitHub user login if available, falling back to
-// the git commit author name.
+// Author is the committer login or name when available, falling back to the
+// commit author identity; a distinct original author is retained in metadata.
 func NormalizeCommitEvent(mrID int64, c *gh.RepositoryCommit) db.MREvent {
 	event := platformgithub.NormalizeCommitEvent(platform.RepoRef{}, 0, c)
 	return dbMREvent(mrID, event)

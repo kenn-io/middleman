@@ -50,6 +50,7 @@ function rejected(detail: string) {
   const error: ProblemBody = {
     code: "validationError",
     detail,
+    status: 400,
     title: "Invalid request",
     type: "about:blank",
   };
@@ -61,6 +62,7 @@ function conflict(detail: string) {
     code: "conflict",
     detail,
     details: { reason: "conflict" },
+    status: 409,
     title: "Pull request conflict",
     type: "about:blank",
   };
@@ -172,7 +174,7 @@ describe("provider action mutations", () => {
     await settled.promise;
 
     expect(succeeded).toHaveBeenCalledOnce();
-    expect(get).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
     expect(post).toHaveBeenCalledWith(
       expect.stringContaining("/request-changes"),
       expect.objectContaining({

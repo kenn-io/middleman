@@ -4,6 +4,7 @@ import type { GeneratedClient } from "../api/generated-api.js";
 import type { OwnedAppRuntime } from "../app/runtime.js";
 import type { ActivityItem, ActivitySettings, ActivitySubject, WorkspaceActivitySubject } from "../api/types.js";
 import { makeTestAppRuntime } from "../testing/effect-layers.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
 import {
   buildActivityItemTypeFilter,
   buildActivityFilterTypes,
@@ -606,23 +607,25 @@ describe("activity store collapse state", () => {
       },
     } satisfies ActivitySubject;
     let threadQuery: Record<string, unknown> | undefined;
-    const get = vi.fn(async (path: string, options: { params?: { query?: Record<string, unknown> } }) => {
-      if (path === "/activity/thread-events") {
-        threadQuery = options.params?.query;
-        return { data: { items: [], capped: false, event_cursor: "snapshot" }, error: null };
-      }
-      return {
-        data: {
-          items: [],
-          item_activity: [subject],
-          workspace_activity: [],
-          capped: false,
-          event_cursor: "snapshot",
+    const store = createActivityStore({
+      client: makeGeneratedClient({
+        ActivityService: {
+          listActivityThreadEvents: async (params) => {
+            threadQuery = params;
+            return { items: [], capped: false, event_cursor: "snapshot" };
+          },
+          listActivity: async () => ({
+            items: [],
+            item_activity: [subject],
+            workspace_activity: [],
+            capped: false,
+            item_activity_capped: false,
+            use_workspace_activity_for_recency: true,
+            event_cursor: "snapshot",
+          }),
         },
-        error: null,
-      };
+      }),
     });
-    const store = createActivityStore({ client: { GET: get } as unknown as GeneratedClient });
     store.hydrateDefaults(settings(true));
     store.setActivityFilterTypes(["comment", "notification"]);
     store.setActivitySearch("reviewer");

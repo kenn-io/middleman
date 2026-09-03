@@ -27,7 +27,7 @@ import (
 )
 
 func TestLaunchWorkspaceRuntimeSessionPreparesAgentContext(t *testing.T) {
-	t.Parallel()
+	runParallelServerTest(t)
 	acquireRootWorkspaceGitSlot(t)
 	assert := assert.New(t)
 	require := require.New(t)
@@ -113,6 +113,9 @@ func TestLaunchWorkspaceRuntimeSessionPreparesAgentContext(t *testing.T) {
 }
 
 func TestWorkspaceRuntimeLaunchWritesAgentContextE2E(t *testing.T) {
+	runParallelServerTest(t)
+	acquireRootWorkspaceGitSlot(t)
+
 	assert := assert.New(t)
 	require := require.New(t)
 	dir := t.TempDir()
@@ -150,6 +153,9 @@ func TestWorkspaceRuntimeLaunchWritesAgentContextE2E(t *testing.T) {
 }
 
 func TestWorkspaceRuntimeLaunchRejectsUnsafeRepositoryAgentInstructionsE2E(t *testing.T) {
+	runParallelServerTest(t)
+	acquireRootWorkspaceGitSlot(t)
+
 	tests := []struct {
 		name      string
 		entry     string
@@ -200,6 +206,9 @@ func TestWorkspaceRuntimeLaunchRejectsUnsafeRepositoryAgentInstructionsE2E(t *te
 }
 
 func TestWorkspaceRuntimeLaunchWritesIssueAndKataAgentContextE2E(t *testing.T) {
+	runParallelServerTest(t)
+	acquireRootWorkspaceGitSlot(t)
+
 	assert := assert.New(t)
 	require := require.New(t)
 	dir := t.TempDir()

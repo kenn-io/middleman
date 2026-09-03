@@ -349,6 +349,9 @@ change-driven and idle-cheap:
   daemon. Before sealing local writes it first proves the pending hub is
   reachable and pins that enrollment; hub failure before that point
   leaves the standalone provider plane open.
+- A daemon without a local federation enrollment starts with provider writes
+  open and does not restore fleet preparation state
+  (`internal/server/server.go::newServer`).
 - Once quiescing begins, the provider-write barrier survives restarts. Only
   `fleet abort-preparation` may reopen it before activation, after admitted work
   drains. A spoke-shaped process requires restart before standalone provider work;

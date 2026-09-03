@@ -222,17 +222,18 @@ export function runCommentMutationContract(adapter: CommentMutationContractAdapt
 
       expect(result).toBe(true);
       expect(del).toHaveBeenCalledWith(adapter.commentMemberPath, {
-        headers: { "Content-Type": "application/json" },
         params: {
           path: { provider: "github", owner: "octo", name: "repo", number: 1, comment_id: 44 },
         },
         signal: expect.any(AbortSignal),
       });
       expect(store.snapshot()?.events).toEqual([]);
-      expect(post).toHaveBeenCalledWith(adapter.syncPath, {
-        params: { path: { provider: "github", owner: "octo", name: "repo", number: 1 } },
-        signal: expect.any(AbortSignal),
-      });
+      await vi.waitFor(() =>
+        expect(post).toHaveBeenCalledWith(adapter.syncPath, {
+          params: { path: { provider: "github", owner: "octo", name: "repo", number: 1 } },
+          signal: expect.any(AbortSignal),
+        }),
+      );
       expect(get).not.toHaveBeenCalled();
     });
 

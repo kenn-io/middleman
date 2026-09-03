@@ -14,10 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/procutil"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 )
 
 func TestCloneProject(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -29,7 +30,7 @@ func TestCloneProject(t *testing.T) {
 	defer ts.Close()
 
 	source := initLifecycleRouteRepo(t)
-	runGit(t, source, "branch", "feat/clone")
+	gitfixture.Run(t, source, "branch", "feat/clone")
 	dest := filepath.Join(t.TempDir(), "cloned")
 
 	body := mustMarshal(t, map[string]any{
@@ -82,7 +83,7 @@ func TestCloneProjectBranchAndHomePath(t *testing.T) {
 	defer ts.Close()
 
 	source := initLifecycleRouteRepo(t)
-	runGit(t, source, "branch", "feat/clone")
+	gitfixture.Run(t, source, "branch", "feat/clone")
 
 	body := mustMarshal(t, map[string]any{
 		"url":    source,
@@ -111,7 +112,7 @@ func TestCloneProjectBranchAndHomePath(t *testing.T) {
 // request reserved, so an immediate retry reaches git again instead of
 // tripping destinationExists over a leftover partial checkout.
 func TestCloneProjectFailureCleansOwnedDestination(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -148,7 +149,7 @@ func TestCloneProjectFailureCleansOwnedDestination(t *testing.T) {
 }
 
 func TestListProjectBranches(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -160,8 +161,8 @@ func TestListProjectBranches(t *testing.T) {
 	defer ts.Close()
 
 	repo := initLifecycleRouteRepo(t)
-	runGit(t, repo, "branch", "feat/one")
-	runGit(t, repo, "branch", "feat/two")
+	gitfixture.Run(t, repo, "branch", "feat/one")
+	gitfixture.Run(t, repo, "branch", "feat/two")
 	projectID := registerProjectForTest(t, ts, repo)
 
 	resp := httpDo(t, ts, http.MethodGet,
@@ -184,7 +185,7 @@ func TestListProjectBranches(t *testing.T) {
 // GET /api/v1/projects/{pid}/worktrees/{wid}/inspect: dirty state, live
 // session count, and branch-delete eligibility for delete confirmation UIs.
 func TestInspectProjectWorktree(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -261,7 +262,7 @@ func TestInspectProjectWorktree(t *testing.T) {
 // runtime session) still counts as alive — otherwise delete confirmation
 // under-reports live work after a restart.
 func TestInspectProjectWorktreeCountsStoredTmuxSessions(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}

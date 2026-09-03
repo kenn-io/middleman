@@ -4,8 +4,8 @@
   import UnlinkIcon from "@lucide/svelte/icons/unlink";
   import { onDestroy, untrack } from "svelte";
 
+  import * as runtimeClient from "../../api/generated/index.js";
   import type { GeneratedClient } from "../../api/generated-api.js";
-  import { client as runtimeClient } from "../../api/runtime.js";
   import { getNavigate } from "../../context.js";
   import {
     createKataLinksStore,
@@ -139,14 +139,6 @@
       .join(", ");
   }
 
-  function problemMessage(problem: unknown, fallback: string): string {
-    if (typeof problem !== "object" || problem === null) return fallback;
-    const value = problem as { detail?: unknown; title?: unknown };
-    if (typeof value.detail === "string" && value.detail !== "") return value.detail;
-    if (typeof value.title === "string" && value.title !== "") return value.title;
-    return fallback;
-  }
-
   async function unlink(link: KataEffectiveLink): Promise<void> {
     if (link.direct_link_id === undefined || disabled || actionPending !== null) return;
     const requestSubjectKey = identityKey(subject);
@@ -155,13 +147,7 @@
     actionPending = "unlink";
     actionError = null;
     try {
-      const result = await deleteKataLink(apiClient, subject, link.direct_link_id);
-      if (result.error) {
-        if (actionIsCurrent(requestGeneration, requestSubjectKey, requestSelectionKey)) {
-          actionError = problemMessage(result.error, "Unable to unlink Kata issue.");
-        }
-        return;
-      }
+      await deleteKataLink(apiClient, subject, link.direct_link_id);
       if (actionIsCurrent(requestGeneration, requestSubjectKey, requestSelectionKey)) {
         await store.loadLinks();
       }
@@ -189,26 +175,22 @@
     actionPending = "open";
     actionError = null;
     try {
-      const result = await apiClient.GET("/kata/daemons/{daemon_id}/issues/{issue_uid}/launch-target", {
-        params: {
-          path: { daemon_id: requestDaemonID, issue_uid: requestIssueUID },
-        },
-      });
+      const result = await apiClient.KataService.getKataLaunchTarget({ daemonId: requestDaemonID, issueUid: requestIssueUID });
       if (!actionIsCurrent(requestGeneration, requestSubjectKey, requestSelectionKey)) {
         popup.close();
         return;
       }
-      if (!result.data?.available || !result.data.url) {
+      if (!result.available || !result.url) {
         popup.close();
-        actionError = result.data?.reason || problemMessage(result.error, "Kata issue cannot be opened.");
+        actionError = result.reason || "Kata issue cannot be opened.";
         return;
       }
-      if (!isSafeExternalHTTPURL(result.data.url)) {
+      if (!isSafeExternalHTTPURL(result.url)) {
         popup.close();
         actionError = "Kata must provide a safe HTTP or HTTPS URL.";
         return;
       }
-      navigateKataPopup(popup, result.data.url);
+      navigateKataPopup(popup, result.url);
     } catch (cause) {
       popup.close();
       if (actionIsCurrent(requestGeneration, requestSubjectKey, requestSelectionKey)) {
@@ -240,27 +222,19 @@
     actionPending = "workspace";
     actionError = null;
     try {
-      const result = await apiClient.POST("/kata/workspaces", {
-        body: {
+      const result = await apiClient.KataService.createKataWorkspace({
           daemon_id: selected.daemon_id,
           issue_uid: selected.issue_uid,
           project_uid: selected.project_uid,
           ...(selected.project_name ? { project_name: selected.project_name } : {}),
           ...(selected.reference ? { qualified_id: selected.reference } : {}),
           ...(selected.title ? { title: selected.title } : {}),
-        },
-      });
-      if (!result.data?.id) {
-        if (responseIsCurrent()) {
-          actionError = problemMessage(result.error, "Unable to create Kata workspace.");
-        }
-        return;
-      }
+        });
       recordKataWorkspaceCreated(requestIdentity, {
-        id: result.data.id,
-        status: result.data.status ?? "provisioning",
+        id: result.id,
+        status: result.status ?? "provisioning",
       });
-      if (responseIsCurrent()) navigate(`/terminal/${encodeURIComponent(result.data.id)}`);
+      if (responseIsCurrent()) navigate(`/terminal/${encodeURIComponent(result.id)}`);
     } catch (cause) {
       if (responseIsCurrent()) {
         actionError = cause instanceof Error ? cause.message : "Unable to create Kata workspace.";

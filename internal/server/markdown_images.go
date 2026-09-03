@@ -58,8 +58,7 @@ func (s *Server) getMarkdownImageFor(
 		return nil, markdownImageError(ctx, err, kind, host)
 	}
 	ref := httpapi.PlatformRepoRef(*repo)
-	cacheKey := string(ref.Platform) + "\x00" + ref.Host + "\x00" + ref.RepoPath + "\x00" + source
-	image, err := s.markdownImages.load(ctx, cacheKey, func(fetchCtx context.Context) (platform.MarkdownImage, error) {
+	image, err := s.markdownImages.load(ctx, markdownImageCacheKey(ref, source), func(fetchCtx context.Context) (platform.MarkdownImage, error) {
 		return reader.GetMarkdownImage(fetchCtx, ref, source)
 	})
 	if err != nil {
@@ -67,11 +66,25 @@ func (s *Server) getMarkdownImageFor(
 	}
 	return &markdownImageOutput{
 		ContentType:        image.ContentType,
-		CacheControl:       "private, max-age=31536000, immutable",
+		CacheControl:       markdownImageCacheControl(image),
 		ContentLength:      strconv.Itoa(len(image.Content)),
 		ContentTypeOptions: "nosniff",
 		Body:               image.Content,
 	}, nil
+}
+
+// markdownImageCacheKey uses the stable provider identity, not the owner/name
+// route: a replacement repository at a reused route must never be served the
+// previous occupant's private bytes.
+func markdownImageCacheKey(ref platform.RepoRef, source string) string {
+	return string(ref.Platform) + "\x00" + ref.Host + "\x00" + ref.PlatformExternalID + "\x00" + source
+}
+
+func markdownImageCacheControl(image platform.MarkdownImage) string {
+	if image.Mutable {
+		return "private, max-age=" + strconv.Itoa(int(markdownImageMutableTTL.Seconds()))
+	}
+	return "private, max-age=31536000, immutable"
 }
 
 func markdownImageError(ctx context.Context, err error, kind platform.Kind, host string) error {

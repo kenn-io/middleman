@@ -1,12 +1,18 @@
-import type { components } from "../api/generated/schema.js";
+import type {
+  KataCreateLinkRequest as GeneratedKataCreateLinkRequest,
+  KataEffectiveLink as GeneratedKataEffectiveLink,
+  KataEffectiveLinksResponse as GeneratedKataEffectiveLinksResponse,
+  KataIssueDetailResponse as GeneratedKataIssueDetailResponse,
+  KataLinkDiagnostic as GeneratedKataLinkDiagnostic,
+} from "../api/generated/models/index.js";
 import type { GeneratedClient } from "../api/generated-api.js";
 import { reconcileKataWorkspaceCreated } from "./kata-workspace-create.svelte.js";
 import { nextWorkspaceLifecycleTick } from "./workspace-create-pending.svelte.js";
 
-export type KataEffectiveLink = components["schemas"]["KataEffectiveLink"];
-export type KataEffectiveLinksResponse = components["schemas"]["KataEffectiveLinksResponse"];
-export type KataIssueDetailResponse = components["schemas"]["KataIssueDetailResponse"];
-export type KataLinkDiagnostic = components["schemas"]["KataLinkDiagnostic"];
+export type KataEffectiveLink = GeneratedKataEffectiveLink;
+export type KataEffectiveLinksResponse = GeneratedKataEffectiveLinksResponse;
+export type KataIssueDetailResponse = GeneratedKataIssueDetailResponse;
+export type KataLinkDiagnostic = GeneratedKataLinkDiagnostic;
 
 export type KataLinksSubject =
   | {
@@ -62,14 +68,6 @@ function subjectKey(subject: KataLinksSubject): string {
 
 function linkKey(link: Pick<KataEffectiveLink, "daemon_id" | "issue_uid">): string {
   return `${link.daemon_id}:${link.issue_uid}`;
-}
-
-function requestErrorMessage(error: unknown, fallback: string): string {
-  if (typeof error !== "object" || error === null) return fallback;
-  const problem = error as { detail?: unknown; title?: unknown };
-  if (typeof problem.detail === "string" && problem.detail.trim() !== "") return problem.detail;
-  if (typeof problem.title === "string" && problem.title.trim() !== "") return problem.title;
-  return fallback;
 }
 
 function aborted(error: unknown): boolean {
@@ -176,26 +174,22 @@ class KataLinksStoreImpl implements KataLinksStore {
     try {
       const result = await this.#fetchLinks(requestSubject, controller.signal);
       if (!this.#acceptLinksResponse(generation, requestSubjectKey, controller)) return;
-      if (!result.data) {
-        this.#error = requestErrorMessage(result.error, "Unable to load linked Kata issues.");
-        return;
-      }
 
       const previousSelection = this.#selectedKey;
-      for (const link of result.data.links) {
+      for (const link of result.links) {
         reconcileKataWorkspaceCreated(
           { daemonID: link.daemon_id, issueUID: link.issue_uid },
           link.workspace?.existing_workspace,
           responseTick,
         );
       }
-      this.#response = result.data;
+      this.#response = result;
       this.#lastAssociationRefreshAt = this.#clock();
       const nextSelection =
-        result.data.links.find((candidate) => linkKey(candidate) === previousSelection) === undefined
-          ? result.data.links[0] === undefined
+        result.links.find((candidate) => linkKey(candidate) === previousSelection) === undefined
+          ? result.links[0] === undefined
             ? null
-            : linkKey(result.data.links[0])
+            : linkKey(result.links[0])
           : previousSelection;
       if (nextSelection !== previousSelection) {
         this.#detailGeneration += 1;
@@ -256,17 +250,12 @@ class KataLinksStoreImpl implements KataLinksStore {
     this.#error = null;
 
     try {
-      const result = await this.#client.GET("/kata/daemons/{daemon_id}/issues/{issue_uid}", {
-        params: { path: { daemon_id: selected.daemon_id, issue_uid: selected.issue_uid } },
-        signal: controller.signal,
-      });
+      const result = await this.#client.KataService.getKataIssueDetail(
+        { daemonId: selected.daemon_id, issueUid: selected.issue_uid },
+        { signal: controller.signal },
+      );
       if (!this.#acceptDetailResponse(generation, requestSubjectKey, requestKey, controller)) return;
-      if (!result.data) {
-        this.#detailEnvelope = null;
-        this.#error = requestErrorMessage(result.error, "Unable to load Kata issue detail.");
-        return;
-      }
-      this.#detailEnvelope = result.data;
+      this.#detailEnvelope = result;
     } catch (error) {
       if (!aborted(error) && this.#acceptDetailResponse(generation, requestSubjectKey, requestKey, controller)) {
         this.#detailEnvelope = null;
@@ -368,65 +357,54 @@ class KataLinksStoreImpl implements KataLinksStore {
 
   #fetchLinks(subject: KataLinksSubject, signal: AbortSignal) {
     if (subject.kind === "workspace") {
-      return this.#client.GET("/workspaces/{id}/kata-links", {
-        params: { path: { id: subject.workspaceID } },
-        signal,
-      });
+      return this.#client.KataService.listWorkspaceKataLinks({ id: subject.workspaceID }, { signal });
     }
 
     if (subject.platformHost) {
       if (subject.kind === "pull_request") {
-        return this.#client.GET("/host/{platform_host}/pulls/{provider}/{owner}/{name}/{number}/kata-links", {
-          params: {
-            path: {
-              platform_host: subject.platformHost,
-              provider: subject.provider,
-              owner: subject.owner,
-              name: subject.name,
-              number: subject.number,
-            },
+        return this.#client.KataService.listPullRequestKataLinksOnHost(
+          {
+            platformHost: subject.platformHost,
+            provider: subject.provider,
+            owner: subject.owner,
+            name: subject.name,
+            number: subject.number,
           },
-          signal,
-        });
+          { signal },
+        );
       }
-      return this.#client.GET("/host/{platform_host}/issues/{provider}/{owner}/{name}/{number}/kata-links", {
-        params: {
-          path: {
-            platform_host: subject.platformHost,
-            provider: subject.provider,
-            owner: subject.owner,
-            name: subject.name,
-            number: subject.number,
-          },
-        },
-        signal,
-      });
-    }
-
-    if (subject.kind === "pull_request") {
-      return this.#client.GET("/pulls/{provider}/{owner}/{name}/{number}/kata-links", {
-        params: {
-          path: {
-            provider: subject.provider,
-            owner: subject.owner,
-            name: subject.name,
-            number: subject.number,
-          },
-        },
-        signal,
-      });
-    }
-    return this.#client.GET("/issues/{provider}/{owner}/{name}/{number}/kata-links", {
-      params: {
-        path: {
+      return this.#client.KataService.listIssueKataLinksOnHost(
+        {
+          platformHost: subject.platformHost,
           provider: subject.provider,
           owner: subject.owner,
           name: subject.name,
           number: subject.number,
         },
+        { signal },
+      );
+    }
+
+    if (subject.kind === "pull_request") {
+      return this.#client.KataService.listPullRequestKataLinks(
+        {
+          provider: subject.provider,
+          owner: subject.owner,
+          name: subject.name,
+          number: subject.number,
+        },
+        { signal },
+      );
+    }
+    return this.#client.KataService.listIssueKataLinks(
+      {
+        provider: subject.provider,
+        owner: subject.owner,
+        name: subject.name,
+        number: subject.number,
       },
-      signal,
-    });
+      { signal },
+    );
   }
 }
 
@@ -434,125 +412,96 @@ export function createKataLinksStore(options: KataLinksStoreOptions): KataLinksS
   return new KataLinksStoreImpl(options);
 }
 
-export type KataCreateLinkRequest = components["schemas"]["KataCreateLinkRequest"];
+export type KataCreateLinkRequest = GeneratedKataCreateLinkRequest;
 
 export function createKataLink(client: GeneratedClient, subject: KataLinksSubject, body: KataCreateLinkRequest) {
   if (subject.kind === "workspace") {
-    return client.POST("/workspaces/{id}/kata-links", {
-      params: { path: { id: subject.workspaceID } },
-      body,
-    });
+    return client.KataService.createWorkspaceKataLink({ id: subject.workspaceID }, body);
   }
   if (subject.platformHost) {
     if (subject.kind === "pull_request") {
-      return client.POST("/host/{platform_host}/pulls/{provider}/{owner}/{name}/{number}/kata-links", {
-        params: {
-          path: {
-            platform_host: subject.platformHost,
-            provider: subject.provider,
-            owner: subject.owner,
-            name: subject.name,
-            number: subject.number,
-          },
+      return client.KataService.createPullRequestKataLinkOnHost(
+        {
+          platformHost: subject.platformHost,
+          provider: subject.provider,
+          owner: subject.owner,
+          name: subject.name,
+          number: subject.number,
         },
         body,
-      });
+      );
     }
-    return client.POST("/host/{platform_host}/issues/{provider}/{owner}/{name}/{number}/kata-links", {
-      params: {
-        path: {
-          platform_host: subject.platformHost,
-          provider: subject.provider,
-          owner: subject.owner,
-          name: subject.name,
-          number: subject.number,
-        },
-      },
-      body,
-    });
-  }
-  if (subject.kind === "pull_request") {
-    return client.POST("/pulls/{provider}/{owner}/{name}/{number}/kata-links", {
-      params: {
-        path: {
-          provider: subject.provider,
-          owner: subject.owner,
-          name: subject.name,
-          number: subject.number,
-        },
-      },
-      body,
-    });
-  }
-  return client.POST("/issues/{provider}/{owner}/{name}/{number}/kata-links", {
-    params: {
-      path: {
+    return client.KataService.createIssueKataLinkOnHost(
+      {
+        platformHost: subject.platformHost,
         provider: subject.provider,
         owner: subject.owner,
         name: subject.name,
         number: subject.number,
       },
+      body,
+    );
+  }
+  if (subject.kind === "pull_request") {
+    return client.KataService.createPullRequestKataLink(
+      {
+        provider: subject.provider,
+        owner: subject.owner,
+        name: subject.name,
+        number: subject.number,
+      },
+      body,
+    );
+  }
+  return client.KataService.createIssueKataLink(
+    {
+      provider: subject.provider,
+      owner: subject.owner,
+      name: subject.name,
+      number: subject.number,
     },
     body,
-  });
+  );
 }
 
 export function deleteKataLink(client: GeneratedClient, subject: KataLinksSubject, linkID: number) {
   if (subject.kind === "workspace") {
-    return client.DELETE("/workspaces/{id}/kata-links/{link_id}", {
-      params: { path: { id: subject.workspaceID, link_id: linkID } },
-    });
+    return client.KataService.deleteWorkspaceKataLink({ id: subject.workspaceID, linkId: linkID });
   }
   if (subject.platformHost) {
     if (subject.kind === "pull_request") {
-      return client.DELETE("/host/{platform_host}/pulls/{provider}/{owner}/{name}/{number}/kata-links/{link_id}", {
-        params: {
-          path: {
-            platform_host: subject.platformHost,
-            provider: subject.provider,
-            owner: subject.owner,
-            name: subject.name,
-            number: subject.number,
-            link_id: linkID,
-          },
-        },
-      });
-    }
-    return client.DELETE("/host/{platform_host}/issues/{provider}/{owner}/{name}/{number}/kata-links/{link_id}", {
-      params: {
-        path: {
-          platform_host: subject.platformHost,
-          provider: subject.provider,
-          owner: subject.owner,
-          name: subject.name,
-          number: subject.number,
-          link_id: linkID,
-        },
-      },
-    });
-  }
-  if (subject.kind === "pull_request") {
-    return client.DELETE("/pulls/{provider}/{owner}/{name}/{number}/kata-links/{link_id}", {
-      params: {
-        path: {
-          provider: subject.provider,
-          owner: subject.owner,
-          name: subject.name,
-          number: subject.number,
-          link_id: linkID,
-        },
-      },
-    });
-  }
-  return client.DELETE("/issues/{provider}/{owner}/{name}/{number}/kata-links/{link_id}", {
-    params: {
-      path: {
+      return client.KataService.deletePullRequestKataLinkOnHost({
+        platformHost: subject.platformHost,
         provider: subject.provider,
         owner: subject.owner,
         name: subject.name,
         number: subject.number,
-        link_id: linkID,
-      },
-    },
+        linkId: linkID,
+      });
+    }
+    return client.KataService.deleteIssueKataLinkOnHost({
+      platformHost: subject.platformHost,
+      provider: subject.provider,
+      owner: subject.owner,
+      name: subject.name,
+      number: subject.number,
+      linkId: linkID,
+    });
+  }
+  if (subject.kind === "pull_request") {
+    return client.KataService.deletePullRequestKataLink({
+      provider: subject.provider,
+      owner: subject.owner,
+      name: subject.name,
+      number: subject.number,
+      linkId: linkID,
+    });
+  }
+  return client.KataService.deleteIssueKataLink({
+    provider: subject.provider,
+    owner: subject.owner,
+    name: subject.name,
+    number: subject.number,
+    linkId: linkID,
   });
 }

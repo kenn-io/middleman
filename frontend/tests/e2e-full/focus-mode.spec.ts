@@ -88,6 +88,8 @@ test.describe("focus mode", () => {
         contentType: "application/json",
         body: JSON.stringify({
           title: "Workspace failed",
+          status: 500,
+          code: "internalError",
           detail: "workspace setup failed",
         }),
       });

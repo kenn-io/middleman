@@ -14,15 +14,14 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { Effect } from "effect";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ProblemBody } from "../../api/problems.js";
+import { GeneratedProblemResponse } from "../../api/runtime.js";
 import type { OwnedAppRuntime } from "../../app/runtime.js";
 import { pushModalFrame, resetModalStack } from "../../stores/keyboard/modal-stack.svelte.js";
 
 const mocks = vi.hoisted(() => ({
   runtimeClient: {
-    GET: vi.fn(),
-    POST: vi.fn(),
-    PUT: vi.fn(),
-    DELETE: vi.fn(),
+    getWorkspace: vi.fn(),
+    refreshWorkspace: vi.fn(),
   },
   showFlash: vi.fn(),
   workspaceEventsSubscriber: undefined as ((event: unknown) => void) | undefined,
@@ -39,16 +38,21 @@ function problem(status: number, code: ProblemBody["code"], detail: string): Pro
   };
 }
 
-vi.mock("../../api/runtime.js", () => ({
-  client: mocks.runtimeClient,
-  createRuntimeClient: () => mocks.runtimeClient,
-  tracedFetch: (fetch: typeof globalThis.fetch) => fetch,
-  apiErrorMessage: (_err: unknown, fallback: string) => fallback,
-}));
+function failedProblem(status: number, code: ProblemBody["code"], detail: string): GeneratedProblemResponse {
+  return new GeneratedProblemResponse(problem(status, code, detail), new Response(null, { status }));
+}
 
 vi.mock("../../app/runtime-context.js", async () => {
   const { makeAppRuntime } = await import("../../app/runtime.js");
-  runtimeState.appRuntime = makeAppRuntime();
+  const { makeGeneratedClient } = await import("../../testing/generated-client.js");
+  runtimeState.appRuntime = makeAppRuntime(
+    makeGeneratedClient({
+      WorkspacesService: {
+        getWorkspace: mocks.runtimeClient.getWorkspace,
+        refreshWorkspace: mocks.runtimeClient.refreshWorkspace,
+      },
+    }),
+  );
   return { getAppRuntime: () => runtimeState.appRuntime };
 });
 
@@ -186,16 +190,11 @@ describe("WorkspaceTerminalView embed props", () => {
   });
 
   beforeEach(() => {
-    mocks.runtimeClient.GET.mockReset();
-    mocks.runtimeClient.POST.mockReset();
-    mocks.runtimeClient.DELETE.mockReset();
+    mocks.runtimeClient.getWorkspace.mockReset();
+    mocks.runtimeClient.refreshWorkspace.mockReset();
     mocks.showFlash.mockReset();
     mocks.workspaceEventsSubscriber = undefined;
-    mocks.runtimeClient.GET.mockResolvedValue({
-      data: readyWorkspaceData,
-      error: undefined,
-      response: { status: 200 },
-    });
+    mocks.runtimeClient.getWorkspace.mockResolvedValue(readyWorkspaceData);
 
     vi.stubGlobal(
       "EventSource",
@@ -279,19 +278,8 @@ describe("WorkspaceTerminalView embed props", () => {
   });
 
   it("refreshes workspace details and reveals a newly associated PR", async () => {
-    mocks.runtimeClient.GET.mockResolvedValue({
-      data: readyIssueWorkspaceData,
-      error: undefined,
-      response: { status: 200 },
-    });
-    mocks.runtimeClient.POST.mockResolvedValue({
-      data: {
-        ...readyIssueWorkspaceData,
-        associated_pr_number: 42,
-      },
-      error: undefined,
-      response: { status: 200 },
-    });
+    mocks.runtimeClient.getWorkspace.mockResolvedValue(readyIssueWorkspaceData);
+    mocks.runtimeClient.refreshWorkspace.mockResolvedValue({ ...readyIssueWorkspaceData, associated_pr_number: 42 });
 
     render(WorkspaceTerminalView, {
       props: {
@@ -306,22 +294,17 @@ describe("WorkspaceTerminalView embed props", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Refresh workspace details" }));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "PR" })).toBeTruthy());
-    expect(mocks.runtimeClient.POST).toHaveBeenCalledWith("/workspaces/{id}/refresh", {
-      params: { path: { id: "ws-1" } },
-      signal: expect.any(AbortSignal),
-    });
+    expect(mocks.runtimeClient.refreshWorkspace).toHaveBeenCalledWith(
+      { id: "ws-1" },
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   it("shows a flash when workspace detail refresh fails", async () => {
-    mocks.runtimeClient.GET.mockResolvedValue({
-      data: readyIssueWorkspaceData,
-      error: undefined,
-      response: { status: 200 },
-    });
-    mocks.runtimeClient.POST.mockResolvedValue({
-      error: problem(503, "serviceUnavailable", "temporarily unavailable"),
-      response: { status: 503 },
-    });
+    mocks.runtimeClient.getWorkspace.mockResolvedValue(readyIssueWorkspaceData);
+    mocks.runtimeClient.refreshWorkspace.mockRejectedValue(
+      failedProblem(503, "serviceUnavailable", "temporarily unavailable"),
+    );
 
     render(WorkspaceTerminalView, {
       props: {
@@ -335,7 +318,7 @@ describe("WorkspaceTerminalView embed props", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Refresh workspace details" }));
 
     await waitFor(() => {
-      expect(mocks.showFlash).toHaveBeenCalledWith("Refresh failed (503)", {
+      expect(mocks.showFlash).toHaveBeenCalledWith("temporarily unavailable", {
         tone: "danger",
       });
     });
@@ -345,10 +328,7 @@ describe("WorkspaceTerminalView embed props", () => {
     // A 404 is authoritative absence: the workspace was deleted by
     // another client. Without reporting it, created-records and
     // overrides keep advertising the dead ID indefinitely.
-    mocks.runtimeClient.GET.mockResolvedValue({
-      error: problem(404, "workspaceNotFound", "workspace not found"),
-      response: { status: 404 },
-    });
+    mocks.runtimeClient.getWorkspace.mockRejectedValue(failedProblem(404, "workspaceNotFound", "workspace not found"));
     const onWorkspaceDeleted = vi.fn();
 
     render(WorkspaceTerminalView, {
@@ -378,14 +358,11 @@ describe("WorkspaceTerminalView embed props", () => {
       },
     };
     let gone = false;
-    mocks.runtimeClient.GET.mockImplementation(async (path: string) => {
-      if (path === "/workspaces/{id}" && gone) {
-        return {
-          error: problem(404, "workspaceNotFound", "workspace not found"),
-          response: { status: 404 },
-        };
+    mocks.runtimeClient.getWorkspace.mockImplementation(async () => {
+      if (gone) {
+        throw failedProblem(404, "workspaceNotFound", "workspace not found");
       }
-      return { data: workspaceWithRepo, error: undefined, response: { status: 200 } };
+      return workspaceWithRepo;
     });
     const onWorkspaceDeleted = vi.fn();
 
@@ -408,15 +385,12 @@ describe("WorkspaceTerminalView embed props", () => {
     // The dead cached envelope must not keep rendering as live.
     await waitFor(() => {
       expect(screen.queryAllByText("feature/embed-props")).toHaveLength(0);
-      expect(screen.getAllByText("Failed to load workspace (404)").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("workspace not found").length).toBeGreaterThan(0);
     });
   });
 
   it("a transient workspace load failure is not treated as a deletion", async () => {
-    mocks.runtimeClient.GET.mockResolvedValue({
-      error: problem(500, "upstreamError", "upstream boom"),
-      response: { status: 500 },
-    });
+    mocks.runtimeClient.getWorkspace.mockRejectedValue(failedProblem(500, "upstreamError", "upstream boom"));
     const onWorkspaceDeleted = vi.fn();
 
     render(WorkspaceTerminalView, {
@@ -424,7 +398,7 @@ describe("WorkspaceTerminalView embed props", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getAllByText("Failed to load workspace (500)").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("upstream boom").length).toBeGreaterThan(0);
     });
     expect(onWorkspaceDeleted).not.toHaveBeenCalled();
   });
@@ -507,11 +481,7 @@ describe("WorkspaceTerminalView embed props", () => {
       // The toolbar that carries the dock controls only renders once the
       // workspace is ready; without a state-level control a slow setup
       // would leave the inline dock impossible to close.
-      mocks.runtimeClient.GET.mockResolvedValue({
-        data: { ...readyWorkspaceData, status: "creating" },
-        error: undefined,
-        response: { status: 200 },
-      });
+      mocks.runtimeClient.getWorkspace.mockResolvedValue({ ...readyWorkspaceData, status: "creating" });
       const setMode = vi.fn();
       render(WorkspaceTerminalView, {
         props: {
@@ -528,10 +498,10 @@ describe("WorkspaceTerminalView embed props", () => {
     });
 
     it("keeps a collapse control reachable after workspace setup fails", async () => {
-      mocks.runtimeClient.GET.mockResolvedValue({
-        data: { ...readyWorkspaceData, status: "error", error_message: "clone failed" },
-        error: undefined,
-        response: { status: 200 },
+      mocks.runtimeClient.getWorkspace.mockResolvedValue({
+        ...readyWorkspaceData,
+        status: "error",
+        error_message: "clone failed",
       });
       const setMode = vi.fn();
       render(WorkspaceTerminalView, {
@@ -549,10 +519,7 @@ describe("WorkspaceTerminalView embed props", () => {
     });
 
     it("keeps a collapse control reachable when the workspace fetch fails", async () => {
-      mocks.runtimeClient.GET.mockResolvedValue({
-        error: problem(500, "upstreamError", "boom"),
-        response: { status: 500 },
-      });
+      mocks.runtimeClient.getWorkspace.mockRejectedValue(failedProblem(500, "upstreamError", "boom"));
       const setMode = vi.fn();
       render(WorkspaceTerminalView, {
         props: {
@@ -562,7 +529,7 @@ describe("WorkspaceTerminalView embed props", () => {
         },
       });
 
-      await waitFor(() => expect(screen.getByText("Failed to load workspace (500)")).toBeTruthy());
+      await waitFor(() => expect(screen.getByText("boom")).toBeTruthy());
 
       await fireEvent.click(screen.getByRole("button", { name: "Collapse Terminal" }));
       expect(setMode).toHaveBeenCalledWith("collapsed");
@@ -574,14 +541,11 @@ describe("WorkspaceTerminalView embed props", () => {
       // collapse controls) must render instead of A's ready toolbar,
       // which would be a stale header whose action guards leave the dock
       // uncollapsible.
-      mocks.runtimeClient.GET.mockImplementation(async (_path: string, opts: { params: { path: { id: string } } }) => {
-        if (opts.params.path.id === "ws-2") {
-          return {
-            error: problem(500, "upstreamError", "boom"),
-            response: { status: 500 },
-          };
+      mocks.runtimeClient.getWorkspace.mockImplementation(async ({ id }: { id: string }) => {
+        if (id === "ws-2") {
+          throw failedProblem(500, "upstreamError", "boom");
         }
-        return { data: readyWorkspaceData, error: undefined, response: { status: 200 } };
+        return readyWorkspaceData;
       });
       const setMode = vi.fn();
       const inlineDock = { getMode: () => "split" as const, setMode };
@@ -593,7 +557,7 @@ describe("WorkspaceTerminalView embed props", () => {
 
       await rerender({ workspaceId: "ws-2", hideWorkspaceList: true, inlineDock });
 
-      await waitFor(() => expect(screen.getByText("Failed to load workspace (500)")).toBeTruthy());
+      await waitFor(() => expect(screen.getByText("boom")).toBeTruthy());
       expect(screen.queryByText("feature/embed-props")).toBeNull();
 
       const collapse = screen.getByRole("button", { name: "Collapse Terminal" });
@@ -603,11 +567,11 @@ describe("WorkspaceTerminalView embed props", () => {
     });
 
     it("a slow in-place workspace switch shows the loading state, not the stale toolbar", async () => {
-      mocks.runtimeClient.GET.mockImplementation((_path: string, opts: { params: { path: { id: string } } }) => {
-        if (opts.params.path.id === "ws-2") {
+      mocks.runtimeClient.getWorkspace.mockImplementation(({ id }: { id: string }) => {
+        if (id === "ws-2") {
           return new Promise(() => {});
         }
-        return Promise.resolve({ data: readyWorkspaceData, error: undefined, response: { status: 200 } });
+        return Promise.resolve(readyWorkspaceData);
       });
       const inlineDock = { getMode: () => "split" as const, setMode: vi.fn() };
       const { rerender } = render(WorkspaceTerminalView, {
@@ -624,11 +588,7 @@ describe("WorkspaceTerminalView embed props", () => {
     });
 
     it("shows no collapse control in setup states without an inlineDock prop", async () => {
-      mocks.runtimeClient.GET.mockResolvedValue({
-        data: { ...readyWorkspaceData, status: "creating" },
-        error: undefined,
-        response: { status: 200 },
-      });
+      mocks.runtimeClient.getWorkspace.mockResolvedValue({ ...readyWorkspaceData, status: "creating" });
       render(WorkspaceTerminalView, {
         props: { workspaceId: "ws-1", hideWorkspaceList: true },
       });

@@ -1,6 +1,7 @@
 import { Duration, Effect, Option, Schedule, Schema } from "effect";
 import { TransientTransportError } from "../../api/effect-errors.js";
 import { GeneratedApi } from "../../api/generated-api.js";
+import { orvalRequest } from "../../api/runtime.js";
 
 export function shouldRetryFleetDiffWatch(status: number): boolean {
   if (status === 501) return false;
@@ -92,21 +93,20 @@ export const watchFleetWorkspaceDiff = Effect.fn("FleetWorkspaceDiffWatch.live")
     hostKey,
     request: (requestedWorkspaceId, requestedHostKey, version) =>
       Effect.tryPromise({
-        try: (signal) =>
-          api.client.GET("/fleet/hosts/{host_key}/workspaces/{id}/diff/watch", {
-            params: {
-              path: { host_key: requestedHostKey, id: requestedWorkspaceId },
-              query: version === "" ? {} : { version },
-            },
-            signal,
-          }),
+        try: async (signal) => {
+          const response = await orvalRequest(
+            api.client.FleetService.getWatchFleetWorkspaceDiffUrl(
+              { hostKey: requestedHostKey, id: requestedWorkspaceId },
+              version === "" ? {} : { version },
+            ),
+            { signal },
+          );
+          const text = [204, 205, 304].includes(response.status) ? "" : await response.text();
+          const body = text === "" ? undefined : JSON.parse(text);
+          return { status: response.status, body };
+        },
         catch: (cause) => TransientTransportError.make({ operation: "watch fleet workspace diff", cause }),
-      }).pipe(
-        Effect.map(({ data, error, response }) => ({
-          status: response.status,
-          body: data ?? error,
-        })),
-      ),
+      }),
     onChanged,
   });
 });

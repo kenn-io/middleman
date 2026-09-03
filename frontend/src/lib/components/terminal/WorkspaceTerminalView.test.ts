@@ -198,61 +198,46 @@ vi.mock("../../app/runtime-context.js", () => ({
 
 vi.mock("../../api/generated-api.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/generated-api.js")>();
-  const { createRuntimeClient } = await import("../../api/runtime.js");
-  const liveClient = createRuntimeClient();
-  interface RuntimeRequestOptions {
-    readonly params?: {
-      readonly path?: Readonly<Record<string, string>>;
-    };
-    readonly body?: {
-      readonly display_region?: "workflow" | "terminal";
-      readonly label?: string;
-      readonly target_key?: string;
-    };
-  }
-  const client = new Proxy(liveClient, {
-    get(target, property) {
-      const original = Reflect.get(target, property, target);
-      if (typeof property !== "string" || typeof original !== "function") return original;
-      return (path: string, options: RuntimeRequestOptions = {}) => {
-        const runtimePath = path.match(
-          /^\/(?:fleet\/hosts\/\{host_key\}\/)?workspaces\/\{id\}\/runtime(?:\/sessions(?:\/\{session_key\})?)?$/,
-        );
-        if (!runtimePath) return original.call(target, path, options);
-        const pathParams = options.params?.path ?? {};
-        const workspaceId = pathParams["id"] ?? "";
-        const hostKey = pathParams["host_key"];
-        const sessionKey = pathParams["session_key"];
-        if (property === "GET") {
-          return mocks.getWorkspaceRuntime(workspaceId, hostKey).then(async (data) =>
-            data instanceof Response
-              ? { error: await data.json(), response: data }
-              : {
-                  data,
-                  response: new Response(null, { status: 200 }),
-                },
-          );
-        }
-        if (property === "POST") {
-          return mocks
-            .launchWorkspaceSession(workspaceId, options.body?.target_key ?? "", {
-              hostKey,
-              region: options.body?.display_region,
-            })
-            .then((data) => ({ data, response: new Response(null, { status: 200 }) }));
-        }
-        if (property === "PATCH") {
-          return mocks
-            .renameWorkspaceSession(workspaceId, sessionKey, options.body?.label ?? "", hostKey)
-            .then((data) => ({ data, response: new Response(null, { status: 200 }) }));
-        }
-        if (property === "DELETE") {
-          return mocks
-            .stopWorkspaceSession(workspaceId, sessionKey, hostKey)
-            .then(() => ({ response: new Response(null, { status: 204 }) }));
-        }
-        return original.call(target, path, options);
-      };
+  const { GeneratedProblemResponse } = await import("../../api/runtime.js");
+  const { makeGeneratedClient } = await import("../../testing/generated-client.js");
+  const getRuntime = async (workspaceId: string, hostKey?: string) => {
+    const result = await mocks.getWorkspaceRuntime(workspaceId, hostKey);
+    if (result instanceof Response) throw new GeneratedProblemResponse(await result.json(), result);
+    return result;
+  };
+  const client = makeGeneratedClient({
+    WorkspacesService: {
+      getWorkspaceRuntime: ({ id }: { id: string }) => getRuntime(id),
+      launchWorkspaceRuntimeSession: (
+        { id }: { id: string },
+        body: { target_key: string; display_region?: "workflow" | "terminal" },
+      ) => mocks.launchWorkspaceSession(id, body.target_key, { region: body.display_region }),
+      renameWorkspaceRuntimeSession: (
+        { id, sessionKey }: { id: string; sessionKey: string },
+        body: { label: string },
+      ) => mocks.renameWorkspaceSession(id, sessionKey, body.label, undefined),
+      stopWorkspaceRuntimeSession: ({ id, sessionKey }: { id: string; sessionKey: string }) =>
+        mocks.stopWorkspaceSession(id, sessionKey, undefined),
+    },
+    FleetService: {
+      getFleetWorkspaceRuntime: ({ hostKey, id }: { hostKey: string; id: string }) => getRuntime(id, hostKey),
+      launchFleetWorkspaceRuntimeSession: (
+        { hostKey, id }: { hostKey: string; id: string },
+        body: { target_key: string; display_region?: "workflow" | "terminal" },
+      ) => mocks.launchWorkspaceSession(id, body.target_key, { hostKey, region: body.display_region }),
+      renameFleetWorkspaceRuntimeSession: (
+        { hostKey, id, sessionKey }: { hostKey: string; id: string; sessionKey: string },
+        body: { label: string },
+      ) => mocks.renameWorkspaceSession(id, sessionKey, body.label, hostKey),
+      stopFleetWorkspaceRuntimeSession: ({
+        hostKey,
+        id,
+        sessionKey,
+      }: {
+        hostKey: string;
+        id: string;
+        sessionKey: string;
+      }) => mocks.stopWorkspaceSession(id, sessionKey, hostKey),
     },
   });
   return {
@@ -905,6 +890,24 @@ describe("WorkspaceTerminalView", () => {
 
     expect(await screen.findByRole("tab", { name: "Helper, Helper running" })).toBeTruthy();
     expect(screen.getByLabelText("Helper running").classList.contains("kit-status-dot--idle")).toBe(true);
+  });
+
+  it("uses the launch target harness icon for a workflow session tab", async () => {
+    const codexSession = {
+      ...runningSession,
+      target_key: "codex-review",
+      label: "Review Agent",
+    } satisfies RuntimeSession;
+    mocks.getWorkspaceRuntime.mockResolvedValue(runtimeWithCodexTarget(true, [codexSession]));
+
+    render(WorkspaceTerminalView, {
+      props: {
+        workspaceId: "ws-1",
+      },
+    });
+
+    const tab = await screen.findByRole("tab", { name: "Review Agent, Review Agent running" });
+    expect(tab.querySelector(".kit-harness-icon--openai")).not.toBeNull();
   });
 
   it("persists toolbar font zoom through shared settings", async () => {

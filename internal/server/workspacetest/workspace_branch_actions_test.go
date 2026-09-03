@@ -12,27 +12,28 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/server/httpapi"
+	"go.kenn.io/forge/internal/testutil"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 	"go.kenn.io/forge/internal/workspace"
 )
 
 func TestWorkspacePushBranchRoutePushesAheadBranch(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := require.New(t)
 	assert := assert.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
 	client, srv := fixture.client, fixture.server
 	ctx := context.Background()
 	ws := createReadyWorkspace(t, ctx, client)
-	runGit(t, ws.WorktreePath, "config", "user.email", "test@test.com")
-	runGit(t, ws.WorktreePath, "config", "user.name", "Test")
+	gitfixture.Run(t, ws.WorktreePath, "config", "user.email", "test@test.com")
+	gitfixture.Run(t, ws.WorktreePath, "config", "user.name", "Test")
 	require.NoError(os.WriteFile(
 		filepath.Join(ws.WorktreePath, "ahead.txt"), []byte("ahead\n"), 0o644,
 	))
-	runGit(t, ws.WorktreePath, "add", ".")
-	runGit(t, ws.WorktreePath, "commit", "-m", "ahead")
+	gitfixture.Run(t, ws.WorktreePath, "add", ".")
+	gitfixture.Run(t, ws.WorktreePath, "commit", "-m", "ahead")
 
-	rr := doJSON(t, srv, http.MethodPost, "/api/v1/workspaces/"+ws.Id+"/push", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodPost, "/api/v1/workspaces/"+ws.Id+"/push", nil)
 
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	div, ok, err := workspace.WorktreeDivergence(ctx, ws.WorktreePath)
@@ -42,15 +43,14 @@ func TestWorkspacePushBranchRoutePushesAheadBranch(t *testing.T) {
 }
 
 func TestWorkspacePullBranchRouteFastForwardsBehindBranch(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := require.New(t)
 	assert := assert.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
 	client, srv := fixture.client, fixture.server
 	ctx := context.Background()
 	ws := createReadyWorkspace(t, ctx, client)
-	runGit(t, ws.WorktreePath, "push", "-u", "origin", "HEAD")
+	gitfixture.Run(t, ws.WorktreePath, "push", "-u", "origin", "HEAD")
 	upstreamRef := workspaceGitOutput(
 		t, ws.WorktreePath,
 		"rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}",
@@ -59,18 +59,18 @@ func TestWorkspacePullBranchRouteFastForwardsBehindBranch(t *testing.T) {
 
 	other := filepath.Join(t.TempDir(), "other")
 	originURL := workspaceGitOutput(t, ws.WorktreePath, "remote", "get-url", "origin")
-	runGit(t, t.TempDir(), "clone", originURL, other)
-	runGit(t, other, "config", "user.email", "test@test.com")
-	runGit(t, other, "config", "user.name", "Test")
-	runGit(t, other, "checkout", "-b", upstreamBranch, upstreamRef)
+	gitfixture.Run(t, t.TempDir(), "clone", originURL, other)
+	gitfixture.Run(t, other, "config", "user.email", "test@test.com")
+	gitfixture.Run(t, other, "config", "user.name", "Test")
+	gitfixture.Run(t, other, "checkout", "-b", upstreamBranch, upstreamRef)
 	require.NoError(os.WriteFile(
 		filepath.Join(other, "remote.txt"), []byte("remote\n"), 0o644,
 	))
-	runGit(t, other, "add", ".")
-	runGit(t, other, "commit", "-m", "remote")
-	runGit(t, other, "push", "origin", upstreamBranch)
+	gitfixture.Run(t, other, "add", ".")
+	gitfixture.Run(t, other, "commit", "-m", "remote")
+	gitfixture.Run(t, other, "push", "origin", upstreamBranch)
 
-	rr := doJSON(t, srv, http.MethodPost, "/api/v1/workspaces/"+ws.Id+"/pull", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodPost, "/api/v1/workspaces/"+ws.Id+"/pull", nil)
 
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	contents, err := os.ReadFile(filepath.Join(ws.WorktreePath, "remote.txt"))
@@ -79,8 +79,7 @@ func TestWorkspacePullBranchRouteFastForwardsBehindBranch(t *testing.T) {
 }
 
 func TestWorkspacePullBranchRouteRejectsDirtyWorktree(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := require.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
 	client, srv := fixture.client, fixture.server
@@ -90,10 +89,10 @@ func TestWorkspacePullBranchRouteRejectsDirtyWorktree(t *testing.T) {
 		filepath.Join(ws.WorktreePath, "dirty.txt"), []byte("dirty\n"), 0o644,
 	))
 
-	rr := doJSON(t, srv, http.MethodPost, "/api/v1/workspaces/"+ws.Id+"/pull", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodPost, "/api/v1/workspaces/"+ws.Id+"/pull", nil)
 
 	require.Equal(http.StatusConflict, rr.Code, rr.Body.String())
-	var problem rawProblemDetail
+	var problem httpapi.ProblemError
 	require.NoError(json.NewDecoder(rr.Body).Decode(&problem))
-	assert.New(t).Equal(string(httpapi.CodeWorktreeDirty), problem.Code)
+	assert.New(t).Equal(httpapi.CodeWorktreeDirty, problem.Code)
 }

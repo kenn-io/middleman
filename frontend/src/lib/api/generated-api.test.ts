@@ -2,7 +2,8 @@ import { assert, it } from "@effect/vitest";
 import { Effect } from "effect";
 import type { ProblemBody } from "./problems.js";
 import { executeGeneratedRequest, executeOpaqueGeneratedApiRequest, makeGeneratedApiLayer } from "./generated-api.js";
-import { createRuntimeClient } from "./runtime.js";
+import { GeneratedProblemResponse, InvalidGeneratedErrorResponse } from "./runtime.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
 
 it.effect("turns a rejected generated request into a transient transport failure", () =>
   Effect.gen(function* () {
@@ -28,10 +29,7 @@ it.effect("preserves the generated problem body from a failed request", () =>
     };
     const failure = yield* Effect.flip(
       executeGeneratedRequest<{ readonly id: string }>("create workspace", () =>
-        Promise.resolve({
-          error: problem,
-          response: new Response(null, { status: 422 }),
-        }),
+        Promise.reject(new GeneratedProblemResponse(problem, new Response(null, { status: 422 }))),
       ),
     );
 
@@ -45,11 +43,8 @@ it.effect("rejects an untyped generated error body at the API boundary", () =>
   Effect.gen(function* () {
     const failure = yield* Effect.flip(
       executeOpaqueGeneratedApiRequest("load fleet workspaces", () =>
-        Promise.resolve({
-          error: { message: "not a problem envelope" },
-          response: new Response(null, { status: 502 }),
-        }),
-      ).pipe(Effect.provide(makeGeneratedApiLayer(createRuntimeClient()))),
+        Promise.reject(new InvalidGeneratedErrorResponse({ message: "not a problem envelope" })),
+      ).pipe(Effect.provide(makeGeneratedApiLayer(makeGeneratedClient()))),
     );
 
     assert.strictEqual(failure._tag, "InvalidExternalPayload");

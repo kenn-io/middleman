@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-import type { components } from "../../src/lib/api/generated/schema.js";
+import type { ProblemError } from "../../src/lib/api/generated/models/index.js";
 import { createMockApiHandler } from "../../src/test/mockApiFetch.js";
 import { mockApi } from "./support/mockApi";
 
-type ProblemBody = components["schemas"]["ProblemError"];
+type ProblemBody = ProblemError;
 
 function problem(code: ProblemBody["code"], status: number, detail?: string): ProblemBody {
   return { type: "about:blank", code, status, ...(detail === undefined ? {} : { detail }) };
@@ -4539,6 +4539,8 @@ test.describe("workspace list bubble opens right sidebar", () => {
       mr_additions: 1500,
       mr_deletions: 2400,
       worktree_dirty: true,
+      agent_state: "working",
+      agent_state_updated_at: "2026-04-11T12:05:00Z",
     };
     const wsAheadBehindDiffClean = {
       ...testWorkspace,
@@ -4551,9 +4553,24 @@ test.describe("workspace list bubble opens right sidebar", () => {
       mr_deletions: 2400,
       worktree_dirty: false,
     };
-    const list = [wsBare, wsBranchOnly, wsAhead, wsAheadBehindDiff, wsAheadBehindDiffClean];
+    const wsAdHoc = {
+      ...testWorkspace,
+      id: "ws-adhoc",
+      item_type: "adhoc",
+      item_number: 0,
+      git_head_ref: "feature/new-work",
+      mr_title: null,
+      mr_state: null,
+      worktree_dirty: true,
+      agent_state: "done",
+      agent_state_updated_at: "2026-04-11T12:00:00Z",
+    };
+    const list = [wsBare, wsBranchOnly, wsAhead, wsAheadBehindDiff, wsAheadBehindDiffClean, wsAdHoc];
 
     await mockApi(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("kenn-forge:workspaceListSort", "agent-status");
+    });
     await page.route("**/api/v1/events", async (route) => {
       await route.fulfill({
         status: 200,
@@ -4605,9 +4622,11 @@ test.describe("workspace list bubble opens right sidebar", () => {
       has: page.getByTitle("Open PR #5555"),
     });
     await expect(busyRow.locator(".kit-diff-stats")).toHaveCount(1);
-    await expect(page.locator(".workspace-list-sidebar .worktree-dirty")).toHaveCount(1);
+    await expect(page.locator(".workspace-list-sidebar .worktree-dirty")).toHaveCount(2);
     await expect(page.locator(".workspace-list-sidebar .worktree-dirty-slot")).toHaveCount(0);
-    await expect(page.locator(".workspace-list-sidebar .ws-row-aside > .item-bubble + .worktree-dirty")).toHaveCount(1);
+    await expect(
+      page.locator(".workspace-list-sidebar .ws-row-aside > .item-bubble + .workspace-sort-time + .worktree-dirty"),
+    ).toHaveCount(1);
 
     const diffBox = await busyRow.locator(".workspace-diff-stats").boundingBox();
     const cleanDiffBox = await cleanBusyRow.locator(".workspace-diff-stats").boundingBox();
@@ -4632,13 +4651,29 @@ test.describe("workspace list bubble opens right sidebar", () => {
       expect(Math.abs(diffBox.x + diffBox.width - (cleanDiffBox.x + cleanDiffBox.width))).toBeLessThanOrEqual(1);
       expect(Math.abs(pushBox.x - cleanPushBox.x)).toBeLessThanOrEqual(1);
       expect(pencilBox.x).toBeGreaterThan(diffBox.x + diffBox.width);
-      expect(Math.abs(pencilBox.x - bubbleBox.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(pencilBox.x + pencilBox.width - (bubbleBox.x + bubbleBox.width))).toBeLessThanOrEqual(1);
       expect(pencilBox.y).toBeGreaterThan(bubbleBox.y + bubbleBox.height + 2);
+    }
+
+    const adHocRow = page.locator(".workspace-list-sidebar .ws-row", { hasText: "feature/new-work" });
+    const adHocSlotBox = await adHocRow.locator(".item-bubble-slot").boundingBox();
+    const adHocTimeBox = await adHocRow.locator(".workspace-sort-time").boundingBox();
+    const adHocPencilBox = await adHocRow.locator(".worktree-dirty").boundingBox();
+    expect(adHocSlotBox).not.toBeNull();
+    expect(adHocTimeBox).not.toBeNull();
+    expect(adHocPencilBox).not.toBeNull();
+    if (adHocSlotBox && adHocTimeBox && adHocPencilBox && bubbleBox) {
+      const expectedRight = bubbleBox.x + bubbleBox.width;
+      expect(Math.abs(adHocSlotBox.x + adHocSlotBox.width - expectedRight)).toBeLessThanOrEqual(1);
+      expect(Math.abs(adHocTimeBox.x + adHocTimeBox.width - expectedRight)).toBeLessThanOrEqual(1);
+      expect(Math.abs(adHocPencilBox.x + adHocPencilBox.width - expectedRight)).toBeLessThanOrEqual(1);
+      expect(adHocTimeBox.y).toBeGreaterThanOrEqual(adHocSlotBox.y + adHocSlotBox.height);
+      expect(adHocPencilBox.y).toBeGreaterThan(adHocTimeBox.y + adHocTimeBox.height);
     }
 
     const bubbles = page.locator(".workspace-list-sidebar .ws-row .item-bubble");
     const boxes: Array<{ right: number }> = [];
-    for (let i = 0; i < list.length; i += 1) {
+    for (let i = 0; i < (await bubbles.count()); i += 1) {
       const box = await bubbles.nth(i).boundingBox();
       expect(box).not.toBeNull();
       if (box != null) {
@@ -4652,6 +4687,69 @@ test.describe("workspace list bubble opens right sidebar", () => {
     // All bubbles should align to the same right column. Allow a
     // sub-pixel tolerance for browser rounding.
     expect(maxRight - minRight).toBeLessThanOrEqual(1);
+  });
+
+  // Desktop and phone parity are separate tests: each full navigation through
+  // the Vite dev server is slow under CI worker load, and four in one test
+  // exhausted the per-test budget on the first attempt.
+  test("workspace recency uses item-list typography on desktop", async ({ page }) => {
+    await setupTerminalMocks(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("kenn-forge:workspaceListSort", "created");
+    });
+
+    await page.goto("/workspaces");
+    const desktopTime = page.locator(".workspace-sort-time");
+    await expect(desktopTime).toBeVisible();
+    const desktopTypography = await desktopTime.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { fontFamily: style.fontFamily, fontSize: style.fontSize, lineHeight: style.lineHeight };
+    });
+
+    await page.goto("/pulls");
+    const pullTime = page.locator(".pull-item .time").first();
+    await expect(pullTime).toBeVisible();
+    const pullTypography = await pullTime.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { fontFamily: style.fontFamily, fontSize: style.fontSize, lineHeight: style.lineHeight };
+    });
+    expect(desktopTypography).toEqual(pullTypography);
+  });
+
+  test("workspace recency uses item-list typography on phones without overflow", async ({ page }) => {
+    await setupTerminalMocks(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("kenn-forge:workspaceListSort", "created");
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/m/pulls");
+    const mobilePullTime = page.locator(".mobile-shell .pull-item .time").first();
+    await expect(mobilePullTime).toBeVisible();
+    const mobilePullTypography = await mobilePullTime.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { fontFamily: style.fontFamily, fontSize: style.fontSize, lineHeight: style.lineHeight };
+    });
+
+    await page.goto("/m/workspaces");
+    const mobileTime = page.locator(".mobile-workspace-row__sort-time");
+    const mobileRow = page.locator(".mobile-workspace-row");
+    await expect(mobileTime).toBeVisible();
+    const mobileTypography = await mobileTime.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { fontFamily: style.fontFamily, fontSize: style.fontSize, lineHeight: style.lineHeight };
+    });
+    expect(mobileTypography).toEqual(mobilePullTypography);
+
+    const rowBox = await mobileRow.boundingBox();
+    const timeBox = await mobileTime.boundingBox();
+    expect(rowBox).not.toBeNull();
+    expect(timeBox).not.toBeNull();
+    if (rowBox && timeBox) {
+      expect(timeBox.x).toBeGreaterThanOrEqual(rowBox.x);
+      expect(timeBox.x + timeBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 
   test("filters workspace rows by repo, title, and item number", async ({ page }) => {

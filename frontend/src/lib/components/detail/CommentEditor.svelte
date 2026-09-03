@@ -21,11 +21,16 @@
 
   import {
     canonicalProvider,
-    providerRepoPath,
+    providerHostRouteParams,
     providerRouteParams,
+    providerUsesHostRoute,
   } from "../../api/provider-routes.js";
   import { executeGeneratedApiRequest } from "../../api/generated-api.js";
-  import type { components } from "../../api/generated/schema.js";
+  import type {
+    CommentAutocompleteReference as GeneratedCommentAutocompleteReference,
+    CommentAutocompleteResponse as GeneratedCommentAutocompleteResponse,
+    GetCommentAutocompleteParams as GeneratedGetCommentAutocompleteParams,
+  } from "../../api/generated/models/index.js";
   import { retryIdempotentRead } from "../../api/retry-policy.js";
   import type { AppExecution } from "../../app/runtime.js";
   import { getAppRuntime } from "../../app/runtime-context.js";
@@ -37,6 +42,9 @@
     provider: string;
     platformHost?: string | undefined;
     repoPath: string;
+    /** Item the comment targets; its participants lead @ mention suggestions. */
+    itemType?: "pull" | "issue" | undefined;
+    itemNumber?: number | undefined;
     value: string;
     disabled?: boolean;
     autofocus?: boolean;
@@ -54,8 +62,8 @@
 
   type AutocompleteTrigger = "@" | "#" | "!";
 
-  type CommentAutocompleteReference = components["schemas"]["CommentAutocompleteReference"];
-  type CommentAutocompleteResponse = components["schemas"]["CommentAutocompleteResponse"];
+  type CommentAutocompleteReference = GeneratedCommentAutocompleteReference;
+  type CommentAutocompleteResponse = GeneratedCommentAutocompleteResponse;
 
   const mentionSuggestionKey = new PluginKey("comment-editor-user-suggestion");
   const referenceSuggestionKey = new PluginKey("comment-editor-reference-suggestion");
@@ -68,6 +76,8 @@
     provider,
     platformHost,
     repoPath,
+    itemType = undefined,
+    itemNumber = undefined,
     value,
     disabled = false,
     autofocus = false,
@@ -168,18 +178,26 @@
     if (trigger === "!" && !isGitLabRepo()) return [];
     suggestionExecution?.interrupt();
     const ref = { provider, platformHost, owner, name, repoPath };
+    const params: GeneratedGetCommentAutocompleteParams = {
+      trigger,
+      q: query,
+      limit: 8,
+      ...(trigger === "@" && itemType !== undefined && itemNumber !== undefined
+        ? { item_type: itemType === "pull" ? "pr" : "issue", item_number: itemNumber }
+        : {}),
+    };
     const program = executeGeneratedApiRequest("GET comment autocomplete", (client, signal) =>
-      client.GET(providerRepoPath(ref, "/comment-autocomplete"), {
-        signal,
-        params: {
-          path: providerRouteParams(ref),
-          query: {
-            trigger,
-            q: query,
-            limit: 8,
-          },
-        },
-      }),
+      providerUsesHostRoute(ref)
+        ? client.RepositoriesService.getCommentAutocompleteOnHost(
+            { ...providerHostRouteParams(ref) },
+            params,
+            { signal },
+          )
+        : client.RepositoriesService.getCommentAutocomplete(
+            { ...providerRouteParams(ref) },
+            params,
+            { signal },
+          ),
     ).pipe(
       retryIdempotentRead,
       Effect.map((response) => toSuggestionItems(trigger, response)),

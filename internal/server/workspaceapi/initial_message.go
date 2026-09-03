@@ -180,6 +180,54 @@ func (s *Handler) SubmitInitialMessageService(
 	return initialMessageAttemptResult(delivered), nil
 }
 
+func (s *Handler) SubmitAgentMessageService(
+	ctx context.Context, workspaceID, runtimeSessionKey, message string,
+) (AgentMessageResult, error) {
+	if s.runtime == nil {
+		return AgentMessageResult{}, httpapi.ServiceUnavailable("agent message delivery not configured")
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return AgentMessageResult{}, httpapi.Validation("workspace_id", "workspace_id is required")
+	}
+	runtimeSessionKey = strings.TrimSpace(runtimeSessionKey)
+	if runtimeSessionKey == "" {
+		return AgentMessageResult{}, httpapi.Validation(
+			"runtime_session_key", "runtime_session_key is required",
+		)
+	}
+	message, messageBytes, err := normalizeInitialAgentMessage(message)
+	if err != nil {
+		return AgentMessageResult{}, httpapi.Validation("message", err.Error())
+	}
+	targetKey := ""
+	for _, session := range s.runtime.ListSessions(workspaceID) {
+		if session.Key == runtimeSessionKey && session.Kind == localruntime.LaunchTargetAgent &&
+			(session.Status == localruntime.SessionStatusStarting ||
+				session.Status == localruntime.SessionStatusRunning) {
+			targetKey = session.TargetKey
+			break
+		}
+	}
+	if targetKey == "" {
+		return AgentMessageResult{}, httpapi.Conflict(
+			httpapi.CodeConflict, "agent runtime session is not live", nil,
+		)
+	}
+	if err := s.runtime.SubmitAgentMessage(ctx, workspaceID, runtimeSessionKey, message); err != nil {
+		if errors.Is(err, localruntime.ErrBracketedPasteInactive) {
+			return AgentMessageResult{}, ErrInitialMessageInputModeNotReady
+		}
+		if errors.Is(err, localruntime.ErrInitialMessageNotWritten) {
+			return AgentMessageResult{}, httpapi.Conflict(httpapi.CodeConflict, err.Error(), nil)
+		}
+		return AgentMessageResult{}, httpapi.Internal("submit agent message failed")
+	}
+	return AgentMessageResult{
+		TargetKey: targetKey, MessageBytes: messageBytes, SubmittedAt: s.now().UTC(),
+	}, nil
+}
+
 func (s *Handler) handleInitialMessageSubmitError(
 	workspaceID string,
 	runtimeSessionKey string,

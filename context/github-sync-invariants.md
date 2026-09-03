@@ -137,6 +137,7 @@ PR timeline storage is intentionally selective.
   stored rows may predate parent-time realignment. (`internal/server/pullapi/routes.go::withSyntheticMRLifecycleEvents`)
 - Keep the existing event families stable: comments, reviews, commits, force
   pushes, and the currently supported PR system events.
+- GitHub commit events use the committer login/name and committed date as their activity actor/time when present, preserve a distinct original author in commit metadata, and fall back independently to author identity/time when committer data is absent.
 - Review comments are UI-aware but are not part of the stored sync model unless
   they can be fetched within the supported timeline path.
 - If bulk sync persists PR system events, detail sync must persist the same
@@ -741,7 +742,13 @@ app to an endpoint its credential cannot use, which fails even though the token
 chain "correctly" falls back to the PAT.
 - Private `user-attachments` reads are the exception to app-token-first reads:
   GitHub returns 404 to installation tokens, so the repo-scoped image proxy must
-  use the user's PAT/`gh` chain (`internal/github/client.go::GetMarkdownImage`).
+  use the user's PAT/`gh` chain (`internal/github/markdown_images.go::GetMarkdownImage`).
+- Repository-file markdown images (`blob`/`raw` web URLs, `raw.githubusercontent.com`)
+  are proxied only for the route's own repository, use the normal read chain, and are
+  type-sniffed because the contents raw media type hides the file type; web URLs do not
+  delimit ref from path, so ref splits are tried shortest-first past 404s. They are
+  marked mutable because the ref is usually a branch. The frontend must apply the
+  same URL rules (`internal/github/markdown_images.go::getRepositoryFileImage`).
 Config may carry multiple `[[github_apps]]` rows for one host, but those rows
 represent distinct app credentials. Management commands must target one row by
 app owner/installation account or app id, and duplicate installation accounts on

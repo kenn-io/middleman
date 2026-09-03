@@ -1,6 +1,8 @@
 <script lang="ts">
   import {
     copyToClipboard,
+    formatRelativeTime,
+    formatTimestamp,
     IconButton,
     SearchInput,
     StatusDot,
@@ -27,7 +29,7 @@
   import { getAppRuntime } from "../../app/runtime-context.js";
   import { getStores } from "../../context.js";
   import { showFlash } from "../../stores/flash.svelte.js";
-  import type { components } from "../../api/generated/schema.js";
+  import type { HostSummary as GeneratedHostSummary } from "../../api/generated/models/index.js";
   import { DiffStats, FilterDropdown, ScrollBox, SidebarToggle } from "@kenn-io/kit-ui";
   import GroupedSidebarSection from "../shared/GroupedSidebarSection.svelte";
   import SidebarTitlePopover from "../sidebar/SidebarTitlePopover.svelte";
@@ -46,6 +48,9 @@
     loadWorkspaceListSort,
     saveWorkspaceListDisplayOptions,
     saveWorkspaceListSort,
+    workspaceAgentStatePriority,
+    workspaceAgentStateSortTime,
+    workspaceListSortTimestamp,
     workspaceListSortOptions,
     type WorkspaceListDisplayOptions,
     type WorkspaceListSort,
@@ -71,7 +76,7 @@
 
   type Workspace = WorkspaceListItem;
 
-  type HostSummary = components["schemas"]["HostSummary"];
+  type HostSummary = GeneratedHostSummary;
   type CatalogLoadStatus = "loading" | "loaded" | "failed";
 
   interface Props {
@@ -312,12 +317,22 @@
       fleetHosts.find((host) => host.kind === "self")?.federationRole === "hub",
   );
 
-  // Flat ordering for timestamp sorts. The org/repo mode keeps
+  // Flat ordering for status and timestamp sorts. The org/repo mode keeps
   // the API order (created_at DESC) inside each repo group.
+  // Agent status follows the same attention-first priority as the server's
+  // aggregate hook state, then keeps newer workspaces first within a status.
   // "Activity" means terminal output only (tmux_last_output_at).
   // "Item activity" means the synced PR/issue last_activity_at.
   // Missing timestamps fall back to workspace creation time.
   const sortedFlat = $derived.by(() => {
+    if (sortMode === "agent-status") {
+      return [...visibleWorkspaces].sort(
+        (a, b) =>
+          workspaceAgentStatePriority(b.agent_state) - workspaceAgentStatePriority(a.agent_state) ||
+          timeValue(workspaceAgentStateSortTime(b)) - timeValue(workspaceAgentStateSortTime(a)) ||
+          a.id.localeCompare(b.id),
+      );
+    }
     const stamp = sortMode === "activity"
       ? (ws: Workspace) =>
           timeValue(ws.tmux_last_output_at) || timeValue(ws.created_at)
@@ -616,9 +631,9 @@
   }
 
   function agentStatePresentation(ws: Workspace): {
-    label: "Working" | "Approval" | "Input" | "Done";
+    label: "Working" | "Approval" | "Input" | "Done" | "Idle";
     status: StatusDotStatus;
-    tone: "working" | "approval" | "input" | "done";
+    tone: "working" | "approval" | "input" | "done" | "idle";
   } | null {
     switch (ws.agent_state) {
       case "working":
@@ -629,11 +644,13 @@
         return { label: "Input", status: "waiting", tone: "input" };
       case "done": {
         const version = doneStateVersion(ws);
-        if (version !== null && acknowledgedDoneStates[workspaceRowKey(ws)] === version) {
+        if (sortMode !== "agent-status" && version !== null && acknowledgedDoneStates[workspaceRowKey(ws)] === version) {
           return null;
         }
         return { label: "Done", status: "idle", tone: "done" };
       }
+      case "idle":
+        return sortMode === "agent-status" ? { label: "Idle", status: "idle", tone: "idle" } : null;
       default:
         return null;
     }
@@ -697,7 +714,7 @@
       !workspaceOperationAvailable(ws, "terminalAttach")
     ) return;
     const doneVersion = doneStateVersion(ws);
-    if (doneVersion !== null) {
+    if (sortMode !== "agent-status" && doneVersion !== null) {
       acknowledgedDoneStates = {
         ...acknowledgedDoneStates,
         [workspaceRowKey(ws)]: doneVersion,
@@ -821,7 +838,7 @@
   function canPush(ws: Workspace): boolean {
     const ahead = ws.commits_ahead ?? 0;
     const behind = ws.commits_behind ?? 0;
-    return ahead > 0 && behind === 0;
+    return ws.branch_upstream_missing === true || (ahead > 0 && behind === 0);
   }
 
   function canPull(ws: Workspace): boolean {
@@ -831,6 +848,9 @@
   }
 
   function syncActionDetail(ws: Workspace): string {
+    if (ws.branch_upstream_missing === true) {
+      return "";
+    }
     if (canPush(ws)) {
       return `${ws.commits_ahead ?? 0} ahead`;
     }
@@ -900,16 +920,10 @@
     const hostKey = ws.fleet_host_key;
     const refresh = hostKey
       ? executeOpaqueGeneratedApiRequest("refresh remote workspace", (generatedClient, signal) =>
-          generatedClient.POST("/fleet/hosts/{host_key}/workspaces/{id}/refresh", {
-            params: { path: { host_key: hostKey, id: ws.id } },
-            signal,
-          }),
+          generatedClient.FleetService.refreshFleetWorkspace({ hostKey, id: ws.id }, { signal }),
         ).pipe(Effect.asVoid)
       : executeGeneratedApiRequest("refresh workspace", (generatedClient, signal) =>
-          generatedClient.POST("/workspaces/{id}/refresh", {
-            params: { path: { id: ws.id } },
-            signal,
-          }),
+          generatedClient.WorkspacesService.refreshWorkspace({ id: ws.id }, { signal }),
         ).pipe(Effect.asVoid);
     runtime.runCommand(refresh.pipe(Effect.tap(() => Effect.sync(requestApplicationWorkspaceRefresh))), {
       operation: "refresh workspace status",
@@ -971,29 +985,17 @@
     const command = hostKey
       ? action === "push"
         ? executeOpaqueGeneratedApiRequest("push remote workspace branch", (generatedClient, signal) =>
-            generatedClient.POST("/fleet/hosts/{host_key}/workspaces/{id}/push", {
-              params: { path: { host_key: hostKey, id: ws.id } },
-              signal,
-            }),
+            generatedClient.FleetService.pushFleetWorkspaceBranch({ hostKey, id: ws.id }, { signal }),
           ).pipe(Effect.asVoid)
         : executeOpaqueGeneratedApiRequest("pull remote workspace branch", (generatedClient, signal) =>
-            generatedClient.POST("/fleet/hosts/{host_key}/workspaces/{id}/pull", {
-              params: { path: { host_key: hostKey, id: ws.id } },
-              signal,
-            }),
+            generatedClient.FleetService.pullFleetWorkspaceBranch({ hostKey, id: ws.id }, { signal }),
           ).pipe(Effect.asVoid)
       : action === "push"
         ? executeGeneratedApiRequest("push workspace branch", (generatedClient, signal) =>
-            generatedClient.POST("/workspaces/{id}/push", {
-              params: { path: { id: ws.id } },
-              signal,
-            }),
+            generatedClient.WorkspacesService.pushWorkspaceBranch({ id: ws.id }, { signal }),
           ).pipe(Effect.asVoid)
         : executeGeneratedApiRequest("pull workspace branch", (generatedClient, signal) =>
-            generatedClient.POST("/workspaces/{id}/pull", {
-              params: { path: { id: ws.id } },
-              signal,
-            }),
+            generatedClient.WorkspacesService.pullWorkspaceBranch({ id: ws.id }, { signal }),
           ).pipe(Effect.asVoid);
     runtime.runCommand(
       command.pipe(
@@ -1019,16 +1021,10 @@
     const hostKey = ws.fleet_host_key;
     const command = hostKey
       ? executeOpaqueGeneratedApiRequest("reveal remote workspace path", (generatedClient, signal) =>
-          generatedClient.POST("/fleet/hosts/{host_key}/workspaces/{id}/reveal", {
-            params: { path: { host_key: hostKey, id: ws.id } },
-            signal,
-          }),
+          generatedClient.FleetService.revealFleetWorkspace({ hostKey, id: ws.id }, { signal }),
         ).pipe(Effect.asVoid)
       : executeGeneratedApiRequest("reveal workspace path", (generatedClient, signal) =>
-          generatedClient.POST("/workspaces/{id}/reveal", {
-            params: { path: { id: ws.id } },
-            signal,
-          }),
+          generatedClient.WorkspacesService.revealWorkspace({ id: ws.id }, { signal }),
         ).pipe(Effect.asVoid);
     runtime.runCommand(
       command.pipe(
@@ -1058,26 +1054,23 @@
   function confirmDeleteWorkspaceFromList(): void {
     const ws = deleteConfirmWorkspace;
     if (!ws || !startWorkspaceAction(ws, "delete")) return;
+    const force = deleteConfirmForce;
     onWorkspaceDeletePendingChange?.(ws.id, ws.fleet_host_key, true);
     const hostKey = ws.fleet_host_key;
     const command = hostKey
       ? executeOpaqueGeneratedApiRequest("delete remote workspace", (generatedClient, signal) =>
-          generatedClient.DELETE("/fleet/hosts/{host_key}/workspaces/{id}", {
-            params: {
-              path: { host_key: hostKey, id: ws.id },
-              ...(deleteConfirmForce ? { query: { force: true } } : {}),
-            },
-            signal,
-          }),
+          generatedClient.FleetService.deleteFleetWorkspace(
+            { hostKey, id: ws.id },
+            force ? { force: true } : undefined,
+            { signal },
+          ),
         ).pipe(Effect.asVoid)
       : executeGeneratedApiRequest("delete workspace", (generatedClient, signal) =>
-          generatedClient.DELETE("/workspaces/{id}", {
-            params: {
-              path: { id: ws.id },
-              ...(deleteConfirmForce ? { query: { force: true } } : {}),
-            },
-            signal,
-          }),
+          generatedClient.WorkspacesService.deleteWorkspace(
+            { id: ws.id },
+            force ? { force: true } : undefined,
+            { signal },
+          ),
         ).pipe(Effect.asVoid);
     runtime.runCommand(
       command.pipe(
@@ -1345,6 +1338,7 @@
           {@const behind = ws.commits_behind ?? 0}
           {@const showPush = ahead > 0 || behind > 0}
           {@const agentState = agentStatePresentation(ws)}
+          {@const sortTimestamp = workspaceListSortTimestamp(ws, sortMode)}
           {@const workspaceReadable = workspaceOperationAvailable(ws, "workspaceRead") && workspaceOperationAvailable(ws, "terminalAttach")}
           <div
             class={["ws-row", { selected: isSelectedWorkspace(ws) }]}
@@ -1481,15 +1475,13 @@
                     />
                   </span>
                 {/if}
-                {#if ws.worktree_dirty && !hasItemBubble(ws)}
-                  {@render worktreeDirtyIndicator()}
-                {/if}
               </div>
             </div>
-            <!-- An ad-hoc workspace with no detected PR has nothing for a
-                 bubble to open, so it renders none rather than an empty one. -->
-            {#if hasItemBubble(ws)}
-              <div class="ws-row-aside">
+            <div class="ws-row-aside">
+              <!-- Keep the item column stable when a workspace has no linked
+                   provider item. The empty slot is layout only, never a
+                   disabled or misleading #0 control. -->
+              {#if hasItemBubble(ws)}
                 <button
                   class={[
                     "item-bubble",
@@ -1509,11 +1501,21 @@
                 >
                   {itemBubbleLabel(ws)}
                 </button>
-                {#if ws.worktree_dirty}
-                  {@render worktreeDirtyIndicator()}
-                {/if}
-              </div>
-            {/if}
+              {:else}
+                <span class="item-bubble-slot" aria-hidden="true"></span>
+              {/if}
+              {#if sortTimestamp}
+                <time
+                  class="workspace-sort-time"
+                  datetime={sortTimestamp.at}
+                  title={`${sortTimestamp.label}: ${formatTimestamp(sortTimestamp.at)}`}
+                  aria-label={`${sortTimestamp.label}: ${formatRelativeTime(sortTimestamp.at)}`}
+                >{formatRelativeTime(sortTimestamp.at)}</time>
+              {/if}
+              {#if ws.worktree_dirty}
+                {@render worktreeDirtyIndicator()}
+              {/if}
+            </div>
           </div>
           <SidebarTitlePopover
             target={rowEls[workspaceRowKey(ws)] ?? undefined}
@@ -1981,6 +1983,10 @@
     color: var(--accent-green);
   }
 
+  .agent-state--idle {
+    color: var(--text-muted);
+  }
+
 
   .repo-context {
     /* Flat sorts drop the per-repo group headers, so each row
@@ -2054,8 +2060,22 @@
     align-self: flex-start;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-2);
+    align-items: flex-end;
+    gap: var(--space-1);
+    min-width: 44px;
+  }
+
+  .item-bubble-slot {
+    display: block;
+    width: 100%;
+    height: 16px;
+    margin-top: 1px;
+  }
+
+  .workspace-sort-time {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
   }
 
   .item-bubble {

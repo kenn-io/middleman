@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/apiclient/generated"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 )
 
 func TestIssueWorkspaceRecoversExpectedDirectory(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -27,11 +27,11 @@ func TestIssueWorkspaceRecoversExpectedDirectory(t *testing.T) {
 		"github", "github.com", "acme", "widget",
 		fmt.Sprintf("repo-%d", fixture.repoID), "issue-7",
 	)
-	runGit(
+	gitfixture.Run(
 		t, fixture.bare,
 		"worktree", "add", expectedPath, "-b", branch, "main",
 	)
-	wantHead := testGitSHA(t, expectedPath, "HEAD")
+	wantHead := gitfixture.SHA(t, expectedPath, "HEAD")
 	require.NoError(os.WriteFile(
 		filepath.Join(expectedPath, "base.txt"), []byte("dirty\n"), 0o644,
 	))
@@ -60,7 +60,7 @@ func TestIssueWorkspaceRecoversExpectedDirectory(t *testing.T) {
 		branch,
 		workspaceGitOutput(t, expectedPath, "branch", "--show-current"),
 	)
-	assert.Equal(wantHead, testGitSHA(t, expectedPath, "HEAD"))
+	assert.Equal(wantHead, gitfixture.SHA(t, expectedPath, "HEAD"))
 	assert.Equal(wantStatus, workspaceGitOutput(t, expectedPath, "status", "--short"))
 	tracked, err := os.ReadFile(filepath.Join(expectedPath, "base.txt"))
 	require.NoError(err)
@@ -69,8 +69,7 @@ func TestIssueWorkspaceRecoversExpectedDirectory(t *testing.T) {
 }
 
 func TestIssueWorkspaceDirectoryRecoveryRejectsMissingPath(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -121,22 +120,22 @@ func TestIssueWorkspaceDirectoryRecoveryReasons(t *testing.T) {
 			name: "wrong repository",
 			prepare: func(t *testing.T, _ workspaceServerFixture, path string) {
 				repo := filepath.Join(t.TempDir(), "other")
-				runGit(t, filepath.Dir(repo), "init", "--initial-branch=main", repo)
-				runGit(t, repo, "config", "user.email", "test@test.com")
-				runGit(t, repo, "config", "user.name", "Test")
+				gitfixture.Run(t, filepath.Dir(repo), "init", "--initial-branch=main", repo)
+				gitfixture.Run(t, repo, "config", "user.email", "test@test.com")
+				gitfixture.Run(t, repo, "config", "user.name", "Test")
 				require.NoError(t, os.WriteFile(
 					filepath.Join(repo, "base.txt"), []byte("base\n"), 0o644,
 				))
-				runGit(t, repo, "add", ".")
-				runGit(t, repo, "commit", "-m", "base")
-				runGit(t, repo, "worktree", "add", path, "-b", "kenn-forge/issue-7", "HEAD")
+				gitfixture.Run(t, repo, "add", ".")
+				gitfixture.Run(t, repo, "commit", "-m", "base")
+				gitfixture.Run(t, repo, "worktree", "add", path, "-b", "kenn-forge/issue-7", "HEAD")
 			},
 			wantReason: "repository_mismatch",
 		},
 		{
 			name: "wrong branch",
 			prepare: func(t *testing.T, fixture workspaceServerFixture, path string) {
-				runGit(t, fixture.bare, "worktree", "add", path, "-b", "other/branch", "main")
+				gitfixture.Run(t, fixture.bare, "worktree", "add", path, "-b", "other/branch", "main")
 			},
 			wantReason:    "branch_mismatch",
 			checkBranches: true,
@@ -146,7 +145,7 @@ func TestIssueWorkspaceDirectoryRecoveryReasons(t *testing.T) {
 		{
 			name: "detached head",
 			prepare: func(t *testing.T, fixture workspaceServerFixture, path string) {
-				runGit(t, fixture.bare, "worktree", "add", "--detach", path, "main")
+				gitfixture.Run(t, fixture.bare, "worktree", "add", "--detach", path, "main")
 			},
 			wantReason:    "branch_mismatch",
 			checkBranches: true,
@@ -157,8 +156,7 @@ func TestIssueWorkspaceDirectoryRecoveryReasons(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			acquireWorkspaceGitSlot(t)
+			runParallelWorkspaceGitTest(t)
 			assert := assert.New(t)
 			require := require.New(t)
 			fixture := setupWorkspaceServerFixture(t, nil)
@@ -201,8 +199,7 @@ func TestIssueWorkspaceDirectoryRecoveryReasons(t *testing.T) {
 }
 
 func TestIssueWorkspaceConflictRejectsAlternateBranchForExistingDirectory(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -215,7 +212,7 @@ func TestIssueWorkspaceConflictRejectsAlternateBranchForExistingDirectory(t *tes
 		"github", "github.com", "acme", "widget",
 		fmt.Sprintf("repo-%d", fixture.repoID), "issue-7",
 	)
-	runGit(t, fixture.bare, "worktree", "add", expectedPath, "-b", branch, "main")
+	gitfixture.Run(t, fixture.bare, "worktree", "add", expectedPath, "-b", branch, "main")
 
 	resp, err := fixture.client.HTTP.CreateIssueWorkspaceWithResponse(
 		t.Context(), "gh", "acme", "widget", 7,
@@ -258,8 +255,7 @@ func TestIssueWorkspaceConflictRejectsAlternateBranchForExistingDirectory(t *tes
 }
 
 func TestIssueWorkspaceRejectsConflictingReuseOptions(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)

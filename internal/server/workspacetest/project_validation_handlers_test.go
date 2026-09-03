@@ -15,7 +15,7 @@ import (
 )
 
 func TestRegisterProject_RejectsPartialPlatformIdentity(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -65,7 +65,7 @@ func TestRegisterProject_RejectsPartialPlatformIdentity(t *testing.T) {
 // recording the row.
 
 func TestRegisterProject_RejectsPathThatIsAFile(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := require.New(t)
 	assert := assert.New(t)
 
@@ -95,7 +95,7 @@ func TestRegisterProject_RejectsPathThatIsAFile(t *testing.T) {
 // still requires it.
 
 func TestRegisterWorktree_RejectsBlankFields(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -169,7 +169,7 @@ func TestRegisterWorktree_RejectsBlankFields(t *testing.T) {
 // register-project and register-worktree.
 
 func TestRegisterWorktree_NotFoundReturns404(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := require.New(t)
 
 	srv, _ := setupProjectServer(t)
@@ -194,7 +194,7 @@ func TestRegisterWorktree_NotFoundReturns404(t *testing.T) {
 // test catches a regression that lets the empty case marshal to null.
 
 func TestListProjects_ReturnsEmptyArrayNotNull(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := require.New(t)
 	assert := assert.New(t)
 

@@ -15,7 +15,7 @@ func TestSpokePreparationWriteGateSurvivesRestartAndTracksDeferredWork(t *testin
 	require := require.New(t)
 	path := filepath.Join(t.TempDir(), "gate.db")
 	database := dbtest.OpenAt(t, path)
-	gate := NewProviderWriteGate(database)
+	gate := NewProviderWriteGate(database, true)
 
 	releaseWrite, err := gate.Admit(t.Context())
 	require.NoError(err)
@@ -42,7 +42,7 @@ func TestSpokePreparationWriteGateSurvivesRestartAndTracksDeferredWork(t *testin
 	require.NoError(database.Close())
 
 	database = dbtest.OpenPreparedAt(t, path)
-	restarted := NewProviderWriteGate(database)
+	restarted := NewProviderWriteGate(database, true)
 	_, err = restarted.Admit(t.Context())
 	require.ErrorIs(err, ErrSpokePreparationInProgress)
 	require.NoError(restarted.AbortPreparation(t.Context()))
@@ -52,7 +52,7 @@ func TestSpokePreparationWriteGateSurvivesRestartAndTracksDeferredWork(t *testin
 	require.NoError(database.Close())
 
 	database = dbtest.OpenPreparedAt(t, path)
-	afterAbortRestart := NewProviderWriteGate(database)
+	afterAbortRestart := NewProviderWriteGate(database, true)
 	release, err = afterAbortRestart.Admit(t.Context())
 	require.NoError(err, "aborting preparation must durably reopen provider writes")
 	release()
@@ -66,7 +66,7 @@ func TestAbortPreparationRecoversUnreadableDurableState(t *testing.T) {
 		"UPDATE forge_spoke_preparation SET updated_at = 'not-a-time' WHERE singleton_id = 1",
 	)
 	require.NoError(err)
-	gate := NewProviderWriteGate(database)
+	gate := NewProviderWriteGate(database, true)
 
 	require.NoError(gate.CanAbortPreparation())
 	require.NoError(gate.AbortPreparation(t.Context()))

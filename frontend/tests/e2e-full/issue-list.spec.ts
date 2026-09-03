@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { startIsolatedE2EServer, startIsolatedWorkspaceE2EServer, type IsolatedE2EServer } from "./support/e2eServer";
-import type { components } from "../../src/lib/api/generated/schema.js";
+import type { IssueDetailResponse } from "../../src/lib/api/generated/models/index.js";
 
 // Seeded issues (6 total):
 //   acme/widgets#10: open, eve, "Widget rendering broken on Safari"
@@ -166,7 +166,7 @@ test.describe("issue list mutations", () => {
     const stateURL = `${detailURL}/github-state`;
     const persistedState = async (): Promise<string> => {
       const response = await page.request.get(detailURL);
-      const detail = (await response.json()) as components["schemas"]["IssueDetailResponse"];
+      const detail = (await response.json()) as IssueDetailResponse;
       return detail.issue.State;
     };
 

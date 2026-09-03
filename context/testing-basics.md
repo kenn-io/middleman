@@ -9,6 +9,8 @@ fixtures, or changing shell-script coverage.
 - Routine local Go lanes and hooks bound package/processor concurrency and share
   Go caches; `GO_TEST_P=` intentionally restores native package concurrency.
   (`scripts/run-hook-go.sh`, `prek.toml`)
+- Do not overlap frontend/e2e asset builds with Go compilation; replacing embedded
+  assets mid-compile causes missing-file build failures (`internal/web/embed.go:9`).
 - Reduce scanner pressure at source, not by redirecting `GOTMPDIR`.
 - Repository-wide Go tests do not run from Git hooks. Any future fast hook
   lane must select a small set of packages rather than require per-test opt-outs.

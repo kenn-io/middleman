@@ -75,12 +75,12 @@ describe("createDocsAPI folder edits", () => {
     expect(calls[0]!.init?.method).toBe("DELETE");
   });
 
-  test("removeFolder surfaces save_unavailable as a DocsAPIError", async () => {
-    const { fn } = fakeFetch([{ status: 503, body: problem(503, "save_unavailable", "no writer") }]);
+  test("removeFolder surfaces settingsUnavailable as a DocsAPIError", async () => {
+    const { fn } = fakeFetch([{ status: 404, body: problem(404, "settingsUnavailable", "no writer") }]);
     const api = createDocsAPI({ fetch: fn });
     await expect(api.removeFolder("notes")).rejects.toMatchObject({
-      status: 503,
-      code: "save_unavailable",
+      status: 404,
+      code: "settingsUnavailable",
     });
   });
 

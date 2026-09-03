@@ -1,4 +1,6 @@
-export type WorkspaceListSort = "repo" | "created" | "activity" | "item-activity";
+import type { WorkspaceListItem } from "./workspace-list-schema.js";
+
+export type WorkspaceListSort = "repo" | "created" | "activity" | "item-activity" | "agent-status";
 
 export interface WorkspaceListDisplayOptions {
   showOrgNames: boolean;
@@ -30,6 +32,11 @@ export const workspaceListSortOptions: {
     label: "Item activity",
     description: "Sort by latest linked PR or issue activity, falling back to workspace creation.",
   },
+  {
+    value: "agent-status",
+    label: "Agent status",
+    description: "Group by agent status, with workspaces needing attention first.",
+  },
 ];
 
 export const defaultWorkspaceListSort: WorkspaceListSort = "repo";
@@ -43,6 +50,57 @@ const sortStorageKey = "kenn-forge:workspaceListSort";
 const displayStorageKey = "kenn-forge:workspaceListDisplayOptions";
 
 const validSorts = new Set<WorkspaceListSort>(workspaceListSortOptions.map((option) => option.value));
+
+export function workspaceAgentStatePriority(state: WorkspaceListItem["agent_state"]): number {
+  switch (state) {
+    case "approval":
+      return 5;
+    case "input":
+      return 4;
+    case "working":
+      return 3;
+    case "done":
+      return 2;
+    case "idle":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function workspaceAgentStateTimestamp(workspace: WorkspaceListItem): { at: string; label: string } {
+  const hookTimestamp = workspace.agent_state_updated_at?.trim();
+  if (hookTimestamp) return { at: hookTimestamp, label: "Agent hook" };
+
+  const itemTimestamp = workspace.item_last_activity_at?.trim();
+  return itemTimestamp ? { at: itemTimestamp, label: "Item activity" } : { at: workspace.created_at, label: "Created" };
+}
+
+export function workspaceListSortTimestamp(
+  workspace: WorkspaceListItem,
+  sort: WorkspaceListSort,
+): { at: string; label: string } | null {
+  switch (sort) {
+    case "created":
+      return { at: workspace.created_at, label: "Created" };
+    case "activity":
+      return workspace.tmux_last_output_at
+        ? { at: workspace.tmux_last_output_at, label: "Terminal activity" }
+        : { at: workspace.created_at, label: "Created" };
+    case "item-activity":
+      return workspace.item_last_activity_at
+        ? { at: workspace.item_last_activity_at, label: "Item activity" }
+        : { at: workspace.created_at, label: "Created" };
+    case "agent-status":
+      return workspaceAgentStateTimestamp(workspace);
+    default:
+      return null;
+  }
+}
+
+export function workspaceAgentStateSortTime(workspace: WorkspaceListItem): string {
+  return workspaceAgentStateTimestamp(workspace).at;
+}
 
 function getStorage(): Storage | null {
   try {

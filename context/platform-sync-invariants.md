@@ -417,6 +417,11 @@ GitLab private Markdown upload web URLs do not accept API-token authentication.
 Translate only repo-scoped upload URLs to the authenticated project-upload API;
 never proxy arbitrary provider URLs. (`internal/platform/gitlab/markdown_images.go::GetMarkdownImage`)
 
+The markdown image cache is keyed by stable repository identity, never the owner/name
+route, so a replacement occupant of a reused route cannot receive the previous
+repository's bytes; providers mark ref-addressed sources `Mutable` and the server then
+caches them for minutes instead of a year (`internal/server/markdown_images.go::markdownImageCacheKey`).
+
 GitLab merge request and issue `iid` values are repo-scoped numbers. Persist
 provider object ids separately from user-visible numbers, and scope events by
 provider identity so equal GitHub/GitLab ids do not collide.
@@ -498,10 +503,13 @@ Repository import requests and route/query shapes should carry
   pushed-head refresh, manual workspace refresh, and on-demand worktree sync
   must check item visibility before item-specific provider access. Workspace and
   Fleet projections retain local records but omit removed parent metadata;
-  visible stack members are renumbered contiguously after filtering.
+  visible stack members are renumbered contiguously after filtering, and the
+  pull list's per-row stack placement must report the same position and size
+  as the detail stack context.
   `inaccessible` items remain visible.
   (`internal/server/pullapi/helpers.go::visibleMergeRequest`,
-  `internal/server/issueapi/mutation_handlers.go::requireVisibleIssue`)
+  `internal/server/issueapi/mutation_handlers.go::requireVisibleIssue`,
+  `internal/db/queries_stacks.go::ListStackPlacementsForMRs`)
 - Embedded navigation events for repo-bound routes must publish identity from
   parsed route state, not from global embed config. When a route carries repo
   identity, event payloads should include `provider`, `platform_host`, and

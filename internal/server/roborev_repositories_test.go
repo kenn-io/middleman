@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/projects"
+	"go.kenn.io/forge/internal/testutil"
 )
 
 func TestRoborevRepositoryProbeCachesDefinitiveResultsAndDeduplicatesIdentity(t *testing.T) {
@@ -466,7 +467,7 @@ func TestListRoborevConfiguredRepositories(t *testing.T) {
 		inspectHook:     func(string) (bool, error) { return true, nil },
 	})
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/roborev/configured-repositories", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/roborev/configured-repositories", nil)
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	var body struct {
 		Repositories []roborevConfiguredRepositoryResponse `json:"repositories"`
@@ -502,7 +503,7 @@ func TestListRoborevConfiguredRepositoriesMarksPartialResultsIncomplete(t *testi
 		inspectHook: func(string) (bool, error) { return true, nil },
 	})
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/roborev/configured-repositories", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/roborev/configured-repositories", nil)
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	var body roborevConfiguredRepositoriesResponse
 	require.NoError(json.NewDecoder(rr.Body).Decode(&body))
@@ -522,7 +523,7 @@ func TestListRoborevConfiguredRepositoriesReturnsTypedUnavailableWithoutBlocking
 		},
 	})
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/roborev/configured-repositories", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/roborev/configured-repositories", nil)
 	require.Equal(http.StatusServiceUnavailable, rr.Code)
 	assert.Equal("application/problem+json", rr.Header().Get("Content-Type"))
 	var problem struct {
@@ -535,6 +536,6 @@ func TestListRoborevConfiguredRepositoriesReturnsTypedUnavailableWithoutBlocking
 	assert.NotContains(rr.Body.String(), "private.invalid")
 	assert.NotContains(rr.Body.String(), "/private/checkout")
 
-	summaries := doJSON(t, srv, http.MethodGet, "/api/v1/repos/summary", nil)
+	summaries := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repos/summary", nil)
 	assert.Equal(http.StatusOK, summaries.Code)
 }

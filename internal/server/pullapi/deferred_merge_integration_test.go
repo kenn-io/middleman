@@ -2144,7 +2144,7 @@ func TestImmediateMergeRecordsMergedActor(t *testing.T) {
 	require.NotNil(detailResp.JSON200)
 	require.NotNil(detailResp.JSON200.Events)
 	mergedEvents := make([]generated.MergeRequestEventResponse, 0, 1)
-	for _, event := range *detailResp.JSON200.Events {
+	for _, event := range detailResp.JSON200.Events {
 		if event.EventType == "merged" {
 			mergedEvents = append(mergedEvents, event)
 		}
@@ -2171,7 +2171,7 @@ func TestImmediateMergeRecordsMergedActor(t *testing.T) {
 	require.NotNil(detailResp.JSON200)
 	require.NotNil(detailResp.JSON200.Events)
 	mergedEvents = mergedEvents[:0]
-	for _, event := range *detailResp.JSON200.Events {
+	for _, event := range detailResp.JSON200.Events {
 		if event.EventType == "merged" {
 			mergedEvents = append(mergedEvents, event)
 		}

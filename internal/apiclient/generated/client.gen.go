@@ -1145,6 +1145,24 @@ func (e GetPullFilePreviewParamsSide) Valid() bool {
 	}
 }
 
+// Defines values for GetCommentAutocompleteParamsItemType.
+const (
+	GetCommentAutocompleteParamsItemTypeIssue GetCommentAutocompleteParamsItemType = "issue"
+	GetCommentAutocompleteParamsItemTypePr    GetCommentAutocompleteParamsItemType = "pr"
+)
+
+// Valid indicates whether the value is a known member of the GetCommentAutocompleteParamsItemType enum.
+func (e GetCommentAutocompleteParamsItemType) Valid() bool {
+	switch e {
+	case GetCommentAutocompleteParamsItemTypeIssue:
+		return true
+	case GetCommentAutocompleteParamsItemTypePr:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ResolveRepoItemParamsItemType.
 const (
 	ResolveRepoItemParamsItemTypeIssue ResolveRepoItemParamsItemType = "issue"
@@ -1288,9 +1306,9 @@ type ActivityAuthorsResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ActivityAuthorsResponse.json
-	Schema                         *string   `json:"$schema,omitempty"`
-	Authors                        *[]string `json:"authors"`
-	UseWorkspaceActivityForRecency bool      `json:"use_workspace_activity_for_recency"`
+	Schema                         *string  `json:"$schema,omitempty"`
+	Authors                        []string `json:"authors"`
+	UseWorkspaceActivityForRecency bool     `json:"use_workspace_activity_for_recency"`
 }
 
 // ActivityItemResponse defines model for ActivityItemResponse.
@@ -1342,15 +1360,15 @@ type ActivityResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ActivityResponse.json
-	Schema                         *string                             `json:"$schema,omitempty"`
-	Capped                         bool                                `json:"capped"`
-	EventCursor                    string                              `json:"event_cursor"`
-	ItemActivity                   *[]ActivitySubjectResponse          `json:"item_activity"`
-	ItemActivityCapped             bool                                `json:"item_activity_capped"`
-	Items                          *[]ActivityItemResponse             `json:"items"`
-	NextCursor                     *string                             `json:"next_cursor,omitempty"`
-	UseWorkspaceActivityForRecency bool                                `json:"use_workspace_activity_for_recency"`
-	WorkspaceActivity              *[]WorkspaceActivitySubjectResponse `json:"workspace_activity"`
+	Schema                         *string                            `json:"$schema,omitempty"`
+	Capped                         bool                               `json:"capped"`
+	EventCursor                    string                             `json:"event_cursor"`
+	ItemActivity                   []ActivitySubjectResponse          `json:"item_activity"`
+	ItemActivityCapped             bool                               `json:"item_activity_capped"`
+	Items                          []ActivityItemResponse             `json:"items"`
+	NextCursor                     *string                            `json:"next_cursor,omitempty"`
+	UseWorkspaceActivityForRecency bool                               `json:"use_workspace_activity_for_recency"`
+	WorkspaceActivity              []WorkspaceActivitySubjectResponse `json:"workspace_activity"`
 }
 
 // ActivitySubjectResponse defines model for ActivitySubjectResponse.
@@ -1429,10 +1447,10 @@ type ApplyReviewSuggestionHostInputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ApplyReviewSuggestionHostInputBody.json
-	Schema          *string                             `json:"$schema,omitempty"`
-	ExpectedHeadSha *string                             `json:"expected_head_sha,omitempty"`
-	Message         *string                             `json:"message,omitempty"`
-	Suggestions     *[]ApplyReviewSuggestionRequestItem `json:"suggestions"`
+	Schema          *string                            `json:"$schema,omitempty"`
+	ExpectedHeadSha *string                            `json:"expected_head_sha,omitempty"`
+	Message         *string                            `json:"message,omitempty"`
+	Suggestions     []ApplyReviewSuggestionRequestItem `json:"suggestions"`
 }
 
 // ApplyReviewSuggestionInputBody defines model for ApplyReviewSuggestionInputBody.
@@ -1440,10 +1458,10 @@ type ApplyReviewSuggestionInputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ApplyReviewSuggestionInputBody.json
-	Schema          *string                             `json:"$schema,omitempty"`
-	ExpectedHeadSha *string                             `json:"expected_head_sha,omitempty"`
-	Message         *string                             `json:"message,omitempty"`
-	Suggestions     *[]ApplyReviewSuggestionRequestItem `json:"suggestions"`
+	Schema          *string                            `json:"$schema,omitempty"`
+	ExpectedHeadSha *string                            `json:"expected_head_sha,omitempty"`
+	Message         *string                            `json:"message,omitempty"`
+	Suggestions     []ApplyReviewSuggestionRequestItem `json:"suggestions"`
 }
 
 // ApplyReviewSuggestionRequestItem defines model for ApplyReviewSuggestionRequestItem.
@@ -1593,7 +1611,7 @@ type ArchiveReportCountsResponse struct {
 
 // ArchiveReportCoverageResponse defines model for ArchiveReportCoverageResponse.
 type ArchiveReportCoverageResponse struct {
-	ActivePhases           *[]string                                   `json:"active_phases"`
+	ActivePhases           []string                                    `json:"active_phases"`
 	ArchivedItems          int64                                       `json:"archived_items"`
 	BudgetWaitUntil        *time.Time                                  `json:"budget_wait_until,omitempty"`
 	CollectionMode         ArchiveReportCoverageResponseCollectionMode `json:"collection_mode"`
@@ -1646,14 +1664,14 @@ type ArchiveReportResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ArchiveReportResponse.json
-	Schema       *string                             `json:"$schema,omitempty"`
-	Activity     *[]ArchiveReportActivityResponse    `json:"activity,omitempty"`
-	Contributors *[]ArchiveReportContributorResponse `json:"contributors"`
-	End          time.Time                           `json:"end"`
-	Repositories *[]ArchiveReportRepositoryResponse  `json:"repositories"`
-	ReportSchema string                              `json:"schema"`
-	Start        time.Time                           `json:"start"`
-	Totals       ArchiveReportCountsResponse         `json:"totals"`
+	Schema       *string                            `json:"$schema,omitempty"`
+	Activity     *[]ArchiveReportActivityResponse   `json:"activity,omitempty"`
+	Contributors []ArchiveReportContributorResponse `json:"contributors"`
+	End          time.Time                          `json:"end"`
+	Repositories []ArchiveReportRepositoryResponse  `json:"repositories"`
+	ReportSchema string                             `json:"schema"`
+	Start        time.Time                          `json:"start"`
+	Totals       ArchiveReportCountsResponse        `json:"totals"`
 }
 
 // ArchiveRepositoryRef defines model for ArchiveRepositoryRef.
@@ -1667,19 +1685,19 @@ type ArchiveRepositoryRef struct {
 
 // ArchiveStatusResponse defines model for ArchiveStatusResponse.
 type ArchiveStatusResponse struct {
-	ActivePhases           *[]ArchiveStatusResponseActivePhases `json:"active_phases"`
-	BudgetWaitUntil        *time.Time                           `json:"budget_wait_until,omitempty"`
-	CollectionMode         ArchiveStatusResponseCollectionMode  `json:"collection_mode"`
-	Counts                 ArchiveProgressCountsResponse        `json:"counts"`
-	Coverage               ArchiveCoverageResponse              `json:"coverage"`
-	Failure                *ArchiveFailureResponse              `json:"failure,omitempty"`
-	InitialCompletedAt     *time.Time                           `json:"initial_completed_at,omitempty"`
-	InitialStartedAt       *time.Time                           `json:"initial_started_at,omitempty"`
-	MaintenanceSucceededAt *time.Time                           `json:"maintenance_succeeded_at,omitempty"`
-	MaintenanceWatermark   *time.Time                           `json:"maintenance_watermark,omitempty"`
-	OperatorState          ArchiveStatusResponseOperatorState   `json:"operator_state"`
-	Repository             ArchiveRepositoryRef                 `json:"repository"`
-	Status                 ArchiveStatusResponseStatus          `json:"status"`
+	ActivePhases           []ArchiveStatusResponseActivePhases `json:"active_phases"`
+	BudgetWaitUntil        *time.Time                          `json:"budget_wait_until,omitempty"`
+	CollectionMode         ArchiveStatusResponseCollectionMode `json:"collection_mode"`
+	Counts                 ArchiveProgressCountsResponse       `json:"counts"`
+	Coverage               ArchiveCoverageResponse             `json:"coverage"`
+	Failure                *ArchiveFailureResponse             `json:"failure,omitempty"`
+	InitialCompletedAt     *time.Time                          `json:"initial_completed_at,omitempty"`
+	InitialStartedAt       *time.Time                          `json:"initial_started_at,omitempty"`
+	MaintenanceSucceededAt *time.Time                          `json:"maintenance_succeeded_at,omitempty"`
+	MaintenanceWatermark   *time.Time                          `json:"maintenance_watermark,omitempty"`
+	OperatorState          ArchiveStatusResponseOperatorState  `json:"operator_state"`
+	Repository             ArchiveRepositoryRef                `json:"repository"`
+	Status                 ArchiveStatusResponseStatus         `json:"status"`
 }
 
 // ArchiveStatusResponseActivePhases defines model for ArchiveStatusResponse.ActivePhases.
@@ -1696,8 +1714,8 @@ type ArchiveStatusResponseStatus string
 
 // BodySnippet defines model for BodySnippet.
 type BodySnippet struct {
-	Matches *[]SnippetRange `json:"matches"`
-	Text    string          `json:"text"`
+	Matches []SnippetRange `json:"matches"`
+	Text    string         `json:"text"`
 }
 
 // BulkAddRepoRequest defines model for BulkAddRepoRequest.
@@ -1812,7 +1830,7 @@ type CommitsResponse struct {
 	Schema *string `json:"$schema,omitempty"`
 
 	// Commits Commits in newest-first order
-	Commits *[]CommitResponse `json:"commits"`
+	Commits []CommitResponse `json:"commits"`
 }
 
 // ConfiguredRepoStatus defines model for ConfiguredRepoStatus.
@@ -2035,16 +2053,16 @@ type DiffDescriptor struct {
 
 // DiffFile defines model for DiffFile.
 type DiffFile struct {
-	Additions        int64   `json:"additions"`
-	Deletions        int64   `json:"deletions"`
-	Hunks            *[]Hunk `json:"hunks"`
-	IsBinary         bool    `json:"is_binary"`
-	IsGenerated      bool    `json:"is_generated"`
-	IsWhitespaceOnly bool    `json:"is_whitespace_only"`
-	OldPath          string  `json:"old_path"`
-	Patch            string  `json:"patch"`
-	Path             string  `json:"path"`
-	Status           string  `json:"status"`
+	Additions        int64  `json:"additions"`
+	Deletions        int64  `json:"deletions"`
+	Hunks            []Hunk `json:"hunks"`
+	IsBinary         bool   `json:"is_binary"`
+	IsGenerated      bool   `json:"is_generated"`
+	IsWhitespaceOnly bool   `json:"is_whitespace_only"`
+	OldPath          string `json:"old_path"`
+	Patch            string `json:"patch"`
+	Path             string `json:"path"`
+	Status           string `json:"status"`
 }
 
 // DiffResponse defines model for DiffResponse.
@@ -2055,8 +2073,8 @@ type DiffResponse struct {
 	Schema *string `json:"$schema,omitempty"`
 
 	// DiffHeadSha Synced PR diff snapshot head this diff was computed from. Always set for pull request diffs (the endpoint fails when no snapshot head is synced); empty for commit and workspace diffs. Compare with the pull detail's platform_head_sha to detect stale cached diff context; unrelated to 'stale', which reports clone-refresh staleness.
-	DiffHeadSha *string     `json:"diff_head_sha,omitempty"`
-	Files       *[]DiffFile `json:"files"`
+	DiffHeadSha *string    `json:"diff_head_sha,omitempty"`
+	Files       []DiffFile `json:"files"`
 
 	// SnapshotVersion Opaque workspace diff snapshot version used to keep files and patches coherent.
 	SnapshotVersion     *string `json:"snapshot_version,omitempty"`
@@ -2092,11 +2110,11 @@ type DiffReviewDraftResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/DiffReviewDraftResponse.json
-	Schema                *string                   `json:"$schema,omitempty"`
-	Comments              *[]DiffReviewDraftComment `json:"comments"`
-	DraftId               *string                   `json:"draft_id,omitempty"`
-	NativeMultilineRanges bool                      `json:"native_multiline_ranges"`
-	SupportedActions      *[]string                 `json:"supported_actions"`
+	Schema                *string                  `json:"$schema,omitempty"`
+	Comments              []DiffReviewDraftComment `json:"comments"`
+	DraftId               *string                  `json:"draft_id,omitempty"`
+	NativeMultilineRanges bool                     `json:"native_multiline_ranges"`
+	SupportedActions      []string                 `json:"supported_actions"`
 }
 
 // DiffReviewLineRange defines model for DiffReviewLineRange.
@@ -2150,10 +2168,10 @@ type DocsBrowseOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/DocsBrowseOutputBody.json
-	Schema  *string            `json:"$schema,omitempty"`
-	Entries *[]DocsBrowseEntry `json:"entries"`
-	Parent  *string            `json:"parent,omitempty"`
-	Path    string             `json:"path"`
+	Schema  *string           `json:"$schema,omitempty"`
+	Entries []DocsBrowseEntry `json:"entries"`
+	Parent  *string           `json:"parent,omitempty"`
+	Path    string            `json:"path"`
 }
 
 // DocsCreateFileInputBody defines model for DocsCreateFileInputBody.
@@ -2236,11 +2254,11 @@ type DocsSearchAllOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/DocsSearchAllOutputBody.json
-	Schema    *string           `json:"$schema,omitempty"`
-	Hits      *[]CrossFolderHit `json:"hits"`
-	Query     string            `json:"query"`
-	Truncated bool              `json:"truncated"`
-	Warnings  *[]string         `json:"warnings,omitempty"`
+	Schema    *string          `json:"$schema,omitempty"`
+	Hits      []CrossFolderHit `json:"hits"`
+	Query     string           `json:"query"`
+	Truncated bool             `json:"truncated"`
+	Warnings  *[]string        `json:"warnings,omitempty"`
 }
 
 // DocsSearchOutputBody defines model for DocsSearchOutputBody.
@@ -2249,7 +2267,7 @@ type DocsSearchOutputBody struct {
 	//
 	// Example: /api/v1/schemas/DocsSearchOutputBody.json
 	Schema *string `json:"$schema,omitempty"`
-	Hits   *[]Hit  `json:"hits"`
+	Hits   []Hit   `json:"hits"`
 	Query  string  `json:"query"`
 }
 
@@ -2585,8 +2603,8 @@ type FilesResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/FilesResponse.json
-	Schema *string     `json:"$schema,omitempty"`
-	Files  *[]DiffFile `json:"files"`
+	Schema *string    `json:"$schema,omitempty"`
+	Files  []DiffFile `json:"files"`
 
 	// SnapshotVersion Opaque workspace diff snapshot version to pin on the following workspace diff request.
 	SnapshotVersion     *string `json:"snapshot_version,omitempty"`
@@ -2599,8 +2617,8 @@ type FilesystemCompleteOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/FilesystemCompleteOutputBody.json
-	Schema      *string   `json:"$schema,omitempty"`
-	Completions *[]string `json:"completions"`
+	Schema      *string  `json:"$schema,omitempty"`
+	Completions []string `json:"completions"`
 }
 
 // FilesystemValidateRepoOutputBody defines model for FilesystemValidateRepoOutputBody.
@@ -2655,13 +2673,13 @@ type GitChangesResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/GitChangesResponse.json
-	Schema                  *string          `json:"$schema,omitempty"`
-	Branch                  *string          `json:"branch,omitempty"`
-	Changes                 *[]PublishChange `json:"changes"`
-	IgnoredNonMarkdownCount int64            `json:"ignored_non_markdown_count"`
-	IsRepo                  bool             `json:"is_repo"`
-	SuggestedMessage        *string          `json:"suggested_message,omitempty"`
-	Upstream                *string          `json:"upstream,omitempty"`
+	Schema                  *string         `json:"$schema,omitempty"`
+	Branch                  *string         `json:"branch,omitempty"`
+	Changes                 []PublishChange `json:"changes"`
+	IgnoredNonMarkdownCount int64           `json:"ignored_non_markdown_count"`
+	IsRepo                  bool            `json:"is_repo"`
+	SuggestedMessage        *string         `json:"suggested_message,omitempty"`
+	Upstream                *string         `json:"upstream,omitempty"`
 }
 
 // GitStatusEntry defines model for GitStatusEntry.
@@ -2675,9 +2693,9 @@ type GitStatusResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/GitStatusResponse.json
-	Schema  *string           `json:"$schema,omitempty"`
-	Entries *[]GitStatusEntry `json:"entries"`
-	IsRepo  bool              `json:"is_repo"`
+	Schema  *string          `json:"$schema,omitempty"`
+	Entries []GitStatusEntry `json:"entries"`
+	IsRepo  bool             `json:"is_repo"`
 }
 
 // GithubStateHostInputBody defines model for GithubStateHostInputBody.
@@ -2731,11 +2749,11 @@ type HookEvent struct {
 
 // HostDiagnostic defines model for HostDiagnostic.
 type HostDiagnostic struct {
-	BlocksOperations   *[]string `json:"blocksOperations"`
-	Code               string    `json:"code"`
-	RecoverySuggestion string    `json:"recoverySuggestion"`
-	Severity           string    `json:"severity"`
-	Summary            string    `json:"summary"`
+	BlocksOperations   []string `json:"blocksOperations"`
+	Code               string   `json:"code"`
+	RecoverySuggestion string   `json:"recoverySuggestion"`
+	Severity           string   `json:"severity"`
+	Summary            string   `json:"summary"`
 }
 
 // HostOperationAvailability defines model for HostOperationAvailability.
@@ -2766,7 +2784,7 @@ type HostSummary struct {
 	Capabilities          *Capabilities                        `json:"capabilities,omitempty"`
 	ConfigKey             string                               `json:"configKey"`
 	ConnectionState       *string                              `json:"connectionState,omitempty"`
-	Diagnostics           *[]HostDiagnostic                    `json:"diagnostics"`
+	Diagnostics           []HostDiagnostic                     `json:"diagnostics"`
 	Error                 *string                              `json:"error,omitempty"`
 	FederationRole        HostSummaryFederationRole            `json:"federationRole"`
 	Hostname              *string                              `json:"hostname,omitempty"`
@@ -2782,7 +2800,7 @@ type HostSummary struct {
 	TmuxLastPolledAt      *string                              `json:"tmuxLastPolledAt,omitempty"`
 	TmuxMetricsError      *string                              `json:"tmuxMetricsError,omitempty"`
 	TmuxProbeError        *string                              `json:"tmuxProbeError,omitempty"`
-	TmuxSessions          *[]TmuxSessionInfo                   `json:"tmuxSessions"`
+	TmuxSessions          []TmuxSessionInfo                    `json:"tmuxSessions"`
 	Version               *string                              `json:"version,omitempty"`
 }
 
@@ -2791,7 +2809,7 @@ type HostSummaryFederationRole string
 
 // Hunk defines model for Hunk.
 type Hunk struct {
-	Lines    *[]Line `json:"lines"`
+	Lines    []Line  `json:"lines"`
 	NewCount int64   `json:"new_count"`
 	NewStart int64   `json:"new_start"`
 	OldCount int64   `json:"old_count"`
@@ -2848,7 +2866,7 @@ type IssueDetailResponse struct {
 	Schema          *string                    `json:"$schema,omitempty"`
 	DetailFetchedAt *string                    `json:"detail_fetched_at,omitempty"`
 	DetailLoaded    bool                       `json:"detail_loaded"`
-	Events          *[]IssueEvent              `json:"events"`
+	Events          []IssueEvent               `json:"events"`
 	Issue           Issue                      `json:"issue"`
 	PlatformHost    string                     `json:"platform_host"`
 	Repo            RepoRefResponse            `json:"repo"`
@@ -2927,8 +2945,8 @@ type ItemAssigneesResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ItemAssigneesResponse.json
-	Schema    *string   `json:"$schema,omitempty"`
-	Assignees *[]string `json:"assignees"`
+	Schema    *string  `json:"$schema,omitempty"`
+	Assignees []string `json:"assignees"`
 }
 
 // ItemLabelsResponse defines model for ItemLabelsResponse.
@@ -2936,8 +2954,8 @@ type ItemLabelsResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ItemLabelsResponse.json
-	Schema *string  `json:"$schema,omitempty"`
-	Labels *[]Label `json:"labels"`
+	Schema *string `json:"$schema,omitempty"`
+	Labels []Label `json:"labels"`
 }
 
 // ItemReviewersResponse defines model for ItemReviewersResponse.
@@ -2945,8 +2963,8 @@ type ItemReviewersResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ItemReviewersResponse.json
-	Schema    *string   `json:"$schema,omitempty"`
-	Reviewers *[]string `json:"reviewers"`
+	Schema    *string  `json:"$schema,omitempty"`
+	Reviewers []string `json:"reviewers"`
 }
 
 // JoinRequest defines model for JoinRequest.
@@ -3008,9 +3026,9 @@ type KataDaemonRosterResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/KataDaemonRosterResponse.json
-	Schema  *string               `json:"$schema,omitempty"`
-	Daemons *[]KataDaemonResponse `json:"daemons"`
-	Source  *string               `json:"source,omitempty"`
+	Schema  *string              `json:"$schema,omitempty"`
+	Daemons []KataDaemonResponse `json:"daemons"`
+	Source  *string              `json:"source,omitempty"`
 }
 
 // KataEffectiveLink defines model for KataEffectiveLink.
@@ -3022,7 +3040,7 @@ type KataEffectiveLink struct {
 	IssueUid          string                       `json:"issue_uid"`
 	ProjectName       *string                      `json:"project_name,omitempty"`
 	ProjectUid        string                       `json:"project_uid"`
-	Provenance        *[]string                    `json:"provenance"`
+	Provenance        []string                     `json:"provenance"`
 	Reference         *string                      `json:"reference,omitempty"`
 	Status            *string                      `json:"status,omitempty"`
 	Title             *string                      `json:"title,omitempty"`
@@ -3184,7 +3202,7 @@ type LaunchHostRuntimeSessionInputBody struct {
 	//
 	// Example: /api/v1/schemas/LaunchHostRuntimeSessionInputBody.json
 	Schema     *string            `json:"$schema,omitempty"`
-	Command    *[]string          `json:"command"`
+	Command    []string           `json:"command"`
 	Cwd        string             `json:"cwd"`
 	Env        *map[string]string `json:"env,omitempty"`
 	Label      *string            `json:"label,omitempty"`
@@ -3240,8 +3258,8 @@ type ListDocsFoldersOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ListDocsFoldersOutputBody.json
-	Schema  *string               `json:"$schema,omitempty"`
-	Folders *[]DocsFolderResponse `json:"folders"`
+	Schema  *string              `json:"$schema,omitempty"`
+	Folders []DocsFolderResponse `json:"folders"`
 }
 
 // ListHostRuntimeSessionsOutputBody defines model for ListHostRuntimeSessionsOutputBody.
@@ -3249,8 +3267,8 @@ type ListHostRuntimeSessionsOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ListHostRuntimeSessionsOutputBody.json
-	Schema   *string               `json:"$schema,omitempty"`
-	Sessions *[]HostRuntimeSession `json:"sessions"`
+	Schema   *string              `json:"$schema,omitempty"`
+	Sessions []HostRuntimeSession `json:"sessions"`
 }
 
 // ListLaunchTargetsOutputBody defines model for ListLaunchTargetsOutputBody.
@@ -3258,8 +3276,8 @@ type ListLaunchTargetsOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ListLaunchTargetsOutputBody.json
-	Schema        *string         `json:"$schema,omitempty"`
-	LaunchTargets *[]LaunchTarget `json:"launch_targets"`
+	Schema        *string        `json:"$schema,omitempty"`
+	LaunchTargets []LaunchTarget `json:"launch_targets"`
 }
 
 // ListProjectBranchesOutputBody defines model for ListProjectBranchesOutputBody.
@@ -3267,8 +3285,8 @@ type ListProjectBranchesOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ListProjectBranchesOutputBody.json
-	Schema   *string   `json:"$schema,omitempty"`
-	Branches *[]string `json:"branches"`
+	Schema   *string  `json:"$schema,omitempty"`
+	Branches []string `json:"branches"`
 }
 
 // ListProjectsOutputBody defines model for ListProjectsOutputBody.
@@ -3276,8 +3294,8 @@ type ListProjectsOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ListProjectsOutputBody.json
-	Schema   *string            `json:"$schema,omitempty"`
-	Projects *[]ProjectResponse `json:"projects"`
+	Schema   *string           `json:"$schema,omitempty"`
+	Projects []ProjectResponse `json:"projects"`
 }
 
 // ListUserRepositoriesOutputBody defines model for ListUserRepositoriesOutputBody.
@@ -3285,8 +3303,8 @@ type ListUserRepositoriesOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ListUserRepositoriesOutputBody.json
-	Schema       *string           `json:"$schema,omitempty"`
-	Repositories *[]UserRepository `json:"repositories"`
+	Schema       *string          `json:"$schema,omitempty"`
+	Repositories []UserRepository `json:"repositories"`
 }
 
 // ListWorkspaceAgentSessionsOutputBody defines model for ListWorkspaceAgentSessionsOutputBody.
@@ -3294,8 +3312,8 @@ type ListWorkspaceAgentSessionsOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ListWorkspaceAgentSessionsOutputBody.json
-	Schema   *string                          `json:"$schema,omitempty"`
-	Sessions *[]WorkspaceAgentSessionResponse `json:"sessions"`
+	Schema   *string                         `json:"$schema,omitempty"`
+	Sessions []WorkspaceAgentSessionResponse `json:"sessions"`
 }
 
 // ListWorkspacesOutputBody defines model for ListWorkspacesOutputBody.
@@ -3303,8 +3321,8 @@ type ListWorkspacesOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ListWorkspacesOutputBody.json
-	Schema     *string              `json:"$schema,omitempty"`
-	Workspaces *[]WorkspaceResponse `json:"workspaces"`
+	Schema     *string             `json:"$schema,omitempty"`
+	Workspaces []WorkspaceResponse `json:"workspaces"`
 }
 
 // ListWorktreesOutputBody defines model for ListWorktreesOutputBody.
@@ -3312,8 +3330,8 @@ type ListWorktreesOutputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ListWorktreesOutputBody.json
-	Schema    *string             `json:"$schema,omitempty"`
-	Worktrees *[]WorktreeResponse `json:"worktrees"`
+	Schema    *string            `json:"$schema,omitempty"`
+	Worktrees []WorktreeResponse `json:"worktrees"`
 }
 
 // LocalEnrollment defines model for LocalEnrollment.
@@ -3477,7 +3495,7 @@ type MergeRequestDetailResponse struct {
 	DetailFetchedAt      *string                                `json:"detail_fetched_at,omitempty"`
 	DetailLoaded         bool                                   `json:"detail_loaded"`
 	DiffHeadSha          string                                 `json:"diff_head_sha"`
-	Events               *[]MergeRequestEventResponse           `json:"events"`
+	Events               []MergeRequestEventResponse            `json:"events"`
 	HeadRepoKind         MergeRequestDetailResponseHeadRepoKind `json:"head_repo_kind"`
 	MergeBaseSha         string                                 `json:"merge_base_sha"`
 	MergeRequest         MergeRequest                           `json:"merge_request"`
@@ -3492,7 +3510,7 @@ type MergeRequestDetailResponse struct {
 	Warnings             *[]string                              `json:"warnings,omitempty"`
 	WorkflowApproval     WorkflowApprovalResponse               `json:"workflow_approval"`
 	Workspace            *WorkspaceRef                          `json:"workspace,omitempty"`
-	WorktreeLinks        *[]WorktreeLinkResponse                `json:"worktree_links"`
+	WorktreeLinks        []WorktreeLinkResponse                 `json:"worktree_links"`
 }
 
 // MergeRequestDetailResponseHeadRepoKind defines model for MergeRequestDetailResponse.HeadRepoKind.
@@ -3568,8 +3586,9 @@ type MergeRequestResponse struct {
 	RepoName                string                           `json:"repo_name"`
 	RepoOwner               string                           `json:"repo_owner"`
 	RequestedReviewers      *[]string                        `json:"requested_reviewers,omitempty"`
+	Stack                   *StackPlacementResponse          `json:"stack,omitempty"`
 	Workspace               *WorkspaceRef                    `json:"workspace,omitempty"`
-	WorktreeLinks           *[]WorktreeLinkResponse          `json:"worktree_links"`
+	WorktreeLinks           []WorktreeLinkResponse           `json:"worktree_links"`
 }
 
 // MergeRequestResponseKanbanStatus defines model for MergeRequestResponse.KanbanStatus.
@@ -3642,7 +3661,7 @@ type NeutralSnapshot struct {
 	// Example: /api/v1/schemas/NeutralSnapshot.json
 	Schema                *string         `json:"$schema,omitempty"`
 	Generation            int64           `json:"generation"`
-	Hosts                 *[]NeutralHost  `json:"hosts"`
+	Hosts                 []NeutralHost   `json:"hosts"`
 	PlatformAuthenticated *bool           `json:"platformAuthenticated,omitempty"`
 	Projects              *[]RawProject   `json:"projects,omitempty"`
 	ProtocolVersion       int64           `json:"protocolVersion"`
@@ -3675,9 +3694,9 @@ type NotificationBulkInputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/NotificationBulkInputBody.json
-	Schema   *string  `json:"$schema,omitempty"`
-	Ids      *[]int64 `json:"ids"`
-	MarkRead *bool    `json:"mark_read,omitempty"`
+	Schema   *string `json:"$schema,omitempty"`
+	Ids      []int64 `json:"ids"`
+	MarkRead *bool   `json:"mark_read,omitempty"`
 }
 
 // NotificationBulkResponse defines model for NotificationBulkResponse.
@@ -3685,10 +3704,10 @@ type NotificationBulkResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/NotificationBulkResponse.json
-	Schema    *string                    `json:"$schema,omitempty"`
-	Failed    *[]NotificationBulkFailure `json:"failed"`
-	Queued    *[]int64                   `json:"queued"`
-	Succeeded *[]int64                   `json:"succeeded"`
+	Schema    *string                   `json:"$schema,omitempty"`
+	Failed    []NotificationBulkFailure `json:"failed"`
+	Queued    []int64                   `json:"queued"`
+	Succeeded []int64                   `json:"succeeded"`
 }
 
 // NotificationResponse defines model for NotificationResponse.
@@ -3746,7 +3765,7 @@ type NotificationsResponse struct {
 	//
 	// Example: /api/v1/schemas/NotificationsResponse.json
 	Schema  *string                        `json:"$schema,omitempty"`
-	Items   *[]NotificationResponse        `json:"items"`
+	Items   []NotificationResponse         `json:"items"`
 	Summary NotificationSummaryResponse    `json:"summary"`
 	Sync    NotificationSyncStatusResponse `json:"sync"`
 }
@@ -3895,10 +3914,10 @@ type ProjectWorktreeRuntimeResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/ProjectWorktreeRuntimeResponse.json
-	Schema        *string                          `json:"$schema,omitempty"`
-	LaunchTargets *[]LaunchTarget                  `json:"launch_targets"`
-	Sessions      *[]ProjectWorktreeRuntimeSession `json:"sessions"`
-	ShellSession  *ProjectWorktreeRuntimeSession   `json:"shell_session,omitempty"`
+	Schema        *string                         `json:"$schema,omitempty"`
+	LaunchTargets []LaunchTarget                  `json:"launch_targets"`
+	Sessions      []ProjectWorktreeRuntimeSession `json:"sessions"`
+	ShellSession  *ProjectWorktreeRuntimeSession  `json:"shell_session,omitempty"`
 }
 
 // ProjectWorktreeRuntimeSession defines model for ProjectWorktreeRuntimeSession.
@@ -3922,39 +3941,39 @@ type ProjectWorktreeRuntimeSession struct {
 
 // ProviderCapabilitiesResponse defines model for ProviderCapabilitiesResponse.
 type ProviderCapabilitiesResponse struct {
-	AssigneeMutation            bool      `json:"assignee_mutation"`
-	CommentMutation             bool      `json:"comment_mutation"`
-	DraftMutation               bool      `json:"draft_mutation"`
-	IssueMutation               bool      `json:"issue_mutation"`
-	LabelMutation               bool      `json:"label_mutation"`
-	MergeMutation               bool      `json:"merge_mutation"`
-	MutationHeadBinding         bool      `json:"mutation_head_binding"`
-	NativeMultilineRanges       bool      `json:"native_multiline_ranges"`
-	ReadAuthenticatedUser       bool      `json:"read_authenticated_user"`
-	ReadCi                      bool      `json:"read_ci"`
-	ReadComments                bool      `json:"read_comments"`
-	ReadIssuePrReferences       bool      `json:"read_issue_pr_references"`
-	ReadIssues                  bool      `json:"read_issues"`
-	ReadLabels                  bool      `json:"read_labels"`
-	ReadMarkdownImages          bool      `json:"read_markdown_images"`
-	ReadMergeRequests           bool      `json:"read_merge_requests"`
-	ReadReleases                bool      `json:"read_releases"`
-	ReadRepositories            bool      `json:"read_repositories"`
-	ReadReviewThreads           bool      `json:"read_review_threads"`
-	ReadWorkflowRuns            bool      `json:"read_workflow_runs"`
-	ReadWorkflows               bool      `json:"read_workflows"`
-	ReadyForReview              bool      `json:"ready_for_review"`
-	ReviewDraftMutation         bool      `json:"review_draft_mutation"`
-	ReviewMutation              bool      `json:"review_mutation"`
-	ReviewSuggestionApplication bool      `json:"review_suggestion_application"`
-	ReviewThreadResolution      bool      `json:"review_thread_resolution"`
-	ReviewerMutation            bool      `json:"reviewer_mutation"`
-	StateMutation               bool      `json:"state_mutation"`
-	SupportedReviewActions      *[]string `json:"supported_review_actions"`
-	ThreadReply                 bool      `json:"thread_reply"`
-	ThreadResolve               bool      `json:"thread_resolve"`
-	WorkflowApproval            bool      `json:"workflow_approval"`
-	WorkflowDispatch            bool      `json:"workflow_dispatch"`
+	AssigneeMutation            bool     `json:"assignee_mutation"`
+	CommentMutation             bool     `json:"comment_mutation"`
+	DraftMutation               bool     `json:"draft_mutation"`
+	IssueMutation               bool     `json:"issue_mutation"`
+	LabelMutation               bool     `json:"label_mutation"`
+	MergeMutation               bool     `json:"merge_mutation"`
+	MutationHeadBinding         bool     `json:"mutation_head_binding"`
+	NativeMultilineRanges       bool     `json:"native_multiline_ranges"`
+	ReadAuthenticatedUser       bool     `json:"read_authenticated_user"`
+	ReadCi                      bool     `json:"read_ci"`
+	ReadComments                bool     `json:"read_comments"`
+	ReadIssuePrReferences       bool     `json:"read_issue_pr_references"`
+	ReadIssues                  bool     `json:"read_issues"`
+	ReadLabels                  bool     `json:"read_labels"`
+	ReadMarkdownImages          bool     `json:"read_markdown_images"`
+	ReadMergeRequests           bool     `json:"read_merge_requests"`
+	ReadReleases                bool     `json:"read_releases"`
+	ReadRepositories            bool     `json:"read_repositories"`
+	ReadReviewThreads           bool     `json:"read_review_threads"`
+	ReadWorkflowRuns            bool     `json:"read_workflow_runs"`
+	ReadWorkflows               bool     `json:"read_workflows"`
+	ReadyForReview              bool     `json:"ready_for_review"`
+	ReviewDraftMutation         bool     `json:"review_draft_mutation"`
+	ReviewMutation              bool     `json:"review_mutation"`
+	ReviewSuggestionApplication bool     `json:"review_suggestion_application"`
+	ReviewThreadResolution      bool     `json:"review_thread_resolution"`
+	ReviewerMutation            bool     `json:"reviewer_mutation"`
+	StateMutation               bool     `json:"state_mutation"`
+	SupportedReviewActions      []string `json:"supported_review_actions"`
+	ThreadReply                 bool     `json:"thread_reply"`
+	ThreadResolve               bool     `json:"thread_resolve"`
+	WorkflowApproval            bool     `json:"workflow_approval"`
+	WorkflowDispatch            bool     `json:"workflow_dispatch"`
 }
 
 // ProviderRepositoryObservation defines model for ProviderRepositoryObservation.
@@ -4114,13 +4133,13 @@ type PublishResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/PublishResponse.json
-	Schema      *string          `json:"$schema,omitempty"`
-	Branch      string           `json:"branch"`
-	Commit      string           `json:"commit"`
-	Files       *[]PublishChange `json:"files"`
-	Pushed      bool             `json:"pushed"`
-	ShortCommit string           `json:"short_commit"`
-	Upstream    *string          `json:"upstream,omitempty"`
+	Schema      *string         `json:"$schema,omitempty"`
+	Branch      string          `json:"branch"`
+	Commit      string          `json:"commit"`
+	Files       []PublishChange `json:"files"`
+	Pushed      bool            `json:"pushed"`
+	ShortCommit string          `json:"short_commit"`
+	Upstream    *string         `json:"upstream,omitempty"`
 }
 
 // PullRequests defines model for PullRequests.
@@ -4247,6 +4266,7 @@ type RawWorkspace struct {
 	AgentState            *string            `json:"agentState,omitempty"`
 	AgentStateUpdatedAt   *string            `json:"agentStateUpdatedAt,omitempty"`
 	AssociatedPRNumber    *int64             `json:"associatedPRNumber,omitempty"`
+	BranchUpstreamMissing *bool              `json:"branchUpstreamMissing,omitempty"`
 	CommitsAhead          *int64             `json:"commitsAhead,omitempty"`
 	CommitsBehind         *int64             `json:"commitsBehind,omitempty"`
 	CreatedAt             string             `json:"createdAt"`
@@ -4473,11 +4493,11 @@ type RepoBrowserHistoryResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/RepoBrowserHistoryResponse.json
-	Schema  *string              `json:"$schema,omitempty"`
-	Commits *[]RepoBrowserCommit `json:"commits"`
-	Path    string               `json:"path"`
-	Ref     RepoBrowserRef       `json:"ref"`
-	Repo    RepoRefResponse      `json:"repo"`
+	Schema  *string             `json:"$schema,omitempty"`
+	Commits []RepoBrowserCommit `json:"commits"`
+	Path    string              `json:"path"`
+	Ref     RepoBrowserRef      `json:"ref"`
+	Repo    RepoRefResponse     `json:"repo"`
 }
 
 // RepoBrowserLastChangedResponse defines model for RepoBrowserLastChangedResponse.
@@ -4514,11 +4534,11 @@ type RepoBrowserRefsResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/RepoBrowserRefsResponse.json
-	Schema     *string           `json:"$schema,omitempty"`
-	DefaultRef RepoBrowserRef    `json:"default_ref"`
-	Refs       *[]RepoBrowserRef `json:"refs"`
-	Repo       RepoRefResponse   `json:"repo"`
-	Truncated  bool              `json:"truncated"`
+	Schema     *string          `json:"$schema,omitempty"`
+	DefaultRef RepoBrowserRef   `json:"default_ref"`
+	Refs       []RepoBrowserRef `json:"refs"`
+	Repo       RepoRefResponse  `json:"repo"`
+	Truncated  bool             `json:"truncated"`
 }
 
 // RepoBrowserTreeEntry defines model for RepoBrowserTreeEntry.
@@ -4533,11 +4553,11 @@ type RepoBrowserTreeResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/RepoBrowserTreeResponse.json
-	Schema    *string                 `json:"$schema,omitempty"`
-	Entries   *[]RepoBrowserTreeEntry `json:"entries"`
-	Ref       RepoBrowserRef          `json:"ref"`
-	Repo      RepoRefResponse         `json:"repo"`
-	Truncated bool                    `json:"truncated"`
+	Schema    *string                `json:"$schema,omitempty"`
+	Entries   []RepoBrowserTreeEntry `json:"entries"`
+	Ref       RepoBrowserRef         `json:"ref"`
+	Repo      RepoRefResponse        `json:"repo"`
+	Truncated bool                   `json:"truncated"`
 }
 
 // RepoLabelsResponse defines model for RepoLabelsResponse.
@@ -4545,13 +4565,13 @@ type RepoLabelsResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/RepoLabelsResponse.json
-	Schema    *string  `json:"$schema,omitempty"`
-	CheckedAt *string  `json:"checked_at,omitempty"`
-	Labels    *[]Label `json:"labels"`
-	Stale     bool     `json:"stale"`
-	SyncError string   `json:"sync_error"`
-	SyncedAt  *string  `json:"synced_at,omitempty"`
-	Syncing   bool     `json:"syncing"`
+	Schema    *string `json:"$schema,omitempty"`
+	CheckedAt *string `json:"checked_at,omitempty"`
+	Labels    []Label `json:"labels"`
+	Stale     bool    `json:"stale"`
+	SyncError string  `json:"sync_error"`
+	SyncedAt  *string `json:"synced_at,omitempty"`
+	Syncing   bool    `json:"syncing"`
 }
 
 // RepoOperations defines model for RepoOperations.
@@ -4711,28 +4731,28 @@ type RepoSummaryReleaseResponse struct {
 
 // RepoSummaryResponse defines model for RepoSummaryResponse.
 type RepoSummaryResponse struct {
-	ActiveAuthors        *[]RepoSummaryAuthorResponse      `json:"active_authors"`
-	CachedIssueCount     int64                             `json:"cached_issue_count"`
-	CachedPrCount        int64                             `json:"cached_pr_count"`
-	CommitTimeline       *[]RepoSummaryCommitPointResponse `json:"commit_timeline"`
-	CommitsSinceRelease  *int64                            `json:"commits_since_release,omitempty"`
-	DefaultPlatformHost  string                            `json:"default_platform_host"`
-	DraftPrCount         int64                             `json:"draft_pr_count"`
-	LastSyncCompletedAt  *string                           `json:"last_sync_completed_at,omitempty"`
-	LastSyncError        *string                           `json:"last_sync_error,omitempty"`
-	LastSyncStartedAt    *string                           `json:"last_sync_started_at,omitempty"`
-	LatestRelease        *RepoSummaryReleaseResponse       `json:"latest_release,omitempty"`
-	MostRecentActivityAt *string                           `json:"most_recent_activity_at,omitempty"`
-	Name                 string                            `json:"name"`
-	OpenIssueCount       int64                             `json:"open_issue_count"`
-	OpenPrCount          int64                             `json:"open_pr_count"`
-	Operations           RepoOperations                    `json:"operations"`
-	Owner                string                            `json:"owner"`
-	PlatformHost         string                            `json:"platform_host"`
-	RecentIssues         *[]RepoSummaryIssueResponse       `json:"recent_issues"`
-	Releases             *[]RepoSummaryReleaseResponse     `json:"releases"`
-	Repo                 RepoRefResponse                   `json:"repo"`
-	TimelineUpdatedAt    *string                           `json:"timeline_updated_at,omitempty"`
+	ActiveAuthors        []RepoSummaryAuthorResponse      `json:"active_authors"`
+	CachedIssueCount     int64                            `json:"cached_issue_count"`
+	CachedPrCount        int64                            `json:"cached_pr_count"`
+	CommitTimeline       []RepoSummaryCommitPointResponse `json:"commit_timeline"`
+	CommitsSinceRelease  *int64                           `json:"commits_since_release,omitempty"`
+	DefaultPlatformHost  string                           `json:"default_platform_host"`
+	DraftPrCount         int64                            `json:"draft_pr_count"`
+	LastSyncCompletedAt  *string                          `json:"last_sync_completed_at,omitempty"`
+	LastSyncError        *string                          `json:"last_sync_error,omitempty"`
+	LastSyncStartedAt    *string                          `json:"last_sync_started_at,omitempty"`
+	LatestRelease        *RepoSummaryReleaseResponse      `json:"latest_release,omitempty"`
+	MostRecentActivityAt *string                          `json:"most_recent_activity_at,omitempty"`
+	Name                 string                           `json:"name"`
+	OpenIssueCount       int64                            `json:"open_issue_count"`
+	OpenPrCount          int64                            `json:"open_pr_count"`
+	Operations           RepoOperations                   `json:"operations"`
+	Owner                string                           `json:"owner"`
+	PlatformHost         string                           `json:"platform_host"`
+	RecentIssues         []RepoSummaryIssueResponse       `json:"recent_issues"`
+	Releases             []RepoSummaryReleaseResponse     `json:"releases"`
+	Repo                 RepoRefResponse                  `json:"repo"`
+	TimelineUpdatedAt    *string                          `json:"timeline_updated_at,omitempty"`
 }
 
 // RepoUIVisibilityRequest defines model for RepoUIVisibilityRequest.
@@ -4849,9 +4869,9 @@ type RoborevConfiguredRepositoriesResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/RoborevConfiguredRepositoriesResponse.json
-	Schema       *string                                `json:"$schema,omitempty"`
-	Complete     bool                                   `json:"complete"`
-	Repositories *[]RoborevConfiguredRepositoryResponse `json:"repositories"`
+	Schema       *string                               `json:"$schema,omitempty"`
+	Complete     bool                                  `json:"complete"`
+	Repositories []RoborevConfiguredRepositoryResponse `json:"repositories"`
 }
 
 // RoborevConfiguredRepositoryResponse defines model for RoborevConfiguredRepositoryResponse.
@@ -4889,14 +4909,14 @@ type RuntimeAttachSpecResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/RuntimeAttachSpecResponse.json
-	Schema            *string   `json:"$schema,omitempty"`
-	Command           *[]string `json:"command"`
-	Kind              string    `json:"kind"`
-	RequiresLocalHost bool      `json:"requires_local_host"`
-	SessionKey        string    `json:"session_key"`
-	TargetKey         string    `json:"target_key"`
-	TmuxSession       string    `json:"tmux_session"`
-	Version           int64     `json:"version"`
+	Schema            *string  `json:"$schema,omitempty"`
+	Command           []string `json:"command"`
+	Kind              string   `json:"kind"`
+	RequiresLocalHost bool     `json:"requires_local_host"`
+	SessionKey        string   `json:"session_key"`
+	TargetKey         string   `json:"target_key"`
+	TmuxSession       string   `json:"tmux_session"`
+	Version           int64    `json:"version"`
 }
 
 // SealSpokePreparationInputBody defines model for SealSpokePreparationInputBody.
@@ -4992,8 +5012,8 @@ type SetLabelsRequest struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/SetLabelsRequest.json
-	Schema *string   `json:"$schema,omitempty"`
-	Labels *[]string `json:"labels"`
+	Schema *string  `json:"$schema,omitempty"`
+	Labels []string `json:"labels"`
 }
 
 // SetReviewersRequest defines model for SetReviewersRequest.
@@ -5019,8 +5039,8 @@ type SetWorktreeLinkedIssuesInputBody struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/SetWorktreeLinkedIssuesInputBody.json
-	Schema             *string  `json:"$schema,omitempty"`
-	LinkedIssueNumbers *[]int64 `json:"linked_issue_numbers"`
+	Schema             *string `json:"$schema,omitempty"`
+	LinkedIssueNumbers []int64 `json:"linked_issue_numbers"`
 }
 
 // SetWorktreeSessionBackendInputBody defines model for SetWorktreeSessionBackendInputBody.
@@ -5061,18 +5081,18 @@ type Snapshot struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/Snapshot.json
-	Schema                *string             `json:"$schema,omitempty"`
-	ActivePlatformHost    *string             `json:"activePlatformHost,omitempty"`
-	AggregateIncomplete   *bool               `json:"aggregateIncomplete,omitempty"`
-	Generation            int64               `json:"generation"`
-	Hosts                 *[]HostSummary      `json:"hosts"`
-	PlatformAuthenticated *bool               `json:"platformAuthenticated,omitempty"`
-	ProjectMap            *map[string]string  `json:"projectMap,omitempty"`
-	Projects              *[]ProjectSummary   `json:"projects"`
-	ProtocolVersion       int64               `json:"protocolVersion"`
-	Sessions              *[]SessionSummary   `json:"sessions"`
-	Workspaces            *[]WorkspaceSummary `json:"workspaces"`
-	Worktrees             *[]WorktreeSummary  `json:"worktrees"`
+	Schema                *string            `json:"$schema,omitempty"`
+	ActivePlatformHost    *string            `json:"activePlatformHost,omitempty"`
+	AggregateIncomplete   *bool              `json:"aggregateIncomplete,omitempty"`
+	Generation            int64              `json:"generation"`
+	Hosts                 []HostSummary      `json:"hosts"`
+	PlatformAuthenticated *bool              `json:"platformAuthenticated,omitempty"`
+	ProjectMap            *map[string]string `json:"projectMap,omitempty"`
+	Projects              []ProjectSummary   `json:"projects"`
+	ProtocolVersion       int64              `json:"protocolVersion"`
+	Sessions              []SessionSummary   `json:"sessions"`
+	Workspaces            []WorkspaceSummary `json:"workspaces"`
+	Worktrees             []WorktreeSummary  `json:"worktrees"`
 }
 
 // SnippetRange defines model for SnippetRange.
@@ -5134,13 +5154,13 @@ type StackContextResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/StackContextResponse.json
-	Schema    *string                `json:"$schema,omitempty"`
-	Health    string                 `json:"health"`
-	Members   *[]StackMemberResponse `json:"members"`
-	Position  int64                  `json:"position"`
-	Size      int64                  `json:"size"`
-	StackId   int64                  `json:"stack_id"`
-	StackName string                 `json:"stack_name"`
+	Schema    *string               `json:"$schema,omitempty"`
+	Health    string                `json:"health"`
+	Members   []StackMemberResponse `json:"members"`
+	Position  int64                 `json:"position"`
+	Size      int64                 `json:"size"`
+	StackId   int64                 `json:"stack_id"`
+	StackName string                `json:"stack_name"`
 }
 
 // StackMemberResponse defines model for StackMemberResponse.
@@ -5157,14 +5177,23 @@ type StackMemberResponse struct {
 	Title          string `json:"title"`
 }
 
+// StackPlacementResponse defines model for StackPlacementResponse.
+type StackPlacementResponse struct {
+	// Position 1-based position of this pull request in its stack
+	Position int64 `json:"position"`
+
+	// Size Number of visible pull requests in the stack
+	Size int64 `json:"size"`
+}
+
 // StackResponse defines model for StackResponse.
 type StackResponse struct {
-	Health    string                 `json:"health"`
-	Id        int64                  `json:"id"`
-	Members   *[]StackMemberResponse `json:"members"`
-	Name      string                 `json:"name"`
-	RepoName  string                 `json:"repo_name"`
-	RepoOwner string                 `json:"repo_owner"`
+	Health    string                `json:"health"`
+	Id        int64                 `json:"id"`
+	Members   []StackMemberResponse `json:"members"`
+	Name      string                `json:"name"`
+	RepoName  string                `json:"repo_name"`
+	RepoOwner string                `json:"repo_owner"`
 }
 
 // StarredRequest defines model for StarredRequest.
@@ -5246,13 +5275,13 @@ type Terminal struct {
 
 // TmuxSessionInfo defines model for TmuxSessionInfo.
 type TmuxSessionInfo struct {
-	CreatedAt        *string           `json:"createdAt,omitempty"`
-	Managed          bool              `json:"managed"`
-	Name             string            `json:"name"`
-	SessionScopedKey *string           `json:"sessionScopedKey,omitempty"`
-	WindowCount      int64             `json:"windowCount"`
-	Windows          *[]TmuxWindowInfo `json:"windows"`
-	WorktreeKey      *string           `json:"worktreeKey,omitempty"`
+	CreatedAt        *string          `json:"createdAt,omitempty"`
+	Managed          bool             `json:"managed"`
+	Name             string           `json:"name"`
+	SessionScopedKey *string          `json:"sessionScopedKey,omitempty"`
+	WindowCount      int64            `json:"windowCount"`
+	Windows          []TmuxWindowInfo `json:"windows"`
+	WorktreeKey      *string          `json:"worktreeKey,omitempty"`
 }
 
 // TmuxWindowInfo defines model for TmuxWindowInfo.
@@ -5373,23 +5402,23 @@ type WorkflowCatalogResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/WorkflowCatalogResponse.json
-	Schema       *string                        `json:"$schema,omitempty"`
-	Environments *[]WorkflowEnvironmentResponse `json:"environments"`
-	Repo         RepoRefResponse                `json:"repo"`
-	Workflows    *[]WorkflowDefinitionResponse  `json:"workflows"`
+	Schema       *string                       `json:"$schema,omitempty"`
+	Environments []WorkflowEnvironmentResponse `json:"environments"`
+	Repo         RepoRefResponse               `json:"repo"`
+	Workflows    []WorkflowDefinitionResponse  `json:"workflows"`
 }
 
 // WorkflowDefinitionResponse defines model for WorkflowDefinitionResponse.
 type WorkflowDefinitionResponse struct {
-	Available         bool                     `json:"available"`
-	DefinitionSha     string                   `json:"definition_sha"`
-	Id                string                   `json:"id"`
-	Inputs            *[]WorkflowInputResponse `json:"inputs"`
-	Name              string                   `json:"name"`
-	Path              string                   `json:"path"`
-	State             string                   `json:"state"`
-	UnavailableReason *string                  `json:"unavailable_reason,omitempty"`
-	WebUrl            string                   `json:"web_url"`
+	Available         bool                    `json:"available"`
+	DefinitionSha     string                  `json:"definition_sha"`
+	Id                string                  `json:"id"`
+	Inputs            []WorkflowInputResponse `json:"inputs"`
+	Name              string                  `json:"name"`
+	Path              string                  `json:"path"`
+	State             string                  `json:"state"`
+	UnavailableReason *string                 `json:"unavailable_reason,omitempty"`
+	WebUrl            string                  `json:"web_url"`
 }
 
 // WorkflowDispatchBody defines model for WorkflowDispatchBody.
@@ -5439,21 +5468,21 @@ type WorkflowJobsResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/WorkflowJobsResponse.json
-	Schema *string                   `json:"$schema,omitempty"`
-	Items  *[]WorkflowRunJobResponse `json:"items"`
-	Repo   RepoRefResponse           `json:"repo"`
+	Schema *string                  `json:"$schema,omitempty"`
+	Items  []WorkflowRunJobResponse `json:"items"`
+	Repo   RepoRefResponse          `json:"repo"`
 }
 
 // WorkflowRunJobResponse defines model for WorkflowRunJobResponse.
 type WorkflowRunJobResponse struct {
-	CompletedAt *time.Time                 `json:"completed_at,omitempty"`
-	Conclusion  string                     `json:"conclusion"`
-	Id          string                     `json:"id"`
-	Name        string                     `json:"name"`
-	StartedAt   *time.Time                 `json:"started_at,omitempty"`
-	Status      string                     `json:"status"`
-	Steps       *[]WorkflowRunStepResponse `json:"steps"`
-	WebUrl      *string                    `json:"web_url,omitempty"`
+	CompletedAt *time.Time                `json:"completed_at,omitempty"`
+	Conclusion  string                    `json:"conclusion"`
+	Id          string                    `json:"id"`
+	Name        string                    `json:"name"`
+	StartedAt   *time.Time                `json:"started_at,omitempty"`
+	Status      string                    `json:"status"`
+	Steps       []WorkflowRunStepResponse `json:"steps"`
+	WebUrl      *string                   `json:"web_url,omitempty"`
 }
 
 // WorkflowRunResponse defines model for WorkflowRunResponse.
@@ -5488,11 +5517,11 @@ type WorkflowRunsResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/WorkflowRunsResponse.json
-	Schema     *string                `json:"$schema,omitempty"`
-	Exhausted  bool                   `json:"exhausted"`
-	Items      *[]WorkflowRunResponse `json:"items"`
-	NextCursor *string                `json:"next_cursor,omitempty"`
-	Repo       RepoRefResponse        `json:"repo"`
+	Schema     *string               `json:"$schema,omitempty"`
+	Exhausted  bool                  `json:"exhausted"`
+	Items      []WorkflowRunResponse `json:"items"`
+	NextCursor *string               `json:"next_cursor,omitempty"`
+	Repo       RepoRefResponse       `json:"repo"`
 }
 
 // WorkflowStateMetaResponse defines model for WorkflowStateMetaResponse.
@@ -5683,8 +5712,11 @@ type WorkspaceResponse struct {
 	// AgentStateUpdatedAt UTC timestamp of the hook report that produced agent_state.
 	AgentStateUpdatedAt *time.Time `json:"agent_state_updated_at,omitempty"`
 	AssociatedPrNumber  *int64     `json:"associated_pr_number,omitempty"`
-	CommitsAhead        *int64     `json:"commits_ahead,omitempty"`
-	CommitsBehind       *int64     `json:"commits_behind,omitempty"`
+
+	// BranchUpstreamMissing True when the current branch has an origin upstream configured but its local remote-tracking ref is absent; clients may offer Push so branch sync can verify or create the remote branch.
+	BranchUpstreamMissing *bool  `json:"branch_upstream_missing,omitempty"`
+	CommitsAhead          *int64 `json:"commits_ahead,omitempty"`
+	CommitsBehind         *int64 `json:"commits_behind,omitempty"`
 
 	// Created True when this response represents a workspace newly created by this request; absent when an existing workspace was returned or on reads.
 	Created   *bool  `json:"created,omitempty"`
@@ -5746,9 +5778,9 @@ type WorkspaceRuntimeResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/WorkspaceRuntimeResponse.json
-	Schema        *string         `json:"$schema,omitempty"`
-	LaunchTargets *[]LaunchTarget `json:"launch_targets"`
-	Sessions      *[]SessionInfo  `json:"sessions"`
+	Schema        *string        `json:"$schema,omitempty"`
+	LaunchTargets []LaunchTarget `json:"launch_targets"`
+	Sessions      []SessionInfo  `json:"sessions"`
 }
 
 // WorkspaceSettingsUpdate defines model for WorkspaceSettingsUpdate.
@@ -5765,6 +5797,7 @@ type WorkspaceSummary struct {
 	AgentState            *string                    `json:"agent_state,omitempty"`
 	AgentStateUpdatedAt   *string                    `json:"agent_state_updated_at,omitempty"`
 	AssociatedPrNumber    *int64                     `json:"associated_pr_number,omitempty"`
+	BranchUpstreamMissing *bool                      `json:"branch_upstream_missing,omitempty"`
 	CommitsAhead          *int64                     `json:"commits_ahead,omitempty"`
 	CommitsBehind         *int64                     `json:"commits_behind,omitempty"`
 	CreatedAt             string                     `json:"created_at"`
@@ -5824,7 +5857,7 @@ type WorktreeFromMergeRequestResponse struct {
 	Id                 string              `json:"id"`
 	IsHidden           bool                `json:"is_hidden"`
 	IsPrimary          bool                `json:"is_primary"`
-	LinkedIssueNumbers *[]int64            `json:"linked_issue_numbers"`
+	LinkedIssueNumbers []int64             `json:"linked_issue_numbers"`
 	MergeRequest       MergeRequestSummary `json:"merge_request"`
 	Path               string              `json:"path"`
 	ProjectId          string              `json:"project_id"`
@@ -5851,7 +5884,7 @@ type WorktreeResponse struct {
 	Id                 string    `json:"id"`
 	IsHidden           bool      `json:"is_hidden"`
 	IsPrimary          bool      `json:"is_primary"`
-	LinkedIssueNumbers *[]int64  `json:"linked_issue_numbers"`
+	LinkedIssueNumbers []int64   `json:"linked_issue_numbers"`
 	Path               string    `json:"path"`
 	ProjectId          string    `json:"project_id"`
 	SessionBackend     string    `json:"session_backend"`
@@ -5871,7 +5904,7 @@ type WorktreeSummary struct {
 	IsPrimary          *bool          `json:"isPrimary,omitempty"`
 	IsStale            *bool          `json:"isStale,omitempty"`
 	LastPolledAt       *string        `json:"lastPolledAt,omitempty"`
-	LinkedIssueNumbers *[]int64       `json:"linkedIssueNumbers"`
+	LinkedIssueNumbers []int64        `json:"linkedIssueNumbers"`
 	LinkedPRNumber     *int64         `json:"linkedPRNumber,omitempty"`
 	Name               string         `json:"name"`
 	Path               string         `json:"path"`
@@ -6503,7 +6536,16 @@ type GetCommentAutocompleteParams struct {
 	Trigger *string `form:"trigger,omitempty" json:"trigger,omitempty"`
 	Q       *string `form:"q,omitempty" json:"q,omitempty"`
 	Limit   *int64  `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// ItemType Optional item the comment targets; requires item_number.
+	ItemType *GetCommentAutocompleteParamsItemType `form:"item_type,omitempty" json:"item_type,omitempty"`
+
+	// ItemNumber Optional item number the comment targets; requires item_type.
+	ItemNumber *int64 `form:"item_number,omitempty" json:"item_number,omitempty"`
 }
+
+// GetCommentAutocompleteParamsItemType defines parameters for GetCommentAutocomplete.
+type GetCommentAutocompleteParamsItemType string
 
 // GetRepoCommitDiffParams defines parameters for GetRepoCommitDiff.
 type GetRepoCommitDiffParams struct {
@@ -36238,6 +36280,30 @@ func NewGetCommentAutocompleteRequest(server string, provider string, owner stri
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ItemType != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "item_type", *params.ItemType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ItemNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "item_number", *params.ItemNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

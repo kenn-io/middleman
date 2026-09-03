@@ -114,7 +114,7 @@ describe("DiffReviewDraftTray", () => {
     });
     await fireEvent.click(screen.getByRole("button", { name: "Publish review" }));
 
-    expect(publish).toHaveBeenCalledWith("comment", "Keep this summary");
+    await waitFor(() => expect(publish).toHaveBeenCalledWith("comment", "Keep this summary"));
     expect(summary.value).toBe("Keep this summary");
   });
 
@@ -130,9 +130,11 @@ describe("DiffReviewDraftTray", () => {
     });
     await fireEvent.click(screen.getByRole("button", { name: "Save draft comment" }));
 
-    expect(editComment).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "1", body: "Draft note" }),
-      "Updated draft note",
+    await waitFor(() =>
+      expect(editComment).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "1", body: "Draft note" }),
+        "Updated draft note",
+      ),
     );
     await waitFor(() => {
       expect(screen.queryByLabelText("Draft comment body")).toBeNull();

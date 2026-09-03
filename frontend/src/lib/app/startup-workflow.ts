@@ -1,13 +1,13 @@
 import { Cache, Context, Duration, Effect, Layer, Ref } from "effect";
 import type { TimeoutError } from "effect/Cause";
-import type { components } from "../api/generated/schema.js";
+import type { SettingsResponse } from "../api/generated/models/index.js";
 import { GeneratedApi } from "../api/generated-api.js";
 import type { ApiProblemError, TransientTransportError } from "../api/effect-errors.js";
 import { waitUntilBackendReady } from "../utils/backendReadiness.js";
 
 export { waitUntilBackendReady } from "../utils/backendReadiness.js";
 
-export type StartupSnapshot = components["schemas"]["SettingsResponse"];
+export type StartupSnapshot = SettingsResponse;
 export type StartupError = ApiProblemError | TransientTransportError | TimeoutError;
 
 const STARTUP_CACHE_KEY = "settings";
@@ -20,7 +20,9 @@ const loadStartupSettings = Effect.fn("StartupWorkflow.loadSettings")(function* 
         Effect.sync(() => new AbortController()),
         (owned) => Effect.sync(() => owned.abort()),
       );
-      return yield* api.execute("GET /settings", () => api.client.GET("/settings", { signal: controller.signal }));
+      return yield* api.execute("GET /settings", () =>
+        api.client.SettingsService.getSettings({ signal: controller.signal }),
+      );
     }),
   );
 });

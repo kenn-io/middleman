@@ -56,6 +56,7 @@ type workspaceResponse struct {
 	MRDeletions           *int                      `json:"mr_deletions,omitempty"`
 	CommitsAhead          *int                      `json:"commits_ahead,omitempty"`
 	CommitsBehind         *int                      `json:"commits_behind,omitempty"`
+	BranchUpstreamMissing *bool                     `json:"branch_upstream_missing,omitempty" doc:"True when the current branch has an origin upstream configured but its local remote-tracking ref is absent; clients may offer Push so branch sync can verify or create the remote branch."`
 	WorktreeDirty         *bool                     `json:"worktree_dirty,omitempty" doc:"True when the worktree has staged, unstaged, or untracked changes; false when clean; omitted until git-state enrichment completes."`
 	EnrichmentStatus      string                    `json:"enrichment_status" enum:"not_applicable,pending,fresh,stale,failed" doc:"Aggregate git-state and tmux-activity reconciliation status. Failed responses retain last-known-good component fields when available."`
 	EnrichmentRefreshedAt *string                   `json:"enrichment_refreshed_at,omitempty" doc:"Oldest successful refresh time across the populated enrichment components."`
@@ -63,7 +64,7 @@ type workspaceResponse struct {
 	AssociatedPRNumber    *int                      `json:"associated_pr_number,omitempty"`
 	Kata                  *db.WorkspaceKataMetadata `json:"kata,omitempty"`
 	MRHeadRepoKind        string                    `json:"mr_head_repo_kind,omitempty" enum:"same_repo,fork,unknown" doc:"Set only for pull_request workspaces: same_repo when the PR head is confirmed to be in the base repo, fork when it is a confirmed fork clone, unknown when repository identity could not be resolved."`
-	Created               bool                      `json:"created,omitempty" doc:"True when this response represents a workspace newly created by this request; absent when an existing workspace was returned or on reads."`
+	Created               bool                      `json:"created,omitempty,omitzero" doc:"True when this response represents a workspace newly created by this request; absent when an existing workspace was returned or on reads."`
 }
 
 // WorkspaceResponse is the stable workspace DTO shared with dependent server

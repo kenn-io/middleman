@@ -2,11 +2,48 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { get, post } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 
-vi.mock("../runtime.js", () => ({
-  apiErrorMessage: (error: { detail?: string; title?: string } | undefined, fallback: string) =>
-    error?.detail ?? error?.title ?? fallback,
-  client: { GET: get, POST: post },
-}));
+vi.mock("../generated/index.js", async () => {
+  const { GeneratedProblemResponse } = await import("../runtime.js");
+  const value = async (request: Promise<unknown>) => {
+    const result = (await request) as { data?: unknown; error?: { detail?: string } };
+    if (result.error !== undefined) {
+      const problem = {
+        code: "notFound" as const,
+        detail: result.error.detail,
+        status: 404,
+        title: "Not found",
+      };
+      throw new GeneratedProblemResponse(problem, Response.json(problem, { status: 404 }));
+    }
+    return result.data;
+  };
+  return {
+    KataService: {
+      listKataDaemons: (options?: unknown) => value(get("/kata/daemons", options)),
+      listKataReferences: (path: { daemonId: string }, query: unknown, options?: unknown) =>
+        value(
+          get("/kata/daemons/{daemon_id}/references", {
+            params: { path: { daemon_id: path.daemonId }, query },
+            ...((options as object | undefined) ?? {}),
+          }),
+        ),
+      resolveKataIssueReference: (path: { daemonId: string }, query: unknown, options?: unknown) =>
+        value(
+          get("/kata/daemons/{daemon_id}/issue-reference", {
+            params: { path: { daemon_id: path.daemonId }, query },
+            ...((options as object | undefined) ?? {}),
+          }),
+        ),
+      createKataWorkspace: (body: unknown) => value(post("/kata/workspaces", { body })),
+      getKataLaunchTarget: (path: { daemonId: string; issueUid: string }) =>
+        value(
+          get("/kata/daemons/{daemon_id}/issues/{issue_uid}/launch-target", {
+            params: { path: { daemon_id: path.daemonId, issue_uid: path.issueUid } },
+          }),
+        ),
+    },
+  };
+});
 
 import {
   createOrOpenKataWorkspace,

@@ -571,6 +571,122 @@ func TestWorkspaceRepositoryIdentityMigration55BackfillsOnlyUnambiguousRoutes(
 	require.NoError(raw.Close())
 }
 
+func TestMigration56RepairsNotificationAdmissionTriggers(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	dbPath := filepath.Join(t.TempDir(), "notification-admission-trigger-v55.db")
+	notificationInsert := `
+		INSERT INTO forge_notification_items (
+			platform, platform_host, platform_notification_id,
+			repo_owner, repo_name, subject_type, subject_title,
+			item_number, item_type, reason, unread,
+			source_updated_at, synced_at, source_ack_queued_at
+		) VALUES (
+			'github', 'github.com', ?,
+			'acme', 'widget', 'PullRequest', 'Trigger repair',
+			1, 'pr', 'mention', 1,
+			'2026-09-02T23:00:00Z', '2026-09-02T23:00:00Z', ?
+		)`
+
+	openAtVersionForTest(t, dbPath, 55, func(raw *sql.DB) {
+		_, err := raw.Exec(`
+			DROP TRIGGER forge_notification_ack_admission_update;
+			DROP TRIGGER forge_notification_ack_admission_insert;
+
+			CREATE TRIGGER forge_notification_ack_admission_insert
+			AFTER INSERT ON forge_notification_items
+			WHEN NEW.source_ack_queued_at IS NOT NULL
+			 AND NEW.source_ack_synced_at IS NULL
+			BEGIN
+				UPDATE forge_node_preparation
+				SET ack_generation = ack_generation + 1,
+					updated_at = datetime('now')
+				WHERE singleton_id = 1;
+
+				INSERT INTO forge_notification_ack_admissions (
+					notification_id, generation, queued_at
+				)
+				SELECT NEW.id, ack_generation, NEW.source_ack_queued_at
+				FROM forge_node_preparation
+				WHERE singleton_id = 1
+				ON CONFLICT(notification_id) DO UPDATE SET
+					generation = excluded.generation,
+					queued_at = excluded.queued_at;
+			END;
+
+			CREATE TRIGGER forge_notification_ack_admission_update
+			AFTER UPDATE OF source_ack_queued_at, source_ack_synced_at
+			ON forge_notification_items
+			WHEN NEW.source_ack_queued_at IS NOT NULL
+			 AND NEW.source_ack_synced_at IS NULL
+			 AND (
+				 OLD.source_ack_queued_at IS NULL
+				 OR OLD.source_ack_synced_at IS NOT NULL
+				 OR OLD.source_ack_queued_at <> NEW.source_ack_queued_at
+			 )
+			BEGIN
+				UPDATE forge_node_preparation
+				SET ack_generation = ack_generation + 1,
+					updated_at = datetime('now')
+				WHERE singleton_id = 1;
+
+				INSERT INTO forge_notification_ack_admissions (
+					notification_id, generation, queued_at
+				)
+				SELECT NEW.id, ack_generation, NEW.source_ack_queued_at
+				FROM forge_node_preparation
+				WHERE singleton_id = 1
+				ON CONFLICT(notification_id) DO UPDATE SET
+					generation = excluded.generation,
+					queued_at = excluded.queued_at;
+			END;
+		`)
+		require.NoError(err)
+		_, err = raw.Exec(notificationInsert, "stale-trigger", "2026-09-02T23:00:00Z")
+		require.ErrorContains(err, "no such table: main.forge_node_preparation")
+	})
+
+	database, err := Open(dbPath)
+	require.NoError(err)
+	_, err = database.WriteDB().Exec(
+		notificationInsert, "insert-admission", "2026-09-02T23:01:00Z",
+	)
+	require.NoError(err)
+	_, err = database.WriteDB().Exec(notificationInsert, "update-admission", nil)
+	require.NoError(err)
+	_, err = database.WriteDB().Exec(`
+		UPDATE forge_notification_items
+		SET source_ack_queued_at = '2026-09-02T23:02:00Z'
+		WHERE platform_notification_id = 'update-admission'
+	`)
+	require.NoError(err)
+
+	var ackGeneration int64
+	require.NoError(database.ReadDB().QueryRow(`
+		SELECT ack_generation
+		FROM forge_spoke_preparation
+		WHERE singleton_id = 1
+	`).Scan(&ackGeneration))
+	require.Equal(int64(2), ackGeneration)
+	var admissionCount int
+	require.NoError(database.ReadDB().QueryRow(`
+		SELECT COUNT(*)
+		FROM forge_notification_ack_admissions
+	`).Scan(&admissionCount))
+	require.Equal(2, admissionCount)
+	assertDatabaseIntegrityForTest(t, database.ReadDB())
+	require.NoError(database.Close())
+
+	raw, migrator := openMigratorForTest(t, dbPath)
+	require.NoError(migrator.Migrate(55))
+	_, err = raw.Exec(
+		notificationInsert, "downgraded-admission", "2026-09-02T23:03:00Z",
+	)
+	require.NoError(err)
+	assertDatabaseIntegrityForTest(t, raw)
+	require.NoError(raw.Close())
+}
+
 func TestKataIssueLinksMigration48IsReversible(t *testing.T) {
 	t.Parallel()
 	assert := assert.New(t)
@@ -1081,39 +1197,16 @@ func TestActivityEventMutationRevisionMigrationUpgradesPopulatedV50Database(t *t
 	assert.Equal(11, issueRevision)
 	assert.Equal(2, emptyIssueRevision)
 
-	planRows, err := database.ReadDB().Query(`
-		EXPLAIN QUERY PLAN
-		SELECT MAX(n.source_updated_at)
-		FROM forge_notification_items n
-		WHERE n.item_type = 'pr'
-		  AND n.item_number = 1
-		  AND n.reason != 'author'
-		  AND (
-			n.repo_id = 1
-			OR (
-				n.repo_id IS NULL
-				AND n.platform = 'github'
-				AND n.platform_host = 'github.com'
-				AND n.repo_owner = 'acme'
-				AND n.repo_name = 'widgets'
-			)
-		  )
-	`)
-	require.NoError(err)
-	defer planRows.Close()
-	var planDetails []string
-	for planRows.Next() {
-		var id, parent, notUsed int
-		var detail string
-		require.NoError(planRows.Scan(&id, &parent, &notUsed, &detail))
-		planDetails = append(planDetails, detail)
-	}
-	require.NoError(planRows.Err())
-	assert.Contains(
-		strings.Join(planDetails, "\n"),
-		"idx_forge_notification_items_activity_parent",
-		"notification recency lookup should use the parent index",
-	)
+	// The fixture holds only a couple of notification rows, and Open now
+	// leaves real planner statistics behind, so the planner rightly scans
+	// them instead of probing the index. Assert the migration created the
+	// index rather than a plan choice that only holds at scale.
+	var parentIndexes int
+	require.NoError(database.ReadDB().QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master
+		 WHERE type = 'index' AND name = 'idx_forge_notification_items_activity_parent'`,
+	).Scan(&parentIndexes))
+	assert.Equal(1, parentIndexes, "migration must add the notification parent index")
 	assertDatabaseIntegrityForTest(t, database.ReadDB())
 }
 

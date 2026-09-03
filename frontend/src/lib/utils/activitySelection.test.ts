@@ -14,6 +14,14 @@ const githubWidgets = {
   repoPath: "acme/widgets",
 } as const;
 
+const githubCommit = {
+  itemType: "commit" as const,
+  ...githubWidgets,
+  branchName: "main",
+  commitSha: "abcdef1234567890abcdef1234567890abcdef12",
+  title: "Bump dependency",
+};
+
 describe("activity selection URL state", () => {
   it("parses PR conversation selection", () => {
     expect(
@@ -65,6 +73,59 @@ describe("activity selection URL state", () => {
       repoPath: "Group/SubGroup/Project.Special",
       detailTab: "conversation",
     });
+  });
+
+  it("parses a commit selection with its branch", () => {
+    expect(
+      parseActivitySelection(
+        "?selected=commit:abcdef1234567890abcdef1234567890abcdef12&provider=github&platform_host=github.com&repo_path=acme%2Fwidgets&branch=main",
+      ),
+    ).toEqual({ ...githubCommit, title: "abcdef123456" });
+  });
+
+  it("uses the default branch when a commit selection has no branch", () => {
+    expect(
+      parseActivitySelection(
+        "?selected=commit:abcdef1234567890abcdef1234567890abcdef12&provider=github&platform_host=github.com&repo_path=acme%2Fwidgets",
+      ),
+    ).toEqual({ ...githubCommit, branchName: "default branch", title: "abcdef123456" });
+  });
+
+  it("parses a full SHA-256 commit selection", () => {
+    const commitSha = "a".repeat(64);
+
+    expect(
+      parseActivitySelection(
+        `?selected=commit:${commitSha}&provider=github&platform_host=github.com&repo_path=acme%2Fwidgets&branch=main`,
+      ),
+    ).toEqual({ ...githubCommit, commitSha, title: "aaaaaaaaaaaa" });
+  });
+
+  it("rejects an invalid commit SHA", () => {
+    expect(
+      parseActivitySelection("?selected=commit:zzz&provider=github&platform_host=github.com&repo_path=acme%2Fwidgets"),
+    ).toBeNull();
+  });
+
+  it("rejects an abbreviated commit SHA", () => {
+    expect(
+      parseActivitySelection(
+        "?selected=commit:abcdef1234567890&provider=github&platform_host=github.com&repo_path=acme%2Fwidgets",
+      ),
+    ).toBeNull();
+  });
+
+  it("round-trips every commit identity field", () => {
+    const search = buildActivitySelectionSearch("?range=30d", githubCommit);
+
+    expect(parseActivitySelection(`?${search.toString()}`)).toEqual({ ...githubCommit, title: "abcdef123456" });
+  });
+
+  it("preserves filters when writing a commit selection", () => {
+    const search = buildActivitySelectionSearch("?item_types=commit&range=30d", githubCommit);
+
+    expect(search.get("item_types")).toBe("commit");
+    expect(search.get("range")).toBe("30d");
   });
 
   it("preserves existing Activity filters when writing selection", () => {
@@ -130,6 +191,32 @@ describe("activity selection URL state", () => {
     expect(next.has("selected_tab")).toBe(false);
   });
 
+  it("replaces a PR selection with a commit without stale item fields", () => {
+    const next = buildActivitySelectionSearch(
+      "?selected=pr:1&selected_tab=files&provider=github&repo_path=acme%2Fwidgets",
+      githubCommit,
+    );
+
+    expect(next.get("selected")).toBe("commit:abcdef1234567890abcdef1234567890abcdef12");
+    expect(next.get("branch")).toBe("main");
+    expect(next.has("selected_tab")).toBe(false);
+  });
+
+  it("replaces a commit selection with a PR without a stale branch", () => {
+    const next = buildActivitySelectionSearch(
+      "?selected=commit:abcdef1234567890abcdef1234567890abcdef12&branch=main&provider=github&repo_path=acme%2Fwidgets",
+      {
+        itemType: "pr",
+        ...githubWidgets,
+        number: 1,
+        detailTab: "conversation",
+      },
+    );
+
+    expect(next.get("selected")).toBe("pr:1");
+    expect(next.has("branch")).toBe(false);
+  });
+
   it("overwrites an issue selection with a PR and drops platform host", () => {
     const next = buildActivitySelectionSearch(
       "?selected=issue:10&provider=github&platform_host=ghe.example.com&repo_path=acme%2Fwidgets&search=bug",
@@ -172,6 +259,11 @@ describe("activity selection URL state", () => {
 
     expect(activitySelectionToRoute(issue, "issues")).toBe("/host/ghe.example.com/issues/github/acme/widgets/10");
     expect(activitySelectionToRoute(issue, "pulls")).toBeNull();
+  });
+
+  it("does not build destination routes for a commit selection", () => {
+    expect(activitySelectionToRoute(githubCommit, "pulls")).toBeNull();
+    expect(activitySelectionToRoute(githubCommit, "issues")).toBeNull();
   });
 
   it.each([

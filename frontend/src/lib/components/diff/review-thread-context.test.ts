@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { DiffResult, PREvent } from "../../api/types.js";
-import { reviewThreadContext, reviewThreadsFromEvents, type ReviewThread } from "./review-thread-context.js";
+import {
+  reviewThreadContext,
+  reviewThreadSnapshotState,
+  reviewThreadsFromEvents,
+  type ReviewThread,
+} from "./review-thread-context.js";
 
 function makeThread(overrides: Partial<ReviewThread> = {}): ReviewThread {
   return {
@@ -51,6 +56,17 @@ function makeDiff(): DiffResult {
 }
 
 describe("reviewThreadContext", () => {
+  it.each([
+    ["fresh", "thread-head", "thread-head"],
+    ["stale", "thread-head", "other-head"],
+    ["head-unknown", undefined, "thread-head"],
+    ["head-unknown", "thread-head", undefined],
+    ["head-unknown", "", "thread-head"],
+    ["head-unknown", "thread-head", ""],
+  ] as const)("classifies %s thread and diff heads", (expected, threadHead, diffHead) => {
+    expect(reviewThreadSnapshotState(makeThread({ diff_head_sha: threadHead }), diffHead)).toBe(expected);
+  });
+
   it("extracts review threads from generated client event casing", () => {
     const thread = makeThread({ id: "thread-pascal" });
     const event = { DiffThread: thread } as unknown as PREvent;

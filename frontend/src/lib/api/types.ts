@@ -1,70 +1,145 @@
-import type { components, operations } from "./generated/schema.js";
+import type {
+  Activity,
+  ActivityAuthorsResponse as GeneratedActivityAuthorsResponse,
+  ActivityItemResponse,
+  ActivityResponse as GeneratedActivityResponse,
+  ActivitySubjectResponse,
+  Agent,
+  ApprovePRInputBody as GeneratedApprovePRInputBody,
+  CICheck as GeneratedCICheck,
+  CommentAutocompleteReference as GeneratedCommentAutocompleteReference,
+  CommentAutocompleteResponse as GeneratedCommentAutocompleteResponse,
+  ConfiguredRepoStatus,
+  Detail,
+  DiffFile as GeneratedDiffFile,
+  DiffResponse,
+  EditPRContentInputBody as GeneratedEditPRContentInputBody,
+  FilePreviewResponse,
+  FilesResponse,
+  FleetSettingsResponse,
+  GithubStateInputBody as GeneratedGithubStateInputBody,
+  Hunk,
+  IssueDetailResponse,
+  IssueEvent as GeneratedIssueEvent,
+  IssueResponse,
+  Issues,
+  ItemLabelsResponse as GeneratedItemLabelsResponse,
+  KataProjectRepoMapping as GeneratedKataProjectRepoMapping,
+  Label as GeneratedLabel,
+  LaunchTarget as GeneratedLaunchTarget,
+  Line,
+  LocalSyncCeilingStatus as GeneratedLocalSyncCeilingStatus,
+  McpSettingsResponse,
+  McpSettingsUpdate,
+  MergePRInputBody,
+  MergeRequestDetailResponse,
+  MergeRequestEventResponse,
+  MergeRequestResponse,
+  ModeVisibility as GeneratedModeVisibility,
+  NotificationBulkResponse as GeneratedNotificationBulkResponse,
+  NotificationsResponse as GeneratedNotificationsResponse,
+  OperationAvailability as GeneratedOperationAvailability,
+  ProviderCapabilitiesResponse,
+  PullRequests,
+  RateLimitHostStatus as GeneratedRateLimitHostStatus,
+  RateLimitResourceStatus as GeneratedRateLimitResourceStatus,
+  RateLimitsResponse as GeneratedRateLimitsResponse,
+  RepoBrowserBlob as GeneratedRepoBrowserBlob,
+  RepoBrowserCommit as GeneratedRepoBrowserCommit,
+  RepoBrowserRef as GeneratedRepoBrowserRef,
+  RepoBrowserRefsResponse as GeneratedRepoBrowserRefsResponse,
+  RepoBrowserTreeEntry as GeneratedRepoBrowserTreeEntry,
+  RepoLabelsResponse as GeneratedRepoLabelsResponse,
+  RepoOperations as GeneratedRepoOperations,
+  RepoPreset as GeneratedRepoPreset,
+  RepoResponse,
+  RepoSummaryAuthorResponse,
+  RepoSummaryCommitPointResponse as GeneratedRepoSummaryCommitPointResponse,
+  RepoSummaryIssueResponse,
+  RepoSummaryReleaseResponse as GeneratedRepoSummaryReleaseResponse,
+  RepoSummaryResponse,
+  RequestChangesPRInputBody as GeneratedRequestChangesPRInputBody,
+  SessionInfo,
+  SettingsResponse as GeneratedSettingsResponse,
+  StarredRequest as GeneratedStarredRequest,
+  SyncStatus as GeneratedSyncStatus,
+  Terminal,
+  UpdateFleetSettingsInputBody,
+  WorkspaceActivitySubjectResponse,
+  WorkspaceKataMetadata as GeneratedWorkspaceKataMetadata,
+  WorkspaceRuntimeResponse,
+  ListActivityParams,
+  ListActivityAuthorsParams,
+  ListPullsParams,
+  ListIssuesParams,
+  UnsetStarredParams as GeneratedUnsetStarredParams,
+} from "./generated/models/index.js";
 
-export type Repo = components["schemas"]["RepoResponse"];
-export type RepoSummary = components["schemas"]["RepoSummaryResponse"];
-export type RepoSummaryAuthor = components["schemas"]["RepoSummaryAuthorResponse"];
-export type RepoSummaryIssue = components["schemas"]["RepoSummaryIssueResponse"];
-export type RepoSummaryCommitPointResponse = components["schemas"]["RepoSummaryCommitPointResponse"];
-export type RepoSummaryReleaseResponse = components["schemas"]["RepoSummaryReleaseResponse"];
-export type PullRequest = components["schemas"]["MergeRequestResponse"];
-export type ProviderCapabilities = components["schemas"]["ProviderCapabilitiesResponse"];
-export type OperationAvailability = components["schemas"]["OperationAvailability"];
-export type RepoOperations = components["schemas"]["RepoOperations"];
-export type Issue = components["schemas"]["IssueResponse"];
-export type IssueEvent = components["schemas"]["IssueEvent"];
-export type IssueDetail = components["schemas"]["IssueDetailResponse"];
-export type PREvent = components["schemas"]["MergeRequestEventResponse"];
-export type PullDetail = components["schemas"]["MergeRequestDetailResponse"];
-export type SyncStatus = components["schemas"]["SyncStatus"];
-export type RateLimitHostStatus = components["schemas"]["RateLimitHostStatus"];
-export type RateLimitResourceStatus = components["schemas"]["RateLimitResourceStatus"];
-export type LocalSyncCeilingStatus = components["schemas"]["LocalSyncCeilingStatus"];
-export type RateLimitsResponse = components["schemas"]["RateLimitsResponse"];
-export type ActivityItem = components["schemas"]["ActivityItemResponse"];
-export type ActivityResponse = components["schemas"]["ActivityResponse"];
-export type ActivitySubject = components["schemas"]["ActivitySubjectResponse"];
-export type WorkspaceActivitySubject = components["schemas"]["WorkspaceActivitySubjectResponse"];
-export type ActivityAuthorsResponse = components["schemas"]["ActivityAuthorsResponse"];
-export type NotificationsResponse = components["schemas"]["NotificationsResponse"];
-export type NotificationBulkResponse = components["schemas"]["NotificationBulkResponse"];
-export type CommentAutocompleteResponse = components["schemas"]["CommentAutocompleteResponse"];
-export type CommentAutocompleteReference = components["schemas"]["CommentAutocompleteReference"];
-export type RepoBrowserBlob = components["schemas"]["RepoBrowserBlob"];
-export type RepoBrowserCommit = components["schemas"]["RepoBrowserCommit"];
-export type RepoBrowserRef = components["schemas"]["RepoBrowserRef"];
-export type RepoBrowserRefsResponse = components["schemas"]["RepoBrowserRefsResponse"];
-export type RepoBrowserTreeEntry = components["schemas"]["RepoBrowserTreeEntry"];
-export type ActivityParams = NonNullable<operations["list-activity"]["parameters"]["query"]>;
-export type ActivityAuthorsParams = NonNullable<operations["list-activity-authors"]["parameters"]["query"]>;
-export type PullsParams = operations["list-pulls"]["parameters"]["query"];
-export type IssuesParams = operations["list-issues"]["parameters"]["query"];
-export type ApprovePRInputBody = components["schemas"]["ApprovePRInputBody"];
-export type RequestChangesPRInputBody = components["schemas"]["RequestChangesPRInputBody"];
-export type MergeParams = components["schemas"]["MergePRInputBody"];
-export type EditPRContentInputBody = components["schemas"]["EditPRContentInputBody"];
-export type StarredRequest = components["schemas"]["StarredRequest"];
-export type UnsetStarredParams = operations["unset-starred"]["parameters"]["query"];
-export type GithubStateInputBody = components["schemas"]["GithubStateInputBody"];
+export type Repo = RepoResponse;
+export type RepoSummary = RepoSummaryResponse;
+export type RepoSummaryAuthor = RepoSummaryAuthorResponse;
+export type RepoSummaryIssue = RepoSummaryIssueResponse;
+export type RepoSummaryCommitPointResponse = GeneratedRepoSummaryCommitPointResponse;
+export type RepoSummaryReleaseResponse = GeneratedRepoSummaryReleaseResponse;
+export type PullRequest = MergeRequestResponse;
+export type ProviderCapabilities = ProviderCapabilitiesResponse;
+export type OperationAvailability = GeneratedOperationAvailability;
+export type RepoOperations = GeneratedRepoOperations;
+export type Issue = IssueResponse;
+export type IssueEvent = GeneratedIssueEvent;
+export type IssueDetail = IssueDetailResponse;
+export type PREvent = MergeRequestEventResponse;
+export type PullDetail = MergeRequestDetailResponse;
+export type SyncStatus = GeneratedSyncStatus;
+export type RateLimitHostStatus = GeneratedRateLimitHostStatus;
+export type RateLimitResourceStatus = GeneratedRateLimitResourceStatus;
+export type LocalSyncCeilingStatus = GeneratedLocalSyncCeilingStatus;
+export type RateLimitsResponse = GeneratedRateLimitsResponse;
+export type ActivityItem = ActivityItemResponse;
+export type ActivityResponse = GeneratedActivityResponse;
+export type ActivitySubject = ActivitySubjectResponse;
+export type WorkspaceActivitySubject = WorkspaceActivitySubjectResponse;
+export type ActivityAuthorsResponse = GeneratedActivityAuthorsResponse;
+export type NotificationsResponse = GeneratedNotificationsResponse;
+export type NotificationBulkResponse = GeneratedNotificationBulkResponse;
+export type CommentAutocompleteResponse = GeneratedCommentAutocompleteResponse;
+export type CommentAutocompleteReference = GeneratedCommentAutocompleteReference;
+export type RepoBrowserBlob = GeneratedRepoBrowserBlob;
+export type RepoBrowserCommit = GeneratedRepoBrowserCommit;
+export type RepoBrowserRef = GeneratedRepoBrowserRef;
+export type RepoBrowserRefsResponse = GeneratedRepoBrowserRefsResponse;
+export type RepoBrowserTreeEntry = GeneratedRepoBrowserTreeEntry;
+export type ActivityParams = ListActivityParams;
+export type ActivityAuthorsParams = ListActivityAuthorsParams;
+export type PullsParams = ListPullsParams;
+export type IssuesParams = ListIssuesParams;
+export type ApprovePRInputBody = GeneratedApprovePRInputBody;
+export type RequestChangesPRInputBody = GeneratedRequestChangesPRInputBody;
+export type MergeParams = MergePRInputBody;
+export type EditPRContentInputBody = GeneratedEditPRContentInputBody;
+export type StarredRequest = GeneratedStarredRequest;
+export type UnsetStarredParams = GeneratedUnsetStarredParams;
+export type GithubStateInputBody = GeneratedGithubStateInputBody;
 
-export type LaunchTarget = components["schemas"]["LaunchTarget"];
-export type RuntimeSession = components["schemas"]["SessionInfo"];
-export type WorkspaceRuntime = components["schemas"]["WorkspaceRuntimeResponse"];
+export type LaunchTarget = GeneratedLaunchTarget;
+export type RuntimeSession = SessionInfo;
+export type WorkspaceRuntime = WorkspaceRuntimeResponse;
 
-export type Label = components["schemas"]["Label"];
-export type RepoLabelsResponse = components["schemas"]["RepoLabelsResponse"];
-export type ItemLabelsResponse = components["schemas"]["ItemLabelsResponse"];
+export type Label = GeneratedLabel;
+export type RepoLabelsResponse = GeneratedRepoLabelsResponse;
+export type ItemLabelsResponse = GeneratedItemLabelsResponse;
 
 export type KanbanStatus = PullRequest["KanbanStatus"];
 
-export type CICheckWire = components["schemas"]["CICheck"];
+export type CICheckWire = GeneratedCICheck;
 export type CICheck = CICheckWire & { readonly required?: boolean };
 
-export type ActivitySettings = components["schemas"]["Activity"];
-export type IssueSettings = components["schemas"]["Issues"];
-export type PullRequestSettings = components["schemas"]["PullRequests"];
-export type DetailSettings = components["schemas"]["Detail"];
-export type TerminalSettings = components["schemas"]["Terminal"];
-export type ModeVisibility = components["schemas"]["ModeVisibility"];
+export type ActivitySettings = Activity;
+export type IssueSettings = Issues;
+export type PullRequestSettings = PullRequests;
+export type DetailSettings = Detail;
+export type TerminalSettings = Terminal;
+export type ModeVisibility = GeneratedModeVisibility;
 
 export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   font_family: "",
@@ -102,26 +177,26 @@ export const DEFAULT_DETAIL_SETTINGS: DetailSettings = {
   render_commit_messages_as_markdown: false,
 };
 
-export type AgentSettings = components["schemas"]["Agent"];
-export type ConfigRepo = components["schemas"]["ConfiguredRepoStatus"];
-export type RepoPreset = components["schemas"]["RepoPreset"];
-export type KataProjectRepoMapping = components["schemas"]["KataProjectRepoMapping"];
-export type WorkspaceKataMetadata = components["schemas"]["WorkspaceKataMetadata"];
-type SettingsResponse = components["schemas"]["SettingsResponse"];
+export type AgentSettings = Agent;
+export type ConfigRepo = ConfiguredRepoStatus;
+export type RepoPreset = GeneratedRepoPreset;
+export type KataProjectRepoMapping = GeneratedKataProjectRepoMapping;
+export type WorkspaceKataMetadata = GeneratedWorkspaceKataMetadata;
+type SettingsResponse = GeneratedSettingsResponse;
 export type Settings = Omit<SettingsResponse, "notifications"> & {
   notifications?: SettingsResponse["notifications"];
 };
-export type FleetSettings = components["schemas"]["FleetSettingsResponse"];
-export type FleetSettingsUpdate = components["schemas"]["UpdateFleetSettingsInputBody"];
-export type MCPSettings = components["schemas"]["McpSettingsResponse"];
-export type MCPSettingsUpdate = components["schemas"]["McpSettingsUpdate"];
+export type FleetSettings = FleetSettingsResponse;
+export type FleetSettingsUpdate = UpdateFleetSettingsInputBody;
+export type MCPSettings = McpSettingsResponse;
+export type MCPSettingsUpdate = McpSettingsUpdate;
 
-export type FilePreview = components["schemas"]["FilePreviewResponse"];
-export type DiffResponseWire = components["schemas"]["DiffResponse"];
-export type FilesResponseWire = components["schemas"]["FilesResponse"];
-export type DiffFileWire = components["schemas"]["DiffFile"];
-export type DiffHunkWire = components["schemas"]["Hunk"];
-export type DiffLineWire = components["schemas"]["Line"];
+export type FilePreview = FilePreviewResponse;
+export type DiffResponseWire = DiffResponse;
+export type FilesResponseWire = FilesResponse;
+export type DiffFileWire = GeneratedDiffFile;
+export type DiffHunkWire = Hunk;
+export type DiffLineWire = Line;
 
 export type DiffLine = Omit<DiffLineWire, "type"> & {
   type: "context" | "add" | "delete";

@@ -1,7 +1,7 @@
 import { Effect, Exit } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { createRuntimeClient } from "../api/runtime.js";
 import { makeTestAppRuntime } from "../testing/effect-layers.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
 import type { OwnedAppRuntime } from "./runtime.js";
 
 let runtime: OwnedAppRuntime | undefined;
@@ -13,7 +13,7 @@ describe("AppRuntime", () => {
   });
 
   it("exposes an owned command result to Promise-only integrations", async () => {
-    runtime = makeTestAppRuntime(createRuntimeClient(() => Promise.resolve(Response.json({}))));
+    runtime = makeTestAppRuntime(makeGeneratedClient());
     const execution = runtime.runCommand(Effect.succeed("accepted"), {
       operation: "test Promise integration",
       safeContext: {},
@@ -26,7 +26,7 @@ describe("AppRuntime", () => {
   });
 
   it("does not publish an interrupted microtask command", async () => {
-    runtime = makeTestAppRuntime(createRuntimeClient(() => Promise.resolve(Response.json({}))));
+    runtime = makeTestAppRuntime(makeGeneratedClient());
     let published = false;
     const execution = runtime.runMicrotask(
       () => {

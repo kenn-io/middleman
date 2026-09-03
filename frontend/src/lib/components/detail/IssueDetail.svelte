@@ -8,7 +8,7 @@
   import type { AppExecution } from "../../app/runtime.js";
   import { getAppRuntime } from "../../app/runtime-context.js";
   import { transientClipboardFeedback } from "../../browser/clipboard-feedback.js";
-  import { canonicalProvider, providerItemPath, providerRepoPath, providerRouteParams, resolvedPlatformHost } from "../../api/provider-routes.js";
+  import { canonicalProvider, providerItemPath, providerRepoPath, providerRouteParams, resolvedPlatformHost, providerHostRouteParams, providerUsesHostRoute } from "../../api/provider-routes.js";
   import type { IssueDetail, Label, ProviderCapabilities } from "../../api/types.js";
   import {
     getStores, getActions,
@@ -444,10 +444,7 @@
       yield* loadLabelCatalogWithRefresh({
         isActive: isCurrent,
         loadOnce: executeGeneratedApiRequest("GET issue label catalog", (client, signal) =>
-          client.GET(providerRepoPath(selectedRef, "/labels"), {
-            params: { path: providerRouteParams(selectedRef) },
-            signal,
-          }),
+          providerUsesHostRoute(selectedRef) ? client.RepositoriesService.listRepoLabelsOnHost({ ...providerHostRouteParams(selectedRef) }, { signal }) : client.RepositoriesService.listRepoLabels({ ...providerRouteParams(selectedRef) }, { signal }),
         ).pipe(
           Effect.map((data) => ({
             labels: data.labels ?? [],
@@ -534,13 +531,7 @@
 
   function loadUserCandidates(query: string) {
     return executeGeneratedApiRequest("GET issue user candidates", (client, signal) =>
-      client.GET(providerRepoPath(routeRef, "/comment-autocomplete"), {
-        params: {
-          path: providerRouteParams(routeRef),
-          query: { trigger: "@", q: query, limit: 25 },
-        },
-        signal,
-      }),
+      providerUsesHostRoute(routeRef) ? client.RepositoriesService.getCommentAutocompleteOnHost({ ...providerHostRouteParams(routeRef) }, { trigger: "@", q: query, limit: 25 }, { signal }) : client.RepositoriesService.getCommentAutocomplete({ ...providerRouteParams(routeRef) }, { trigger: "@", q: query, limit: 25 }, { signal }),
     ).pipe(
       retryIdempotentRead,
       Effect.map((data) => data.users ?? []),
@@ -834,16 +825,7 @@
       branchConflict.error = null;
     }
     const program = executeGeneratedApiRequest("POST issue workspace", (client, signal) =>
-      client.POST(providerItemPath("issues", selectedRef, "/workspace"), {
-          params: {
-            path: {
-              ...providerRouteParams(selectedRef),
-              number: requestIdentity.number,
-            },
-          },
-          body: requestBody,
-          signal,
-        }),
+      providerUsesHostRoute(selectedRef) ? client.IssuesService.createIssueWorkspaceOnHost({ ...providerHostRouteParams(selectedRef), number: requestIdentity.number }, requestBody, { signal }) : client.IssuesService.createIssueWorkspace({ ...providerRouteParams(selectedRef), number: requestIdentity.number }, requestBody, { signal }),
     ).pipe(
       Effect.flatMap((data) =>
         Effect.sync(() => {
@@ -1571,6 +1553,7 @@
             repoName={name}
             {repoPath}
             {number}
+            itemType="issue"
             activityViewMode={detailActivityView.getMode()}
             initialEntryLimit={settings.getDetailSettings().initial_timeline_entry_limit}
             itemIdentity={`${provider}:${platformHost ?? ""}:${repoPath}:${number}`}

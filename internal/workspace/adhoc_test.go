@@ -353,7 +353,7 @@ func TestConfigureFallbackBranchUpstreamIgnoresAdHocWorkspace(t *testing.T) {
 	)
 
 	err := configureFallbackBranchUpstream(
-		t.Context(), localRepo,
+		t.Context(), workspaceGitDir{path: localRepo, remote: originRemoteName},
 		&Workspace{
 			ItemType:     db.WorkspaceItemTypeAdHoc,
 			GitHeadRef:   headBranch,

@@ -509,13 +509,13 @@ test.describe("docs workspace", () => {
         backendCommitted.resolve(body);
         await releaseBrowserResponse.promise;
         await route.fulfill({
-          status: 500,
+          status: 502,
           contentType: "application/problem+json",
           body: JSON.stringify({
             title: "Docs publish failed",
-            status: 500,
+            status: 502,
             detail: "push failed: response unavailable",
-            code: "docs_git_error",
+            code: "upstreamError",
             details: { reason: "pushFailedAfterCommit", commit: body.commit },
           }),
         });
@@ -530,7 +530,7 @@ test.describe("docs workspace", () => {
         (response) =>
           response.request().method() === "POST" &&
           response.url().includes("/api/v1/docs/folders/publish/git/publish") &&
-          response.status() === 500,
+          response.status() === 502,
       );
       await dialog.getByRole("button", { name: "Commit & Push" }).click();
 

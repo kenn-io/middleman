@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, request as playwrightRequest, test, type APIRequestContext } from "@playwright/test";
-import type { components } from "../../src/lib/api/generated/schema";
+import type { SettingsResponse } from "../../src/lib/api/generated/models/index.js";
 import { startIsolatedE2EServer, type IsolatedE2EServer } from "./support/e2eServer";
 
 type RepoSummary = {
@@ -215,7 +215,7 @@ test("repository import reconciles a bulk add when the committed response is los
     if (!api) throw new Error("settings-globs API context not initialized");
     const response = await api.get("/api/v1/settings");
     expect(response.ok()).toBe(true);
-    const settings: components["schemas"]["SettingsResponse"] = await response.json();
+    const settings: SettingsResponse = await response.json();
     const imported = settings.repos
       .filter((repo) => repo.owner === "import-lab" && !repo.is_glob)
       .map((repo) => repo.name)
@@ -379,7 +379,7 @@ test("settings keeps a surviving promoted repository visible when rollback fails
   if (!api) throw new Error("settings-globs API context not initialized");
   const response = await api.get("/api/v1/settings");
   expect(response.ok()).toBe(true);
-  const settings: components["schemas"]["SettingsResponse"] = await response.json();
+  const settings: SettingsResponse = await response.json();
   expect(
     settings.repos.some((repo) => repo.owner === "roborev-dev" && repo.name === "kenn-forge" && !repo.is_glob),
   ).toBe(true);

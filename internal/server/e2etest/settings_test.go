@@ -700,6 +700,42 @@ func TestRepoConfigAPIE2EUpdatesWorktreeBasePath(t *testing.T) {
 	assert.Empty(cfgAfterClear.Repos[0].WorktreeBasePath)
 }
 
+func TestRepoConfigAPIE2EAcceptsForkStyleWorktreeBase(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	srv, _, cfgPath := setupTestServerWithConfig(t)
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	localRepo := setupSettingsLocalGitRepoForDefaultHost(t)
+	runSettingsGit(t, localRepo, "remote", "rename", "origin", "upstream")
+	runSettingsGit(
+		t, localRepo, "remote", "add", "origin",
+		"https://github.com/forker/widget.git",
+	)
+
+	updateResp := doServerJSON(
+		t, ts.Client(), http.MethodPut,
+		ts.URL+"/api/v1/repo/github/acme/widget/worktree-base",
+		generated.RepoWorktreeBaseRequest{WorktreeBasePath: localRepo},
+	)
+	defer updateResp.Body.Close()
+	require.Equal(http.StatusOK, updateResp.StatusCode)
+
+	var updated generated.SettingsResponse
+	require.NoError(json.NewDecoder(updateResp.Body).Decode(&updated))
+	require.Len(updated.Repos, 1)
+	require.NotNil(updated.Repos[0].WorktreeBasePath)
+	canonicalLocalRepo, err := filepath.EvalSymlinks(localRepo)
+	require.NoError(err)
+	assert.Equal(canonicalLocalRepo, *updated.Repos[0].WorktreeBasePath)
+
+	cfgAfterUpdate, err := config.Load(cfgPath)
+	require.NoError(err)
+	require.Len(cfgAfterUpdate.Repos, 1)
+	assert.Equal(canonicalLocalRepo, cfgAfterUpdate.Repos[0].WorktreeBasePath)
+}
+
 func TestRepoConfigAPIE2EUpdatesUIVisibility(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)

@@ -7791,6 +7791,22 @@ func TestClientForRepoMatchesCaseInsensitively(t *testing.T) {
 	require.Same(mc, client)
 }
 
+func TestDirectClientForHostReportsMissingProvider(t *testing.T) {
+	require := require.New(t)
+	syncer := NewSyncer(nil, openTestDB(t), nil, nil, time.Minute, nil, nil)
+	t.Cleanup(syncer.Stop)
+
+	client, err := syncer.DirectClientForHost("github.com")
+	require.Nil(client)
+	require.ErrorIs(err, platform.ErrProviderNotConfigured)
+
+	var platformErr *platform.Error
+	require.ErrorAs(err, &platformErr)
+	require.Equal(platform.ErrCodeProviderNotConfigured, platformErr.Code)
+	require.Equal(platform.KindGitHub, platformErr.Provider)
+	require.Equal("github.com", platformErr.PlatformHost)
+}
+
 func TestSyncerClientLookupReportsMissingProvider(t *testing.T) {
 	require := require.New(t)
 	syncer := NewSyncer(nil, openTestDB(t), nil, []RepoRef{{
@@ -23391,6 +23407,15 @@ func TestWithObsoleteMetadata(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWithCommitOrderMetadataPreservesCommitAuthor(t *testing.T) {
+	withOrder := withCommitOrderMetadata(`{"commit_author":"original-author"}`, 2, 4)
+	assert.JSONEq(t, `{"commit_author":"original-author","commit_order":2,"commit_order_key":4}`, withOrder)
+
+	withObsolete, changed := withObsoleteMetadata(withOrder, true)
+	assert.True(t, changed)
+	assert.JSONEq(t, `{"commit_author":"original-author","commit_order":2,"commit_order_key":4,"obsolete":true}`, withObsolete)
 }
 
 // TestSyncRepoDropsStaleSettingsSnapshotBehindNewerObservation simulates a

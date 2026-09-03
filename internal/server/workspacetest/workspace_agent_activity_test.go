@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/apiclient/generated"
 	"go.kenn.io/forge/internal/config"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 )
 
 func TestWorkspaceAgentActivityFlowsThroughHTTPResponsesE2E(t *testing.T) {
@@ -74,10 +75,10 @@ func TestWorkspaceAgentActivityFlowsThroughHTTPResponsesE2E(t *testing.T) {
 	require.Equal(http.StatusOK, sessionsResponse.StatusCode(), string(sessionsResponse.Body))
 	require.NotNil(sessionsResponse.JSON200)
 	require.NotNil(sessionsResponse.JSON200.Sessions)
-	require.Len(*sessionsResponse.JSON200.Sessions, 1)
-	assert.Equal("codex", (*sessionsResponse.JSON200.Sessions)[0].Agent)
-	assert.Equal("live-agent", (*sessionsResponse.JSON200.Sessions)[0].SessionId)
-	assert.Equal(launch.JSON200.Key, (*sessionsResponse.JSON200.Sessions)[0].RuntimeSessionKey)
+	require.Len(sessionsResponse.JSON200.Sessions, 1)
+	assert.Equal("codex", sessionsResponse.JSON200.Sessions[0].Agent)
+	assert.Equal("live-agent", sessionsResponse.JSON200.Sessions[0].SessionId)
+	assert.Equal(launch.JSON200.Key, sessionsResponse.JSON200.Sessions[0].RuntimeSessionKey)
 
 	messageResponse, err := fixture.client.HTTP.SubmitWorkspaceRuntimeSessionInitialMessageWithResponse(
 		ctx, ws.Id, launch.JSON200.Key,
@@ -100,8 +101,8 @@ func TestWorkspaceAgentActivityFlowsThroughHTTPResponsesE2E(t *testing.T) {
 	require.Equal(http.StatusOK, sessionsResponse.StatusCode(), string(sessionsResponse.Body))
 	require.NotNil(sessionsResponse.JSON200)
 	require.NotNil(sessionsResponse.JSON200.Sessions)
-	require.Len(*sessionsResponse.JSON200.Sessions, 1)
-	assert.Nil((*sessionsResponse.JSON200.Sessions)[0].InitialMessage)
+	require.Len(sessionsResponse.JSON200.Sessions, 1)
+	assert.Nil(sessionsResponse.JSON200.Sessions[0].InitialMessage)
 
 	getResponse, err := fixture.client.HTTP.GetWorkspaceWithResponse(ctx, ws.Id)
 	require.NoError(err)
@@ -115,10 +116,10 @@ func TestWorkspaceAgentActivityFlowsThroughHTTPResponsesE2E(t *testing.T) {
 	require.NoError(os.WriteFile(
 		filepath.Join(ws.WorktreePath, "activity.txt"), []byte("activity\n"), 0o644,
 	))
-	runGit(t, ws.WorktreePath, "config", "user.email", "agent-activity@example.invalid")
-	runGit(t, ws.WorktreePath, "config", "user.name", "Agent Activity Fixture")
-	runGit(t, ws.WorktreePath, "add", "activity.txt")
-	runGit(t, ws.WorktreePath, "commit", "-m", "add activity fixture")
+	gitfixture.Run(t, ws.WorktreePath, "config", "user.email", "agent-activity@example.invalid")
+	gitfixture.Run(t, ws.WorktreePath, "config", "user.name", "Agent Activity Fixture")
+	gitfixture.Run(t, ws.WorktreePath, "add", "activity.txt")
+	gitfixture.Run(t, ws.WorktreePath, "commit", "-m", "add activity fixture")
 	pushResponse, err := fixture.client.HTTP.PushWorkspaceBranchWithResponse(ctx, ws.Id)
 	require.NoError(err)
 	require.Equal(http.StatusOK, pushResponse.StatusCode(), string(pushResponse.Body))
@@ -144,7 +145,7 @@ func TestWorkspaceAgentActivityFlowsThroughHTTPResponsesE2E(t *testing.T) {
 	require.Equal(http.StatusOK, sessionsResponse.StatusCode(), string(sessionsResponse.Body))
 	require.NotNil(sessionsResponse.JSON200)
 	require.NotNil(sessionsResponse.JSON200.Sessions)
-	assert.Empty(*sessionsResponse.JSON200.Sessions)
+	assert.Empty(sessionsResponse.JSON200.Sessions)
 
 	getResponse, err = fixture.client.HTTP.GetWorkspaceWithResponse(ctx, ws.Id)
 	require.NoError(err)

@@ -220,7 +220,11 @@ async function mockStackedPR(
     const method = route.request().method();
 
     if (method === "GET" && pathname === "/api/v1/pulls") {
-      await fulfillJson(route, [pr]);
+      const currentStackMembers = options.stackMembers?.() ?? stackMembers;
+      const position = currentStackMembers.findIndex((member) => member.number === pr.Number) + 1;
+      const stack =
+        position > 0 && currentStackMembers.length > 1 ? { position, size: currentStackMembers.length } : undefined;
+      await fulfillJson(route, [{ ...pr, stack }]);
       return;
     }
 
@@ -447,6 +451,11 @@ test("stack status shares the PR detail expandable slot with CI", async ({ page 
 
   await page.goto("/pulls/github/acme/widgets/102");
 
+  const listStackIndicator = page.locator(".pull-item").getByLabel("Stacked: 2/7");
+  await expect(listStackIndicator).toHaveText("2/7");
+  await expect(page.getByTestId("stack-chip")).toContainText("2/7");
+  await expect(page.getByTestId("stack-chip")).not.toContainText("Stacked");
+
   await page.getByTestId("ci-chip").click();
   await expect(page.getByText("frontend / vp check")).toBeVisible();
 
@@ -537,13 +546,39 @@ test("stack status follows refreshed detail stack data", async ({ page }) => {
   ];
   await emitPRDetailRefreshed(page, 102);
 
-  await expect(page.getByRole("button", { name: /Stacked: 2\/2/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Stacked: 2\/7/i })).toHaveCount(0);
+  // Scope to the chip: the sidebar row button also exposes "Stacked: n/m"
+  // through its accessible name, so a page-wide role query would match it.
+  await expect(page.getByTestId("stack-chip")).toHaveAccessibleName(/Stacked: 2\/2/i);
 
   currentStackMembers = [];
   await emitPRDetailRefreshed(page, 102);
 
   await expect(page.getByTestId("stack-chip")).toHaveCount(0);
+});
+
+test("phone pull rows fit the stack indicator beside the other indicators", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockStackedPR(page);
+
+  await page.goto("/m/pulls");
+  const row = page.locator(".mobile-shell .pull-item").first();
+  const indicator = row.getByLabel("Stacked: 2/7");
+  await expect(indicator).toHaveText("2/7");
+  // The fixture also renders the approved review, CI cluster, and time
+  // indicators, so the row exercises the full trailing cluster.
+  await expect(row.locator(".review-indicator--approved")).toBeVisible();
+  await expect(row.locator(".ci")).toBeVisible();
+
+  const rowBox = await row.boundingBox();
+  const indicatorBox = await indicator.boundingBox();
+  expect(rowBox).not.toBeNull();
+  expect(indicatorBox).not.toBeNull();
+  if (rowBox && indicatorBox) {
+    expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(390);
+    expect(indicatorBox.x).toBeGreaterThanOrEqual(rowBox.x);
+    expect(indicatorBox.x + indicatorBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
 test("stack status stays rendered while navigating to a stack member", async ({ page }) => {

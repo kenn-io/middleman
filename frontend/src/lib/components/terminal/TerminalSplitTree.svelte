@@ -1,7 +1,12 @@
 <script lang="ts">
   import { Effect } from "effect";
   import { untrack } from "svelte";
-  import { SplitResizeHandle, type SplitResizeEvent } from "@kenn-io/kit-ui";
+  import {
+    HarnessIcon,
+    SplitResizeHandle,
+    type HarnessIconId,
+    type SplitResizeEvent,
+  } from "@kenn-io/kit-ui";
   import { clearActiveTabbedPanelDrag, startTabbedPanelTabDrag } from "../shared/tabbed-panel-drag.js";
   import type { RuntimeSession } from "../../api/types.js";
   import XIcon from "@lucide/svelte/icons/x";
@@ -31,6 +36,7 @@
     beginTerminalGeometryIntent,
     extendTerminalGeometryIntent,
   } from "./terminalGeometryIntent.js";
+  import { launchTargetHarness } from "./agentHarness";
 
   const runtime = getAppRuntime();
 
@@ -122,6 +128,10 @@
 
   function labelFor(session: RuntimeSession): string {
     return displayLabels[session.key] ?? session.label;
+  }
+
+  function sessionHarness(session: RuntimeSession): HarnessIconId | null {
+    return launchTargetHarness({ kind: session.kind, key: session.target_key });
   }
 
   function startSessionDrag(
@@ -319,6 +329,7 @@
     ]}
   >
     {#if session}
+      {@const harness = sessionHarness(session)}
       {#if sessions.length > 1}
         <div
           class="leaf-header"
@@ -343,6 +354,8 @@
             <span class="leaf-icon" aria-hidden="true">
               {#if session.kind === "plain_shell"}
                 <TerminalIcon size="12" strokeWidth="2" />
+              {:else if harness}
+                <HarnessIcon {harness} size={12} decorative />
               {:else}
                 <SparklesIcon size="12" strokeWidth="2" />
               {/if}

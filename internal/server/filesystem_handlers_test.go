@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 )
 
 // TestFilesystemComplete covers GET /api/v1/filesystem/complete: directory
@@ -76,10 +77,10 @@ func TestFilesystemValidateRepo(t *testing.T) {
 
 	repo := filepath.Join(t.TempDir(), "repo")
 	require.NoError(os.MkdirAll(repo, 0o755))
-	runGit(t, repo, "init", "--initial-branch=main")
-	runGit(t, repo, "config", "user.email", "test@example.com")
-	runGit(t, repo, "config", "user.name", "Test User")
-	runGit(t, repo, "commit", "--allow-empty", "-m", "initial")
+	gitfixture.Run(t, repo, "init", "--initial-branch=main")
+	gitfixture.Run(t, repo, "config", "user.email", "test@example.com")
+	gitfixture.Run(t, repo, "config", "user.name", "Test User")
+	gitfixture.Run(t, repo, "commit", "--allow-empty", "-m", "initial")
 	require.NoError(os.MkdirAll(filepath.Join(repo, "subdir"), 0o755))
 
 	decode := func(path string) (bool, string, string) {

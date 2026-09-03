@@ -125,4 +125,26 @@ describe("DiffReviewThreadInlineComment", () => {
 
     expect(screen.getByText("Published review note")).toBeTruthy();
   });
+
+  it.each([
+    ["inline", null],
+    ["file", "File"],
+    ["outdated", "Outdated"],
+    ["unavailable", "Line unavailable"],
+  ] as const)("presents the %s review placement", (placement, label) => {
+    render(DiffReviewThreadInlineComment, {
+      props: {
+        thread: makeReviewThread(),
+        placement,
+      },
+    });
+
+    if (label) {
+      expect(screen.getByText(label)).toBeTruthy();
+    } else {
+      expect(screen.queryByText("File")).toBeNull();
+      expect(screen.queryByText("Outdated")).toBeNull();
+      expect(screen.queryByText("Line unavailable")).toBeNull();
+    }
+  });
 });

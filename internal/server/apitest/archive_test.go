@@ -57,7 +57,7 @@ func TestAPIArchiveStartPauseStatusAndReport(t *testing.T) {
 	assert.Equal("github.test", (*started.JSON200)[0].Repository.PlatformHost)
 	assert.Equal([]generated.ArchiveStatusResponseActivePhases{
 		generated.IssueInventory, generated.MergeRequestInventory,
-	}, *(*started.JSON200)[0].ActivePhases)
+	}, (*started.JSON200)[0].ActivePhases)
 	assert.Equal(generated.ArchiveCoverageResponseCommentsSupported, (*started.JSON200)[0].Coverage.Comments)
 	assert.NotNil((*started.JSON200)[0].InitialStartedAt)
 	assert.Equal(int32(1), wakeCount.Load())
@@ -120,11 +120,11 @@ func TestAPIArchiveStartPauseStatusAndReport(t *testing.T) {
 	assert.Equal(int64(1), reportResponse.JSON200.Totals.IssuesClosed)
 	assert.Equal(int64(1), reportResponse.JSON200.Totals.MergeRequestsMerged)
 	require.NotNil(reportResponse.JSON200.Repositories)
-	require.Len(*reportResponse.JSON200.Repositories, 1)
+	require.Len(reportResponse.JSON200.Repositories, 1)
 	assert.Equal(generated.ArchiveReportCoverageResponseIssuesSupported,
-		(*reportResponse.JSON200.Repositories)[0].Coverage.Issues)
+		reportResponse.JSON200.Repositories[0].Coverage.Issues)
 	assert.Equal(generated.ArchiveReportCoverageResponseMergeRequestsSupported,
-		(*reportResponse.JSON200.Repositories)[0].Coverage.MergeRequests)
+		reportResponse.JSON200.Repositories[0].Coverage.MergeRequests)
 	require.NotNil(reportResponse.JSON200.Activity)
 	require.Len(*reportResponse.JSON200.Activity, 3)
 	assert.Equal("issue-7", (*reportResponse.JSON200.Activity)[0].ProviderExternalId)

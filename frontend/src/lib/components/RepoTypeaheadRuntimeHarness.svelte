@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Effect } from "effect";
   import { onDestroy, untrack, type ComponentProps } from "svelte";
+  import * as client from "../api/generated/index.js";
   import { setAppRuntime } from "../app/runtime-context.js";
-  import { client } from "../api/runtime.js";
   import { makeTestAppRuntime } from "../testing/effect-layers.js";
   import RepoTypeahead from "./RepoTypeahead.svelte";
 

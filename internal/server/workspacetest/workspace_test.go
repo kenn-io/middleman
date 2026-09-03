@@ -22,6 +22,7 @@ import (
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/procutil"
 	"go.kenn.io/forge/internal/server"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 	"go.kenn.io/forge/internal/workspace/localruntime"
 )
 
@@ -66,12 +67,12 @@ func TestWorkspaceRuntimeTargetsE2E(t *testing.T) {
 	require.NotNil(resp.JSON200)
 	require.NotNil(resp.JSON200.LaunchTargets)
 	require.NotNil(resp.JSON200.Sessions)
-	assert.NotEmpty(*resp.JSON200.LaunchTargets)
-	assert.Empty(*resp.JSON200.Sessions)
+	assert.NotEmpty(resp.JSON200.LaunchTargets)
+	assert.Empty(resp.JSON200.Sessions)
 	assertWorkspaceRuntimeTarget(
-		t, *resp.JSON200.LaunchTargets, "plain_shell",
+		t, resp.JSON200.LaunchTargets, "plain_shell",
 	)
-	assertWorkspaceRuntimeTargetAbsent(t, *resp.JSON200.LaunchTargets, "shell")
+	assertWorkspaceRuntimeTargetAbsent(t, resp.JSON200.LaunchTargets, "shell")
 }
 
 func TestWorkspaceRuntimeClaimFailureClosesBeforeFollowingInputE2E(t *testing.T) {
@@ -173,7 +174,7 @@ func TestWorkspaceRuntimeTargetsHideInternalShellTargetE2E(t *testing.T) {
 	require.NotNil(resp.JSON200.LaunchTargets)
 
 	foundPlainShell := false
-	for _, target := range *resp.JSON200.LaunchTargets {
+	for _, target := range resp.JSON200.LaunchTargets {
 		if target.Key == string(localruntime.LaunchTargetShell) {
 			require.Fail("internal shell target should not be exposed")
 		}
@@ -236,9 +237,9 @@ func TestWorkspaceRuntimeLaunchPlainShellCreatesRuntimeSessionE2E(t *testing.T) 
 	require.Equal(http.StatusOK, getResp.StatusCode())
 	require.NotNil(getResp.JSON200)
 	require.NotNil(getResp.JSON200.Sessions)
-	require.Len(*getResp.JSON200.Sessions, 1)
-	assert.Equal(shell.Key, (*getResp.JSON200.Sessions)[0].Key)
-	assert.Equal("terminal", (*getResp.JSON200.Sessions)[0].DisplayRegion)
+	require.Len(getResp.JSON200.Sessions, 1)
+	assert.Equal(shell.Key, getResp.JSON200.Sessions[0].Key)
+	assert.Equal("terminal", getResp.JSON200.Sessions[0].DisplayRegion)
 }
 
 func TestWorkspaceRuntimeAttachSpecUsesStoredTmuxSessionE2E(t *testing.T) {
@@ -316,24 +317,24 @@ func TestWorkspaceCommitsFlagsUnpushedCommitsE2E(t *testing.T) {
 	// Commit locally without pushing. A brand-new commit is unpushed no matter
 	// how the worktree tracks its upstream, so the commits endpoint must flag
 	// it - this proves the push status reaches the wire for a real workspace.
-	runGit(t, ws.WorktreePath, "config", "user.email", "ws@test.com")
-	runGit(t, ws.WorktreePath, "config", "user.name", "Workspace")
+	gitfixture.Run(t, ws.WorktreePath, "config", "user.email", "ws@test.com")
+	gitfixture.Run(t, ws.WorktreePath, "config", "user.name", "Workspace")
 	require.NoError(os.WriteFile(
 		filepath.Join(ws.WorktreePath, "local-only.txt"),
 		[]byte("local\n"), 0o644,
 	))
-	runGit(t, ws.WorktreePath, "add", ".")
-	runGit(t, ws.WorktreePath, "commit", "-m", "local only commit")
-	localSHA := testGitSHA(t, ws.WorktreePath, "HEAD")
+	gitfixture.Run(t, ws.WorktreePath, "add", ".")
+	gitfixture.Run(t, ws.WorktreePath, "commit", "-m", "local only commit")
+	localSHA := gitfixture.SHA(t, ws.WorktreePath, "HEAD")
 
 	resp, err := fixture.client.HTTP.GetWorkspaceCommitsWithResponse(ctx, ws.Id)
 	require.NoError(err)
 	require.Equal(http.StatusOK, resp.StatusCode())
 	require.NotNil(resp.JSON200)
 	require.NotNil(resp.JSON200.Commits)
-	require.NotEmpty(*resp.JSON200.Commits)
+	require.NotEmpty(resp.JSON200.Commits)
 
-	top := (*resp.JSON200.Commits)[0]
+	top := resp.JSON200.Commits[0]
 	assert.Equal(localSHA, top.Sha, "newest commit should be the local-only commit")
 	require.NotNil(top.Pushed, "workspace commits should carry push status")
 	assert.False(*top.Pushed, "freshly committed local commit must be unpushed")
@@ -350,7 +351,7 @@ func TestWorkspaceCommitsOmitsPushStatusWithoutUpstreamE2E(t *testing.T) {
 	// untracked, so provider reconciliation cannot add a base-repository
 	// upstream while this request runs.
 	forkURL := "https://github.com/fork/widget.git"
-	runGit(t, fixture.bare, "config", "--add", "url."+fixture.remote+".insteadOf", forkURL)
+	gitfixture.Run(t, fixture.bare, "config", "--add", "url."+fixture.remote+".insteadOf", forkURL)
 	seedPRWithHeadRepo(t, fixture.database, "github.com", "acme", "widget", 2, forkURL)
 	createResp, err := fixture.client.HTTP.CreateWorkspaceWithResponse(
 		ctx, generated.CreateWorkspaceInputBody{
@@ -369,9 +370,9 @@ func TestWorkspaceCommitsOmitsPushStatusWithoutUpstreamE2E(t *testing.T) {
 	require.Equal(http.StatusOK, resp.StatusCode())
 	require.NotNil(resp.JSON200)
 	require.NotNil(resp.JSON200.Commits)
-	require.NotEmpty(*resp.JSON200.Commits)
+	require.NotEmpty(resp.JSON200.Commits)
 
-	for _, c := range *resp.JSON200.Commits {
+	for _, c := range resp.JSON200.Commits {
 		assert.Nil(c.Pushed,
 			"push status must be omitted when the branch has no upstream")
 	}

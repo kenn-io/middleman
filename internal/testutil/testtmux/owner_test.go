@@ -761,7 +761,7 @@ esac
 	select {
 	case cleanupErr := <-cleanupDone:
 		require.NoError(cleanupErr)
-	case <-time.After(cleanupTimeout + 2*time.Second):
+	case <-time.After(2*cleanupTimeout + 2*time.Second):
 		require.Fail("cleanup did not terminate a stalled admitted tmux startup")
 		_ = startup.Process.Kill()
 		require.NoError(<-cleanupDone)

@@ -13,82 +13,32 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/config"
-	"go.kenn.io/forge/internal/procutil"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 	"go.kenn.io/forge/internal/testutil/gitsafe"
 )
 
 type gitRepo struct {
-	dir      string
-	remote   string
+	*gitfixture.Repository
 	registry *Registry
 	folderID string
 }
 
 func newGitRepo(t *testing.T) *gitRepo {
 	t.Helper()
-	if err := procutil.Command("git", "--version").Run(); err != nil {
-		t.Skip("git binary unavailable")
-	}
-	dir := t.TempDir()
-	remote := t.TempDir()
-	runGit(t, dir, "init", "-b", "main")
-	runGit(t, dir, "config", "user.email", "kenn-forge-fixture@example.invalid")
-	runGit(t, dir, "config", "user.name", "Kenn Forge Fixture")
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "seed.md"), []byte("seed\n"), 0o644))
-	runGit(t, dir, "add", "seed.md")
-	runGit(t, dir, "commit", "-m", "seed")
-	runGit(t, remote, "init", "--bare")
-	runGit(t, dir, "remote", "add", "origin", remote)
-	runGit(t, dir, "push", "-u", "origin", "main")
+	repo := gitfixture.NewRepository(t, true)
 	reg := NewRegistry([]config.DocFolder{
-		{ID: "f", Name: "F", Path: dir},
+		{ID: "f", Name: "F", Path: repo.Dir},
 	}, WithGitRunner(gitsafe.Runner()))
-	return &gitRepo{dir: dir, remote: remote, registry: reg, folderID: "f"}
+	return &gitRepo{Repository: repo, registry: reg, folderID: "f"}
 }
 
 func newGitRepoNoUpstream(t *testing.T) *gitRepo {
 	t.Helper()
-	if err := procutil.Command("git", "--version").Run(); err != nil {
-		t.Skip("git binary unavailable")
-	}
-	dir := t.TempDir()
-	runGit(t, dir, "init", "-b", "main")
-	runGit(t, dir, "config", "user.email", "kenn-forge-fixture@example.invalid")
-	runGit(t, dir, "config", "user.name", "Kenn Forge Fixture")
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "seed.md"), []byte("seed\n"), 0o644))
-	runGit(t, dir, "add", "seed.md")
-	runGit(t, dir, "commit", "-m", "seed")
+	repo := gitfixture.NewRepository(t, false)
 	reg := NewRegistry([]config.DocFolder{
-		{ID: "f", Name: "F", Path: dir},
+		{ID: "f", Name: "F", Path: repo.Dir},
 	}, WithGitRunner(gitsafe.Runner()))
-	return &gitRepo{dir: dir, registry: reg, folderID: "f"}
-}
-
-func (g *gitRepo) writeFile(t *testing.T, rel, body string) {
-	t.Helper()
-	full := filepath.Join(g.dir, filepath.FromSlash(rel))
-	require.NoError(t, os.MkdirAll(filepath.Dir(full), 0o755))
-	require.NoError(t, os.WriteFile(full, []byte(body), 0o644))
-}
-
-func (g *gitRepo) stage(t *testing.T, paths ...string) {
-	t.Helper()
-	args := append([]string{"add", "--"}, paths...)
-	runGit(t, g.dir, args...)
-}
-
-func runGit(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	cmd := procutil.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "git %s: %s", strings.Join(args, " "), string(out))
-	return string(out)
-}
-
-func gitOutput(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	return strings.TrimSpace(runGit(t, dir, args...))
+	return &gitRepo{Repository: repo, registry: reg, folderID: "f"}
 }
 
 func TestIntegrationGitChangesNotARepo(t *testing.T) {
@@ -125,9 +75,9 @@ func TestIntegrationGitChangesIncludesUntrackedAndModifiedMarkdown(t *testing.T)
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
-	g.writeFile(t, "seed.md", "seed updated\n")
-	g.writeFile(t, "code.go", "package x\n")
+	g.Write(t, "new.md", "# new\n")
+	g.Write(t, "seed.md", "seed updated\n")
+	g.Write(t, "code.go", "package x\n")
 
 	res, err := g.registry.GitChanges(context.Background(), g.folderID)
 
@@ -158,8 +108,8 @@ func TestIntegrationGitPublishHappyPath(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
-	g.writeFile(t, "seed.md", "seed updated\n")
+	g.Write(t, "new.md", "# new\n")
+	g.Write(t, "seed.md", "seed updated\n")
 
 	res, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: update 2 files\n\n- new.md\n- seed.md\n")
 
@@ -171,7 +121,7 @@ func TestIntegrationGitPublishHappyPath(t *testing.T) {
 	assert.Equal("origin/main", res.Upstream)
 	assert.True(res.Pushed)
 	assert.Len(res.Files, 2)
-	head := gitOutput(t, g.remote, "rev-parse", "main")
+	head := strings.TrimSpace(string(gitfixture.Run(t, g.Remote, "rev-parse", "main")))
 	assert.Equal(res.Commit, head)
 }
 
@@ -180,26 +130,26 @@ func TestIntegrationGitPublishPushesConfiguredUpstreamDespitePushDefaults(t *tes
 	require := require.New(t)
 	g := newGitRepo(t)
 	backup := t.TempDir()
-	runGit(t, backup, "init", "--bare")
-	runGit(t, g.dir, "remote", "add", "backup", backup)
-	runGit(t, g.dir, "push", "backup", "main:main")
-	backupInitial := gitOutput(t, backup, "rev-parse", "main")
-	runGit(t, g.dir, "config", "remote.pushDefault", "backup")
-	runGit(t, g.dir, "config", "push.default", "current")
-	g.writeFile(t, "new.md", "# new\n")
+	gitfixture.Run(t, backup, "init", "--bare")
+	gitfixture.Run(t, g.Dir, "remote", "add", "backup", backup)
+	gitfixture.Run(t, g.Dir, "push", "backup", "main:main")
+	backupInitial := strings.TrimSpace(string(gitfixture.Run(t, backup, "rev-parse", "main")))
+	gitfixture.Run(t, g.Dir, "config", "remote.pushDefault", "backup")
+	gitfixture.Run(t, g.Dir, "config", "push.default", "current")
+	g.Write(t, "new.md", "# new\n")
 
 	res, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: explicit upstream")
 
 	require.NoError(err)
-	originHead := gitOutput(t, g.remote, "rev-parse", "main")
+	originHead := strings.TrimSpace(string(gitfixture.Run(t, g.Remote, "rev-parse", "main")))
 	assert.Equal(res.Commit, originHead)
-	backupHead := gitOutput(t, backup, "rev-parse", "main")
+	backupHead := strings.TrimSpace(string(gitfixture.Run(t, backup, "rev-parse", "main")))
 	assert.Equal(backupInitial, backupHead)
 }
 
 func TestIntegrationGitPublishRefusesEmptyMessage(t *testing.T) {
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "   \n\t")
 
@@ -208,7 +158,7 @@ func TestIntegrationGitPublishRefusesEmptyMessage(t *testing.T) {
 
 func TestIntegrationGitPublishRefusesNoMarkdownChanges(t *testing.T) {
 	g := newGitRepo(t)
-	g.writeFile(t, "code.go", "package x\n")
+	g.Write(t, "code.go", "package x\n")
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: nothing")
 
@@ -226,9 +176,9 @@ func TestIntegrationGitPublishRefusesNotARepo(t *testing.T) {
 
 func TestIntegrationGitPublishRefusesIndexNotCleanUnrelatedStaged(t *testing.T) {
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
-	g.writeFile(t, "code.go", "package x\n")
-	g.stage(t, "code.go")
+	g.Write(t, "new.md", "# new\n")
+	g.Write(t, "code.go", "package x\n")
+	g.Stage(t, "code.go")
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -237,9 +187,9 @@ func TestIntegrationGitPublishRefusesIndexNotCleanUnrelatedStaged(t *testing.T) 
 
 func TestIntegrationGitPublishRefusesIndexNotCleanPartiallyStaged(t *testing.T) {
 	g := newGitRepo(t)
-	g.writeFile(t, "partial.md", "v1\n")
-	g.stage(t, "partial.md")
-	g.writeFile(t, "partial.md", "v2\n")
+	g.Write(t, "partial.md", "v1\n")
+	g.Stage(t, "partial.md")
+	g.Write(t, "partial.md", "v2\n")
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -248,15 +198,13 @@ func TestIntegrationGitPublishRefusesIndexNotCleanPartiallyStaged(t *testing.T) 
 
 func TestIntegrationGitPublishRefusesConflict(t *testing.T) {
 	g := newGitRepo(t)
-	runGit(t, g.dir, "checkout", "-b", "side")
-	g.writeFile(t, "seed.md", "side version\n")
-	runGit(t, g.dir, "commit", "-am", "side")
-	runGit(t, g.dir, "checkout", "main")
-	g.writeFile(t, "seed.md", "main version\n")
-	runGit(t, g.dir, "commit", "-am", "main")
-	cmd := procutil.Command("git", "merge", "side")
-	cmd.Dir = g.dir
-	out, mergeErr := cmd.CombinedOutput()
+	gitfixture.Run(t, g.Dir, "checkout", "-b", "side")
+	g.Write(t, "seed.md", "side version\n")
+	gitfixture.Run(t, g.Dir, "commit", "-am", "side")
+	gitfixture.Run(t, g.Dir, "checkout", "main")
+	g.Write(t, "seed.md", "main version\n")
+	gitfixture.Run(t, g.Dir, "commit", "-am", "main")
+	out, _, mergeErr := gitsafe.Runner().Run(t.Context(), g.Dir, nil, "merge", "side")
 	require.Error(t, mergeErr, "expected merge conflict, got clean merge: %s", out)
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
@@ -268,7 +216,7 @@ func TestIntegrationGitPublishRefusesNoUpstream(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepoNoUpstream(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -282,12 +230,12 @@ func TestIntegrationGitPublishStagesRenamePair(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	runGit(t, g.dir, "mv", "seed.md", "renamed.md")
+	gitfixture.Run(t, g.Dir, "mv", "seed.md", "renamed.md")
 
 	res, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: rename")
 
 	require.NoError(err)
-	out := gitOutput(t, g.dir, "ls-tree", "--name-only", res.Commit)
+	out := strings.TrimSpace(string(gitfixture.Run(t, g.Dir, "ls-tree", "--name-only", res.Commit)))
 	assert.NotContains(out, "seed.md")
 	assert.Contains(out, "renamed.md")
 }
@@ -296,15 +244,15 @@ func TestIntegrationGitPublishStagesWorktreeRename(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	require.NoError(os.Rename(filepath.Join(g.dir, "seed.md"), filepath.Join(g.dir, "moved.md")))
+	require.NoError(os.Rename(filepath.Join(g.Dir, "seed.md"), filepath.Join(g.Dir, "moved.md")))
 
 	res, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: rename in worktree")
 
 	require.NoError(err)
-	out := gitOutput(t, g.dir, "ls-tree", "--name-only", res.Commit)
+	out := strings.TrimSpace(string(gitfixture.Run(t, g.Dir, "ls-tree", "--name-only", res.Commit)))
 	assert.NotContains(out, "seed.md")
 	assert.Contains(out, "moved.md")
-	renames := gitOutput(t, g.dir, "show", "--name-status", "-M", "--format=", res.Commit)
+	renames := strings.TrimSpace(string(gitfixture.Run(t, g.Dir, "show", "--name-status", "-M", "--format=", res.Commit)))
 	assert.Contains(renames, "R")
 }
 
@@ -312,8 +260,8 @@ func TestIntegrationGitPublishPushFailedAfterCommit(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
-	runGit(t, g.dir, "remote", "set-url", "origin", "/does/not/exist")
+	g.Write(t, "new.md", "# new\n")
+	gitfixture.Run(t, g.Dir, "remote", "set-url", "origin", "/does/not/exist")
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -322,7 +270,7 @@ func TestIntegrationGitPublishPushFailedAfterCommit(t *testing.T) {
 	assert.NotEmpty(pushFailed.Commit)
 	assert.NotEmpty(pushFailed.Stderr)
 	assert.NotContains(pushFailed.Stderr, "exit status")
-	head := gitOutput(t, g.dir, "rev-parse", "HEAD")
+	head := strings.TrimSpace(string(gitfixture.Run(t, g.Dir, "rev-parse", "HEAD")))
 	assert.Equal(head, pushFailed.Commit)
 }
 
@@ -330,10 +278,10 @@ func TestIntegrationGitPublishDoesNotRunDocsRepoHooks(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	marker := filepath.Join(t.TempDir(), "hook-ran")
 	hookBody := "#!/bin/sh\necho hooked > \"" + marker + "\"\nexit 1\n"
-	hookDir := filepath.Join(g.dir, ".git", "hooks")
+	hookDir := filepath.Join(g.Dir, ".git", "hooks")
 	require.NoError(os.MkdirAll(hookDir, 0o755))
 	for _, name := range []string{"pre-commit", "commit-msg", "post-commit", "pre-push"} {
 		require.NoError(os.WriteFile(filepath.Join(hookDir, name), []byte(hookBody), 0o755))
@@ -350,12 +298,12 @@ func TestIntegrationGitPublishIgnoresRepoHooksPathOverride(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	marker := filepath.Join(t.TempDir(), "hook-ran")
 	hooksPath := t.TempDir()
 	hookBody := "#!/bin/sh\necho hooked > \"" + marker + "\"\nexit 1\n"
 	require.NoError(os.WriteFile(filepath.Join(hooksPath, "pre-commit"), []byte(hookBody), 0o755))
-	runGit(t, g.dir, "config", "core.hooksPath", hooksPath)
+	gitfixture.Run(t, g.Dir, "config", "core.hooksPath", hooksPath)
 
 	res, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -392,8 +340,8 @@ func TestIntegrationGitPublishRejectsCommandBearingLocalConfig(t *testing.T) {
 			assert := assert.New(t)
 			require := require.New(t)
 			g := newGitRepo(t)
-			g.writeFile(t, "new.md", "# new\n")
-			runGit(t, g.dir, "config", tc.key, tc.value)
+			g.Write(t, "new.md", "# new\n")
+			gitfixture.Run(t, g.Dir, "config", tc.key, tc.value)
 
 			_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -408,13 +356,13 @@ func TestIntegrationGitPublishRejectsIncludedCommandBearingConfig(t *testing.T) 
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	// The attack the include gate exists for: the directive itself looks
 	// harmless, but the included file enables a signing program that a
 	// later `git commit` would execute.
 	included := filepath.Join(t.TempDir(), "evil.cfg")
 	require.NoError(os.WriteFile(included, []byte("[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = /tmp/evil\n"), 0o644))
-	runGit(t, g.dir, "config", "include.path", included)
+	gitfixture.Run(t, g.Dir, "config", "include.path", included)
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -429,13 +377,13 @@ func TestIntegrationGitPublishRejectsPushTargetInsideDocsFolder(t *testing.T) {
 		url  func(g *gitRepo) string
 	}{
 		{"relative path", func(g *gitRepo) string { return "./evil.git" }},
-		{"absolute path", func(g *gitRepo) string { return filepath.Join(g.dir, "evil.git") }},
-		{"file URL", func(g *gitRepo) string { return "file://" + filepath.Join(g.dir, "evil.git") }},
+		{"absolute path", func(g *gitRepo) string { return filepath.Join(g.Dir, "evil.git") }},
+		{"file URL", func(g *gitRepo) string { return "file://" + filepath.Join(g.Dir, "evil.git") }},
 		{"percent-encoded file URL", func(g *gitRepo) string {
 			// Git decodes %65 to 'e' and pushes into evil.git; the
 			// containment check decodes via net/url so it compares the
 			// same path git resolves rather than the escaped literal.
-			return "file://" + filepath.Join(g.dir, "%65vil.git")
+			return "file://" + filepath.Join(g.Dir, "%65vil.git")
 		}},
 	}
 	for _, tc := range cases {
@@ -443,21 +391,21 @@ func TestIntegrationGitPublishRejectsPushTargetInsideDocsFolder(t *testing.T) {
 			assert := assert.New(t)
 			require := require.New(t)
 			g := newGitRepo(t)
-			g.writeFile(t, "new.md", "# new\n")
-			runGit(t, g.dir, "init", "--bare", "evil.git")
+			g.Write(t, "new.md", "# new\n")
+			gitfixture.Run(t, g.Dir, "init", "--bare", "evil.git")
 			marker := filepath.Join(t.TempDir(), "hook-ran")
 			hook := "#!/bin/sh\necho hooked > \"" + marker + "\"\nexit 0\n"
-			require.NoError(os.MkdirAll(filepath.Join(g.dir, "evil.git", "hooks"), 0o755))
-			require.NoError(os.WriteFile(filepath.Join(g.dir, "evil.git", "hooks", "pre-receive"), []byte(hook), 0o755))
-			runGit(t, g.dir, "remote", "set-url", "origin", tc.url(g))
-			head := gitOutput(t, g.dir, "rev-parse", "HEAD")
+			require.NoError(os.MkdirAll(filepath.Join(g.Dir, "evil.git", "hooks"), 0o755))
+			require.NoError(os.WriteFile(filepath.Join(g.Dir, "evil.git", "hooks", "pre-receive"), []byte(hook), 0o755))
+			gitfixture.Run(t, g.Dir, "remote", "set-url", "origin", tc.url(g))
+			head := strings.TrimSpace(string(gitfixture.Run(t, g.Dir, "rev-parse", "HEAD")))
 
 			_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
 			var unsafe *UnsafeGitConfigError
 			require.ErrorAs(err, &unsafe)
 			assert.NoFileExists(marker, "in-folder remote pre-receive hook executed")
-			assert.Equal(head, gitOutput(t, g.dir, "rev-parse", "HEAD"),
+			assert.Equal(head, strings.TrimSpace(string(gitfixture.Run(t, g.Dir, "rev-parse", "HEAD"))),
 				"publish committed before rejecting the push target")
 		})
 	}
@@ -466,12 +414,12 @@ func TestIntegrationGitPublishRejectsPushTargetInsideDocsFolder(t *testing.T) {
 func TestIntegrationGitPublishRejectsPushInsteadOfRewriteIntoDocsFolder(t *testing.T) {
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
-	runGit(t, g.dir, "init", "--bare", "evil.git")
+	g.Write(t, "new.md", "# new\n")
+	gitfixture.Run(t, g.Dir, "init", "--bare", "evil.git")
 	// The remote URL itself looks like a safe network transport; the
 	// repo-local rewrite redirects the push into the folder.
-	runGit(t, g.dir, "remote", "set-url", "origin", "https://docs.example.invalid/repo.git")
-	runGit(t, g.dir, "config", "url../evil.git.pushInsteadOf", "https://docs.example.invalid/repo.git")
+	gitfixture.Run(t, g.Dir, "remote", "set-url", "origin", "https://docs.example.invalid/repo.git")
+	gitfixture.Run(t, g.Dir, "config", "url../evil.git.pushInsteadOf", "https://docs.example.invalid/repo.git")
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -483,19 +431,19 @@ func TestIntegrationGitPublishRejectsMixedLocalAndNetworkPushURLs(t *testing.T) 
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	// One push invocation would contact both URLs; the local
 	// receive-pack hardening cannot be applied per-URL, so the set is
 	// refused before anything is committed.
-	runGit(t, g.dir, "config", "--add", "remote.origin.pushurl", g.remote)
-	runGit(t, g.dir, "config", "--add", "remote.origin.pushurl", "ssh://git@docs.example.invalid/repo.git")
-	head := gitOutput(t, g.dir, "rev-parse", "HEAD")
+	gitfixture.Run(t, g.Dir, "config", "--add", "remote.origin.pushurl", g.Remote)
+	gitfixture.Run(t, g.Dir, "config", "--add", "remote.origin.pushurl", "ssh://git@docs.example.invalid/repo.git")
+	head := strings.TrimSpace(string(gitfixture.Run(t, g.Dir, "rev-parse", "HEAD")))
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
 	var unsafe *UnsafeGitConfigError
 	require.ErrorAs(err, &unsafe)
-	assert.Equal(head, gitOutput(t, g.dir, "rev-parse", "HEAD"),
+	assert.Equal(head, strings.TrimSpace(string(gitfixture.Run(t, g.Dir, "rev-parse", "HEAD"))),
 		"publish committed before rejecting the mixed push urls")
 }
 
@@ -503,9 +451,9 @@ func TestIntegrationGitPublishRejectsRemoteHelperPushTarget(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	marker := filepath.Join(t.TempDir(), "helper-ran")
-	runGit(t, g.dir, "remote", "set-url", "origin", `ext::sh -c "touch `+marker+`"`)
+	gitfixture.Run(t, g.Dir, "remote", "set-url", "origin", `ext::sh -c "touch `+marker+`"`)
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -518,31 +466,31 @@ func TestIntegrationGitPublishNeutralizesLocalRemoteReceiveHooks(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	// Local-path remotes outside the docs folder remain supported, but
 	// the target repo's receive-side hooks must not run: receive-pack
 	// executes on this machine and a hook would be arbitrary code. The
 	// hook exits 1 so, if it ran, the push itself would also fail.
 	marker := filepath.Join(t.TempDir(), "hook-ran")
 	hook := "#!/bin/sh\necho hooked > \"" + marker + "\"\nexit 1\n"
-	require.NoError(os.WriteFile(filepath.Join(g.remote, "hooks", "pre-receive"), []byte(hook), 0o755))
+	require.NoError(os.WriteFile(filepath.Join(g.Remote, "hooks", "pre-receive"), []byte(hook), 0o755))
 
 	res, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
 	require.NoError(err)
 	assert.True(res.Pushed)
 	assert.NoFileExists(marker, "local remote pre-receive hook executed during publish")
-	assert.Equal(res.Commit, gitOutput(t, g.remote, "rev-parse", "main"))
+	assert.Equal(res.Commit, strings.TrimSpace(string(gitfixture.Run(t, g.Remote, "rev-parse", "main"))))
 }
 
 func TestIntegrationGitPublishRejectsFilterAttributes(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	// Even when the driver is configured globally (here it is undefined),
 	// opting paths into a filter marks the repo as LFS-style and is refused.
-	g.writeFile(t, ".gitattributes", "*.md filter=lfs diff=lfs\n")
+	g.Write(t, ".gitattributes", "*.md filter=lfs diff=lfs\n")
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -555,10 +503,10 @@ func TestIntegrationGitPublishRejectsSubdirectoryFilterAttributes(t *testing.T) 
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "sub/new.md", "# new\n")
+	g.Write(t, "sub/new.md", "# new\n")
 	// A .gitattributes nested below the root opts sub/*.md into a filter.
 	// A root-only scan would miss this; check-attr resolves it per path.
-	g.writeFile(t, "sub/.gitattributes", "*.md filter=lfs\n")
+	g.Write(t, "sub/.gitattributes", "*.md filter=lfs\n")
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -573,29 +521,29 @@ func TestIntegrationGitPublishGatesAttributesBeforeStatusRunsFilter(t *testing.T
 	g := newGitRepo(t)
 	runner := gitsafe.MutableRunner(t)
 	g.registry = NewRegistry(
-		[]config.DocFolder{{ID: g.folderID, Name: "F", Path: g.dir}},
+		[]config.DocFolder{{ID: g.folderID, Name: "F", Path: g.Dir}},
 		WithGitRunner(runner),
 	)
 	marker := filepath.Join(t.TempDir(), "filter-ran")
 	// Simulate a globally-installed clean filter, as git-lfs would be on a
 	// victim's machine. The repo only chooses to route paths through it.
 	_, stderr, err := runner.Run(
-		t.Context(), g.dir, nil, "config", "--global", "filter.evil.clean",
+		t.Context(), g.Dir, nil, "config", "--global", "filter.evil.clean",
 		"sh -c 'echo ran > \""+marker+"\"; cat'",
 	)
 	require.NoError(err, string(stderr))
 	_, stderr, err = runner.Run(
-		t.Context(), g.dir, nil, "config", "--global", "filter.evil.smudge", "cat",
+		t.Context(), g.Dir, nil, "config", "--global", "filter.evil.smudge", "cat",
 	)
 	require.NoError(err, string(stderr))
 	// Attacker-controlled repo attributes opt markdown into that filter.
-	g.writeFile(t, ".gitattributes", "*.md filter=evil\n")
+	g.Write(t, ".gitattributes", "*.md filter=evil\n")
 	// Modify a tracked markdown to the same byte length as the committed
 	// blob and backdate it, so git must rehash (running the clean filter)
 	// to detect the change during `git status`.
-	g.writeFile(t, "seed.md", "xxxx\n")
+	g.Write(t, "seed.md", "xxxx\n")
 	old := time.Unix(1_000_000_000, 0)
-	require.NoError(os.Chtimes(filepath.Join(g.dir, "seed.md"), old, old))
+	require.NoError(os.Chtimes(filepath.Join(g.Dir, "seed.md"), old, old))
 
 	_, err = g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -607,7 +555,7 @@ func TestIntegrationGitPublishGatesAttributesBeforeStatusRunsFilter(t *testing.T
 func TestIntegrationGitStatusRejectsFilterAttributes(t *testing.T) {
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, ".gitattributes", "*.md filter=lfs\n")
+	g.Write(t, ".gitattributes", "*.md filter=lfs\n")
 
 	_, err := g.registry.GitStatus(context.Background(), g.folderID)
 
@@ -618,8 +566,8 @@ func TestIntegrationGitStatusRejectsFilterAttributes(t *testing.T) {
 func TestIntegrationGitChangesRejectsFilterAttributes(t *testing.T) {
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "sub/.gitattributes", "*.md diff=evil\n")
-	g.writeFile(t, "sub/new.md", "# new\n")
+	g.Write(t, "sub/.gitattributes", "*.md diff=evil\n")
+	g.Write(t, "sub/new.md", "# new\n")
 
 	_, err := g.registry.GitChanges(context.Background(), g.folderID)
 
@@ -630,11 +578,11 @@ func TestIntegrationGitChangesRejectsFilterAttributes(t *testing.T) {
 func TestIntegrationGitChangesRejectsCommandBearingLocalConfig(t *testing.T) {
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	// The preview must apply the same config gate as publish so a folder
 	// with unsafe local config cannot preview as publishable and only
 	// fail on submit.
-	runGit(t, g.dir, "config", "gpg.program", "/tmp/evil")
+	gitfixture.Run(t, g.Dir, "config", "gpg.program", "/tmp/evil")
 
 	_, err := g.registry.GitChanges(context.Background(), g.folderID)
 
@@ -645,11 +593,11 @@ func TestIntegrationGitChangesRejectsCommandBearingLocalConfig(t *testing.T) {
 func TestIntegrationGitPublishAllowsBenignLocalConfig(t *testing.T) {
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	// Signing explicitly off and benign attributes must not trip the gate.
-	runGit(t, g.dir, "config", "commit.gpgsign", "false")
-	runGit(t, g.dir, "config", "tag.gpgsign", "false")
-	g.writeFile(t, ".gitattributes", "*.md text=auto eol=lf\n")
+	gitfixture.Run(t, g.Dir, "config", "commit.gpgsign", "false")
+	gitfixture.Run(t, g.Dir, "config", "tag.gpgsign", "false")
+	g.Write(t, ".gitattributes", "*.md text=auto eol=lf\n")
 
 	res, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -661,11 +609,11 @@ func TestIntegrationGitStatusDoesNotRunRepoFsmonitor(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	marker := filepath.Join(t.TempDir(), "fsmonitor-ran")
 	monitor := filepath.Join(t.TempDir(), "fsmonitor")
 	require.NoError(os.WriteFile(monitor, []byte("#!/bin/sh\necho ran > \""+marker+"\"\nexit 1\n"), 0o755))
-	runGit(t, g.dir, "config", "core.fsmonitor", monitor)
+	gitfixture.Run(t, g.Dir, "config", "core.fsmonitor", monitor)
 
 	// GitStatus runs `git status`, which honors core.fsmonitor.
 	_, err := g.registry.GitStatus(context.Background(), g.folderID)
@@ -678,15 +626,15 @@ func TestIntegrationGitPublishBlocksExtRemoteHelperOnPush(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
+	g.Write(t, "new.md", "# new\n")
 	marker := filepath.Join(t.TempDir(), "helper-ran")
 	helper := filepath.Join(t.TempDir(), "evil")
 	require.NoError(os.WriteFile(helper, []byte("#!/bin/sh\necho ran > \""+marker+"\"\n"), 0o755))
 	// An attacker-controlled repo config can opt the ext transport back in
 	// (modern git blocks it by default) and point a remote at an arbitrary
 	// command, which push would execute without our protocol.ext override.
-	runGit(t, g.dir, "config", "protocol.ext.allow", "always")
-	runGit(t, g.dir, "remote", "set-url", "origin", "ext::"+helper)
+	gitfixture.Run(t, g.Dir, "config", "protocol.ext.allow", "always")
+	gitfixture.Run(t, g.Dir, "remote", "set-url", "origin", "ext::"+helper)
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -698,9 +646,9 @@ func TestIntegrationGitPublishCommitFailurePreservesStderr(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "new.md", "# new\n")
-	runGit(t, g.dir, "config", "user.useConfigOnly", "true")
-	runGit(t, g.dir, "config", "--unset", "user.email")
+	g.Write(t, "new.md", "# new\n")
+	gitfixture.Run(t, g.Dir, "config", "user.useConfigOnly", "true")
+	gitfixture.Run(t, g.Dir, "config", "--unset", "user.email")
 
 	_, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: x")
 
@@ -714,13 +662,13 @@ func TestIntegrationGitPublishStagesLiteralPathspec(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	g := newGitRepo(t)
-	g.writeFile(t, "weird *.md", "# weird\n")
-	g.writeFile(t, "decoy.md", "# decoy\n")
+	g.Write(t, "weird *.md", "# weird\n")
+	g.Write(t, "decoy.md", "# decoy\n")
 
 	res, err := g.registry.GitPublish(context.Background(), g.folderID, "docs: weird")
 
 	require.NoError(err)
-	out := gitOutput(t, g.dir, "ls-tree", "--name-only", res.Commit)
+	out := strings.TrimSpace(string(gitfixture.Run(t, g.Dir, "ls-tree", "--name-only", res.Commit)))
 	assert.Contains(out, "weird *.md")
 	assert.Contains(out, "decoy.md")
 }

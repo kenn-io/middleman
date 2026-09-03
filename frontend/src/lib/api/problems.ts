@@ -3,15 +3,17 @@
 // and isProblem from this module rather than substring-matching the
 // human-readable detail text — code is the stable contract.
 
-import { problemErrorCodeValues } from "./generated/schema";
-import type { components } from "./generated/schema";
+import { ProblemErrorCode } from "./generated/models/index.js";
+import type { ProblemError } from "./generated/models/index.js";
 
-export type ProblemBody = components["schemas"]["ProblemError"];
+export type ProblemBody = ProblemError;
 
 // ProblemCode is the closed union of wire codes emitted by the server.
 // Drawn from the generated OpenAPI enum so a new server code lights up
 // the union without manual sync.
 export type ProblemCode = ProblemBody["code"];
+
+const problemErrorCodeValues = Object.values(ProblemErrorCode);
 
 export const ProblemCodes = Object.fromEntries(problemErrorCodeValues.map((code) => [code, code])) as {
   readonly [K in ProblemCode]: K;

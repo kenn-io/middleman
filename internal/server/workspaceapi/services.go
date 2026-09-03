@@ -103,6 +103,12 @@ type InitialMessageResult struct {
 	DeliveredAt  *time.Time
 }
 
+type AgentMessageResult struct {
+	TargetKey    string
+	MessageBytes int
+	SubmittedAt  time.Time
+}
+
 func (s *Handler) resolveWorkspaceLaunchSpec(
 	ctx context.Context,
 	route providerplane.RepositoryRoute,

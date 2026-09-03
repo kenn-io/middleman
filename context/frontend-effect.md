@@ -84,8 +84,8 @@ service is the supported tool here.
   transport, and library failures in the existing tagged domain errors rather
   than returning `unknown`, global `Error`, or thrown exceptions.
 - Decode untrusted event, storage, and non-generated payloads with Schema.
-  Generated OpenAPI responses and request bodies should reuse types from
-  `frontend/src/lib/api/generated/schema.ts` through
+  Generated OpenAPI responses and request bodies should import the matching
+  Orval model from `frontend/src/lib/api/generated/models/`, directly or through
   `frontend/src/lib/api/types.ts`; do not duplicate those shapes or add runtime
   guards around already-generated contracts.
 - A non-idempotent transport failure may be uncertain. Retain a fence and read

@@ -26,6 +26,7 @@ import (
 	"go.kenn.io/forge/internal/server/pullapi"
 	"go.kenn.io/forge/internal/testutil"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 	"go.kenn.io/forge/internal/tokenauth"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
@@ -101,16 +102,16 @@ func TestNodeGitLabCloneReadsFetchMergeRequestHead(t *testing.T) {
 	const mrNumber = 7
 
 	work, remote, platformHost := setupHTTPWorktreeBaseForServerTest(t, "base-copy")
-	baseSHA := testGitSHA(t, work, "main")
-	runGit(t, work, "checkout", "-b", "contributor/fork", "main")
+	baseSHA := gitfixture.SHA(t, work, "main")
+	gitfixture.Run(t, work, "checkout", "-b", "contributor/fork", "main")
 	require.NoError(os.WriteFile(
 		filepath.Join(work, "gitlab-mr.txt"), []byte("merge request head\n"), 0o644,
 	))
-	runGit(t, work, "add", ".")
-	runGit(t, work, "commit", "-m", "gitlab merge request head")
-	headSHA := testGitSHA(t, work, "HEAD")
-	runGit(t, work, "push", remote, "HEAD:refs/merge-requests/7/head")
-	runGit(t, remote, "update-server-info")
+	gitfixture.Run(t, work, "add", ".")
+	gitfixture.Run(t, work, "commit", "-m", "gitlab merge request head")
+	headSHA := gitfixture.SHA(t, work, "HEAD")
+	gitfixture.Run(t, work, "push", remote, "HEAD:refs/merge-requests/7/head")
+	gitfixture.Run(t, remote, "update-server-info")
 	cloneURL := "http://" + platformHost + "/acme/widget.git"
 
 	hubDB := dbtest.Open(t)
@@ -180,10 +181,10 @@ func TestNodeGitLabCloneReadsFetchMergeRequestHead(t *testing.T) {
 	})
 	t.Cleanup(func() { gracefulShutdown(t, nodeServer) })
 
-	response := doJSON(
+	response := testutil.DoJSON(
 		t, nodeServer, http.MethodGet,
-		"/api/v1/host/"+platformHost+"/pulls/gitlab/acme/widget/7/commits", nil,
-	)
+		"/api/v1/host/"+platformHost+"/pulls/gitlab/acme/widget/7/commits", nil)
+
 	require.Equal(http.StatusOK, response.Code, response.Body.String())
 	assert.Contains(response.Body.String(), headSHA)
 }
@@ -343,11 +344,11 @@ func TestRemoteAdHocWorkspaceCreationSeedsSpokeRepositoryCatalog(t *testing.T) {
 	})
 	t.Cleanup(func() { gracefulShutdown(t, spokeServer) })
 
-	response := doJSON(
+	response := testutil.DoJSON(
 		t, spokeServer, http.MethodPost,
 		"/api/v1/host/github.com/repo/github/acme/widget/workspaces",
-		map[string]any{"branch": "work/remote-create"},
-	)
+		map[string]any{"branch": "work/remote-create"})
+
 	require.Equal(http.StatusAccepted, response.Code, response.Body.String())
 	observed, err := spokeDB.GetRepositoryByProviderID(
 		t.Context(), "github", "github.com", "repo-acme-widget",
@@ -706,7 +707,7 @@ func TestNodeCloneReadsRequireFreshDescriptorAndComputeLocally(t *testing.T) {
 		"/api/v1/pulls/github/acme/widgets/1/file-preview?path=internal/cache.go",
 		"/api/v1/repo/github/acme/widgets/browser/refs",
 	} {
-		response := doJSON(t, nodeServer, http.MethodGet, path, nil)
+		response := testutil.DoJSON(t, nodeServer, http.MethodGet, path, nil)
 		require.Equal(http.StatusOK, response.Code, response.Body.String())
 	}
 
@@ -734,18 +735,18 @@ func TestNodeCloneReadsRequireFreshDescriptorAndComputeLocally(t *testing.T) {
 		},
 	)
 	t.Cleanup(func() { gracefulShutdown(t, credentiallessNode) })
-	credentialProblem := doJSON(
+	credentialProblem := testutil.DoJSON(
 		t, credentiallessNode, http.MethodGet,
-		"/api/v1/pulls/github/acme/widgets/1/diff", nil,
-	)
+		"/api/v1/pulls/github/acme/widgets/1/diff", nil)
+
 	require.Equal(http.StatusServiceUnavailable, credentialProblem.Code)
 	var problem httpapi.ProblemError
 	require.NoError(json.NewDecoder(credentialProblem.Body).Decode(&problem))
 	assert.Equal(httpapi.CodeGitCredentialUnavailable, problem.Code)
-	credentialBrowserProblem := doJSON(
+	credentialBrowserProblem := testutil.DoJSON(
 		t, credentiallessNode, http.MethodGet,
-		"/api/v1/repo/github/acme/widgets/browser/refs", nil,
-	)
+		"/api/v1/repo/github/acme/widgets/browser/refs", nil)
+
 	require.Equal(http.StatusServiceUnavailable, credentialBrowserProblem.Code)
 	require.NoError(json.NewDecoder(credentialBrowserProblem.Body).Decode(&problem))
 	assert.Equal(httpapi.CodeGitCredentialUnavailable, problem.Code)
@@ -755,17 +756,17 @@ func TestNodeCloneReadsRequireFreshDescriptorAndComputeLocally(t *testing.T) {
 	// the outage with httptest.Server.Close.
 	hubServer.Hub().Close()
 	hub.Close()
-	outage := doJSON(
+	outage := testutil.DoJSON(
 		t, nodeServer, http.MethodGet,
-		"/api/v1/pulls/github/acme/widgets/1/diff", nil,
-	)
+		"/api/v1/pulls/github/acme/widgets/1/diff", nil)
+
 	require.Equal(http.StatusServiceUnavailable, outage.Code, outage.Body.String())
 	require.NoError(json.NewDecoder(outage.Body).Decode(&problem))
 	assert.Equal(httpapi.CodeHubUnavailable, problem.Code)
-	browserOutage := doJSON(
+	browserOutage := testutil.DoJSON(
 		t, nodeServer, http.MethodGet,
-		"/api/v1/repo/github/acme/widgets/browser/refs", nil,
-	)
+		"/api/v1/repo/github/acme/widgets/browser/refs", nil)
+
 	require.Equal(http.StatusServiceUnavailable, browserOutage.Code)
 	require.NoError(json.NewDecoder(browserOutage.Body).Decode(&problem))
 	assert.Equal(httpapi.CodeHubUnavailable, problem.Code)

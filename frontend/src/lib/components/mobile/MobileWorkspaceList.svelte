@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { copyToClipboard, DiffStats, Modal, SearchInput, Spinner, StatusDot, Toggle, type StatusDotStatus } from "@kenn-io/kit-ui";
+  import { copyToClipboard, DiffStats, formatRelativeTime, formatTimestamp, Modal, SearchInput, Spinner, StatusDot, Toggle, type StatusDotStatus } from "@kenn-io/kit-ui";
   import MoreHorizontalIcon from "@lucide/svelte/icons/ellipsis";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import { Effect, Schedule, Stream } from "effect";
@@ -13,7 +13,7 @@
     executeOpaqueGeneratedApiRequest,
   } from "../../api/generated-api.js";
   import { loadFleetSnapshot } from "../../api/fleet-snapshot.js";
-  import type { components } from "../../api/generated/schema.js";
+  import type { HostSummary as GeneratedHostSummary } from "../../api/generated/models/index.js";
   import { getAppRuntime } from "../../app/runtime-context.js";
   import { eventSourceStream } from "../../browser/event-source.js";
   import { openNewWorkspaceDialog } from "../../stores/new-workspace.svelte.js";
@@ -38,6 +38,7 @@
     loadWorkspaceListSort,
     saveWorkspaceListDisplayOptions,
     saveWorkspaceListSort,
+    workspaceListSortTimestamp,
     workspaceListSortOptions,
     type WorkspaceListDisplayOptions,
     type WorkspaceListSort,
@@ -51,7 +52,7 @@
     workspaceMatchesMobileSearch,
   } from "./mobile-workspace-list.js";
 
-  type HostSummary = components["schemas"]["HostSummary"];
+  type HostSummary = GeneratedHostSummary;
 
   interface Props {
     onOpen: (workspaceId: string, hostKey?: string) => void;
@@ -193,9 +194,9 @@
   }
 
   function agentStatePresentation(workspace: WorkspaceListItem): {
-    label: "Working" | "Approval" | "Input" | "Done";
-    tone: "working" | "approval" | "input" | "done";
-    announcement: "working" | "waiting for approval" | "waiting for input" | "done";
+    label: "Working" | "Approval" | "Input" | "Done" | "Idle";
+    tone: "working" | "approval" | "input" | "done" | "idle";
+    announcement: "working" | "waiting for approval" | "waiting for input" | "done" | "idle";
   } | null {
     switch (workspace.agent_state) {
       case "working":
@@ -206,6 +207,8 @@
         return { label: "Input", tone: "input", announcement: "waiting for input" };
       case "done":
         return { label: "Done", tone: "done", announcement: "done" };
+      case "idle":
+        return sortMode === "agent-status" ? { label: "Idle", tone: "idle", announcement: "idle" } : null;
       default:
         return null;
     }
@@ -253,18 +256,24 @@
     actionBusy = `${workspace.fleet_host_key ?? "local"}:${workspace.id}:${action}`;
     const hostKey = workspace.fleet_host_key;
     const command = hostKey
-      ? executeOpaqueGeneratedApiRequest(`${action} mobile Fleet workspace`, (client, signal) =>
-          client.POST(`/fleet/hosts/{host_key}/workspaces/{id}/${action}`, {
-            params: { path: { host_key: hostKey, id: workspace.id } },
-            signal,
-          }),
-        ).pipe(Effect.asVoid)
-      : executeGeneratedApiRequest(`${action} mobile workspace`, (client, signal) =>
-          client.POST(`/workspaces/{id}/${action}`, {
-            params: { path: { id: workspace.id } },
-            signal,
-          }),
-        ).pipe(Effect.asVoid);
+      ? executeOpaqueGeneratedApiRequest<unknown>(`${action} mobile Fleet workspace`, (client, signal) => {
+          const params = { hostKey, id: workspace.id };
+          switch (action) {
+            case "push": return client.FleetService.pushFleetWorkspaceBranch(params, { signal });
+            case "pull": return client.FleetService.pullFleetWorkspaceBranch(params, { signal });
+            case "refresh": return client.FleetService.refreshFleetWorkspace(params, { signal });
+            case "reveal": return client.FleetService.revealFleetWorkspace(params, { signal });
+          }
+        }).pipe(Effect.asVoid)
+      : executeGeneratedApiRequest<unknown>(`${action} mobile workspace`, (client, signal) => {
+          const params = { id: workspace.id };
+          switch (action) {
+            case "push": return client.WorkspacesService.pushWorkspaceBranch(params, { signal });
+            case "pull": return client.WorkspacesService.pullWorkspaceBranch(params, { signal });
+            case "refresh": return client.WorkspacesService.refreshWorkspace(params, { signal });
+            case "reveal": return client.WorkspacesService.revealWorkspace(params, { signal });
+          }
+        }).pipe(Effect.asVoid);
     appRuntime.runCommand(
       command.pipe(
         Effect.tap(() => Effect.sync(refreshWorkspaces.request)),
@@ -291,22 +300,18 @@
     const hostKey = workspace.fleet_host_key;
     const command = hostKey
       ? executeOpaqueGeneratedApiRequest("delete mobile Fleet workspace", (client, signal) =>
-          client.DELETE("/fleet/hosts/{host_key}/workspaces/{id}", {
-            params: {
-              path: { host_key: hostKey, id: workspace.id },
-              ...(force ? { query: { force: true } } : {}),
-            },
-            signal,
-          }),
+          client.FleetService.deleteFleetWorkspace(
+            { hostKey, id: workspace.id },
+            force ? { force: true } : undefined,
+            { signal },
+          ),
         ).pipe(Effect.asVoid)
       : executeGeneratedApiRequest("delete mobile workspace", (client, signal) =>
-          client.DELETE("/workspaces/{id}", {
-            params: {
-              path: { id: workspace.id },
-              ...(force ? { query: { force: true } } : {}),
-            },
-            signal,
-          }),
+          client.WorkspacesService.deleteWorkspace(
+            { id: workspace.id },
+            force ? { force: true } : undefined,
+            { signal },
+          ),
         ).pipe(Effect.asVoid);
     appRuntime.runCommand(
       command.pipe(
@@ -354,7 +359,8 @@
   }
 
   function canPush(workspace: WorkspaceListItem): boolean {
-    return (workspace.commits_ahead ?? 0) > 0 && (workspace.commits_behind ?? 0) === 0;
+    return workspace.branch_upstream_missing === true ||
+      ((workspace.commits_ahead ?? 0) > 0 && (workspace.commits_behind ?? 0) === 0);
   }
 
   function canPull(workspace: WorkspaceListItem): boolean {
@@ -502,6 +508,7 @@
 {#snippet workspaceRow(workspace: WorkspaceListItem, showRepository: boolean)}
   {@const label = itemLabel(workspace)}
   {@const agentState = agentStatePresentation(workspace)}
+  {@const sortTimestamp = workspaceListSortTimestamp(workspace, sortMode)}
   <article class="mobile-workspace-row">
     <button
       class="mobile-workspace-row__main"
@@ -531,15 +538,27 @@
         {/if}
       </span>
     </button>
-    {#if label}
-      <button
-        class="mobile-workspace-row__item"
-        type="button"
-        aria-label={`Open linked item ${label}`}
-        onclick={() => openWorkspaceItem(workspace)}
-        disabled={!workspaceOperationAvailable(workspace, "workspaceRead")}
-        title={!workspaceOperationAvailable(workspace, "workspaceRead") ? "Linked item details are unavailable from this Forge" : undefined}
-      >{label}</button>
+    {#if label || sortTimestamp}
+      <span class="mobile-workspace-row__item-stack">
+        {#if label}
+          <button
+            class="mobile-workspace-row__item"
+            type="button"
+            aria-label={`Open linked item ${label}`}
+            onclick={() => openWorkspaceItem(workspace)}
+            disabled={!workspaceOperationAvailable(workspace, "workspaceRead")}
+            title={!workspaceOperationAvailable(workspace, "workspaceRead") ? "Linked item details are unavailable from this Forge" : undefined}
+          >{label}</button>
+        {/if}
+        {#if sortTimestamp}
+          <time
+            class="mobile-workspace-row__sort-time"
+            datetime={sortTimestamp.at}
+            title={`${sortTimestamp.label}: ${formatTimestamp(sortTimestamp.at)}`}
+            aria-label={`${sortTimestamp.label}: ${formatRelativeTime(sortTimestamp.at)}`}
+          >{formatRelativeTime(sortTimestamp.at)}</time>
+        {/if}
+      </span>
     {/if}
     <button
       class="mobile-workspace-row__more"
@@ -656,12 +675,15 @@
   .mobile-workspace-row__agent-state--working, .mobile-workspace-row__agent-state--done { color: var(--accent-green); }
   .mobile-workspace-row__agent-state--approval { color: var(--accent-amber); }
   .mobile-workspace-row__agent-state--input { color: var(--accent-purple); }
+  .mobile-workspace-row__agent-state--idle { color: var(--text-muted); }
   .mobile-workspace-row__meta { min-width: 0; display: flex; align-items: center; gap: 0.5rem; overflow: hidden; color: var(--text-muted); font-size: var(--font-size-sm); }
   .mobile-workspace-row__meta > span, .mobile-workspace-row__meta code, .mobile-workspace-row__meta em { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mobile-workspace-row__meta code { flex: 1; color: var(--text-secondary); font-family: var(--font-mono); }
   .mobile-workspace-row__meta em { color: var(--accent-blue); font-style: normal; font-weight: 650; }
+  .mobile-workspace-row__item-stack { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 0.125rem; margin: 0.25rem; }
   .mobile-workspace-row__item, .mobile-workspace-row__more { align-self: center; min-width: 2.75rem; min-height: 2.75rem; margin: 0.25rem; border-radius: var(--radius-md) !important; }
-  .mobile-workspace-row__item { height: 2rem; min-width: auto; min-height: 2rem; padding: 0 0.625rem !important; color: var(--text-on-accent) !important; background: var(--accent-green) !important; font-family: var(--font-mono) !important; font-weight: 700 !important; }
+  .mobile-workspace-row__item { height: 2rem; min-width: auto; min-height: 2rem; margin: 0; padding: 0 0.625rem !important; color: var(--text-on-accent) !important; background: var(--accent-green) !important; font-family: var(--font-mono) !important; font-weight: 700 !important; }
+  .mobile-workspace-row__sort-time { color: var(--text-muted); font-size: var(--font-size-sm); line-height: 1.35; white-space: nowrap; }
   .mobile-workspace-row__item:disabled { cursor: not-allowed; opacity: var(--opacity-disabled); }
   .mobile-workspace-row__more { display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted) !important; }
   .mobile-workspace-row button:focus-visible, .mobile-sheet-content button:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: -2px; }

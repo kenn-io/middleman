@@ -17,6 +17,7 @@ import (
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
+	"go.kenn.io/forge/internal/testutil"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 )
 
@@ -42,7 +43,7 @@ func settingsReposFromBody(t *testing.T, body []byte) []ghclient.ConfiguredRepoS
 
 func listRepoNames(t *testing.T, srv *Server) []string {
 	t.Helper()
-	rr := doJSON(t, srv, http.MethodGet, "/api/v1/repos", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/repos", nil)
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 	var repos []struct {
 		Name string `json:"name"`
@@ -69,10 +70,10 @@ func TestHandleUpdateRepoUIVisibilityHidesAndShows(t *testing.T) {
 	})
 	require.Equal([]string{"widget"}, listRepoNames(t, srv))
 
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	repos := settingsReposFromBody(t, rr.Body.Bytes())
 	require.Len(repos, 1)
@@ -82,16 +83,16 @@ func TestHandleUpdateRepoUIVisibilityHidesAndShows(t *testing.T) {
 		"interactive catalog omits the hidden repo")
 
 	// Settings remains the unfiltered management surface.
-	rr = doJSON(t, srv, http.MethodGet, "/api/v1/settings", nil)
+	rr = testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/settings", nil)
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	repos = settingsReposFromBody(t, rr.Body.Bytes())
 	require.Len(repos, 1)
 	assert.True(repos[0].HiddenFromUI)
 
-	rr = doJSON(t, srv, http.MethodPut,
+	rr = testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": false},
-	)
+		map[string]bool{"hidden": false})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	repos = settingsReposFromBody(t, rr.Body.Bytes())
 	require.Len(repos, 1)
@@ -122,10 +123,10 @@ func TestHandleUpdateRepoUIVisibilityFollowsRenamedRoute(t *testing.T) {
 		ConfiguredRepoPath: "acme/widget",
 	}})
 
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	repos := settingsReposFromBody(t, rr.Body.Bytes())
 	require.Len(repos, 1)
@@ -157,10 +158,10 @@ func TestRepoUIVisibilityDoesNotFollowReusedRoute(t *testing.T) {
 		PlatformExternalID: "R_old",
 		ConfiguredRepoPath: "acme/widget",
 	}})
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 
 	// The provider deleted acme/widget and a different repository took over
@@ -185,7 +186,7 @@ func TestRepoUIVisibilityDoesNotFollowReusedRoute(t *testing.T) {
 		ConfiguredRepoPath: "acme/widget",
 	}})
 
-	rr = doJSON(t, srv, http.MethodGet, "/api/v1/settings", nil)
+	rr = testutil.DoJSON(t, srv, http.MethodGet, "/api/v1/settings", nil)
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	repos := settingsReposFromBody(t, rr.Body.Bytes())
 	require.Len(repos, 1)
@@ -195,10 +196,10 @@ func TestRepoUIVisibilityDoesNotFollowReusedRoute(t *testing.T) {
 		"replacement repo stays in the interactive catalog")
 
 	// Hiding the entry now targets the replacement's stable identity.
-	rr = doJSON(t, srv, http.MethodPut,
+	rr = testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	hidden, err := database.HiddenRepos(t.Context())
 	require.NoError(err)
@@ -244,10 +245,10 @@ func TestRepoUIVisibilityRejectsStaleTrackedIdentity(t *testing.T) {
 		ConfiguredRepoPath: "acme/widget",
 	}})
 
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusConflict, rr.Code, rr.Body.String())
 	hidden, err := database.HiddenRepos(t.Context())
 	require.NoError(err)
@@ -302,19 +303,19 @@ name = "wid*"
 		ConfiguredRepoPath: "acme/widget",
 	}})
 
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	require.Empty(listRepoNames(t, srv))
 
 	// Removing the exact entry orphans the preference: the glob keeps the
 	// repository tracked, but glob rows have no visibility controls, so the
 	// preference must be released with its owning exact entry.
-	rr = doJSON(t, srv, http.MethodDelete,
-		"/api/v1/repo/github/acme/widget", nil,
-	)
+	rr = testutil.DoJSON(t, srv, http.MethodDelete,
+		"/api/v1/repo/github/acme/widget", nil)
+
 	require.Equal(http.StatusNoContent, rr.Code, rr.Body.String())
 	event := waitForConfigEvent(t, stream, 2*time.Second)
 	require.True(event.Valid, event.Error)
@@ -359,10 +360,10 @@ name = "wid*"
 		ConfiguredRepoPath: "acme/widget",
 	}})
 
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 
 	// A client can abandon the DELETE request after the config change
@@ -429,10 +430,10 @@ name = "wid*"
 		ConfiguredRepoPath: "acme/widget",
 	}})
 
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	require.Empty(listRepoNames(t, srv))
 
@@ -587,10 +588,10 @@ name = "widget"
 		ServerOptions{HostCheckAllowLoopbackAnyPort: true},
 	)
 
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	repos := settingsReposFromBody(t, rr.Body.Bytes())
 	require.Len(repos, 1)
@@ -625,10 +626,10 @@ func TestHandleUpdateRepoUIVisibilityReportsRouteOnlyTrackedRef(t *testing.T) {
 		ConfiguredRepoPath: "acme/widget",
 	}})
 
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
 	repos := settingsReposFromBody(t, rr.Body.Bytes())
 	require.Len(repos, 1)
@@ -799,10 +800,10 @@ owner = "acme"
 name = "widget-*"
 `, &mockGH{})
 
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget-*/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusBadRequest, rr.Code, rr.Body.String())
 }
 
@@ -810,10 +811,10 @@ func TestHandleUpdateRepoUIVisibilityUnknownRepo(t *testing.T) {
 	require := require.New(t)
 	srv, _, _ := setupTestServerWithConfig(t)
 
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/unrelated/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusNotFound, rr.Code, rr.Body.String())
 }
 
@@ -824,9 +825,9 @@ func TestHandleUpdateRepoUIVisibilityRequiresVerifiedRepo(t *testing.T) {
 	// acme/widget is configured and tracked but has no catalog row yet
 	// (first sync has not verified it), so there is no stable identity to
 	// attach the preference to.
-	rr := doJSON(t, srv, http.MethodPut,
+	rr := testutil.DoJSON(t, srv, http.MethodPut,
 		"/api/v1/repo/github/acme/widget/ui-visibility",
-		map[string]bool{"hidden": true},
-	)
+		map[string]bool{"hidden": true})
+
 	require.Equal(http.StatusConflict, rr.Code, rr.Body.String())
 }

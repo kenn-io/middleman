@@ -1,9 +1,9 @@
 import { Effect, Schema } from "effect";
-import type { components } from "../../api/generated/schema.js";
+import type { RepoRefResponse, WorkspaceResponse } from "../../api/generated/models/index.js";
 import { InvalidExternalPayload } from "../../api/effect-errors.js";
 
-type GeneratedWorkspace = components["schemas"]["WorkspaceResponse"];
-type GeneratedRepo = components["schemas"]["RepoRefResponse"];
+type GeneratedWorkspace = WorkspaceResponse;
+type GeneratedRepo = RepoRefResponse;
 
 export type WorkspaceDetail = Pick<
   GeneratedWorkspace,

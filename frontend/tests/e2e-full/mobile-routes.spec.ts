@@ -491,6 +491,9 @@ test.describe("phone routes", () => {
           hasText: "Add widget caching layer",
         }),
       })
+      .filter({
+        has: page.locator(".mobile-activity-card__meta span", { hasText: /^(acme\/)?widgets$/ }),
+      })
       .first();
     await expect(card).toBeVisible({ timeout: 10_000 });
 
@@ -518,9 +521,16 @@ test.describe("phone routes", () => {
   test("mobile activity card routes to a focused thread detail", async ({ page }) => {
     await page.goto("/m?range=30d&view=threaded");
     await expect(page.getByRole("button", { name: "Open thread" })).toHaveCount(0);
-    await expect(page.locator(".mobile-activity-card__button").first()).toBeVisible();
+    const card = page
+      .locator(".mobile-activity-card")
+      .filter({
+        has: page.locator(".mobile-activity-card__meta span", { hasText: /^acme\/widgets$/ }),
+      })
+      .filter({ hasText: "Add widget caching layer" })
+      .first();
+    await expect(card).toBeVisible();
 
-    await page.locator(".mobile-activity-card__button").first().click();
+    await card.locator(".mobile-activity-card__button").click();
 
     await expect(page).toHaveURL(/\/focus\/(?:host\/[^/]+\/)?(?:pulls|issues)\//);
     await expect(page.locator(".focus-layout")).toBeVisible();
@@ -542,9 +552,16 @@ test.describe("phone routes", () => {
     await expectPathname(page, "/");
     await expect(page.locator(".mobile-shell")).toBeVisible();
     await expect(page.getByRole("button", { name: "Open thread" })).toHaveCount(0);
-    await expect(page.locator(".mobile-activity-card__button").first()).toBeVisible();
+    const card = page
+      .locator(".mobile-activity-card")
+      .filter({
+        has: page.locator(".mobile-activity-card__meta span", { hasText: /^acme\/widgets$/ }),
+      })
+      .filter({ hasText: "Add widget caching layer" })
+      .first();
+    await expect(card).toBeVisible();
 
-    await page.locator(".mobile-activity-card__button").first().click();
+    await card.locator(".mobile-activity-card__button").click();
 
     await expect(page).toHaveURL(/\/focus\/(?:host\/[^/]+\/)?(?:pulls|issues)\//);
     await expect(page.locator(".focus-layout")).toBeVisible();

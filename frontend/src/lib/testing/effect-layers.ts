@@ -3,6 +3,8 @@ import * as Socket from "effect/unstable/socket/Socket";
 import { makeAppLiveLayer } from "../app/layer.js";
 import { makeAppRuntimeBoundary, type OwnedAppRuntime } from "../app/runtime.js";
 import { makeGeneratedApiLayer, type GeneratedClient } from "../api/generated-api.js";
+import { makeGeneratedClient } from "./generated-client.js";
+import { makeGeneratedClientFromRouteMocks, type RouteMockClient } from "./test/route-mock-client.js";
 import { EventSourceFactory, type EventSourceLike } from "../browser/event-source.js";
 import { BrowserObservers } from "../browser/observers.js";
 
@@ -122,6 +124,10 @@ const observerFactoryLayer = Layer.effect(BrowserObservers)(
 
 export const BrowserObserversTest = Layer.provideMerge(observerFactoryLayer, observerProbeLayer);
 
+function isRouteMockClient(client: GeneratedClient | RouteMockClient): client is RouteMockClient {
+  return "GET" in client || "POST" in client || "PUT" in client || "PATCH" in client || "DELETE" in client;
+}
+
 export class WebSocketProbe extends Context.Service<
   WebSocketProbe,
   {
@@ -220,6 +226,12 @@ export const WebSocketSuccessTest = makeWebSocketTestLayer("success");
 export const WebSocketFailureTest = makeWebSocketTestLayer("failure");
 export const WebSocketInterruptionTest = makeWebSocketTestLayer("interruption");
 
-export function makeTestAppRuntime(client: GeneratedClient): OwnedAppRuntime {
-  return makeAppRuntimeBoundary(ManagedRuntime.make(makeAppLiveLayer(makeGeneratedApiLayer(client))));
+export function makeTestAppRuntime(client: GeneratedClient | RouteMockClient = makeGeneratedClient()): OwnedAppRuntime {
+  return makeAppRuntimeBoundary(
+    ManagedRuntime.make(
+      makeAppLiveLayer(
+        makeGeneratedApiLayer(isRouteMockClient(client) ? makeGeneratedClientFromRouteMocks(client) : client),
+      ),
+    ),
+  );
 }

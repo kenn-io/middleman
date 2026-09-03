@@ -71,6 +71,7 @@
     "@vitest/browser-playwright": "4.1.10",
     "jsdom": "29.1.1",
     "openapi-typescript": "^7.13.0",
+    "orval": "8.26.0",
     "playwright": "1.62.1",
     "svelte": "5.56.8",
     "vite": "8.2.1",

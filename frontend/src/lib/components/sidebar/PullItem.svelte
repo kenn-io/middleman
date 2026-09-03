@@ -12,6 +12,7 @@
   import CITokenCluster, { composeAriaLabel } from "../shared/CITokenCluster.svelte";
   import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
   import CircleCheckBigIcon from "@lucide/svelte/icons/circle-check-big";
+  import Layers2Icon from "@lucide/svelte/icons/layers-2";
   import OctagonXIcon from "@lucide/svelte/icons/octagon-x";
   import LabelRow from "../shared/LabelRow.svelte";
   import WorkspaceIndicator from "../shared/WorkspaceIndicator.svelte";
@@ -220,6 +221,16 @@
           <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
             <path d="M5 3.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm0 2.122a2.25 2.25 0 10-1.5 0v.878A2.25 2.25 0 005.75 8.5h1.5v2.128a2.251 2.251 0 101.5 0V8.5h1.5a2.25 2.25 0 002.25-2.25v-.878a2.25 2.25 0 10-1.5 0v.878a.75.75 0 01-.75.75h-5.5a.75.75 0 01-.75-.75v-.878zM8 12.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm3.25-9.75a.75.75 0 100 1.5.75.75 0 000-1.5z"/>
           </svg>
+        </span>
+      {/if}
+      {#if pr.stack}
+        <span
+          class="stack-indicator"
+          aria-label={`Stacked: ${pr.stack.position}/${pr.stack.size}`}
+          title={`Stacked: ${pr.stack.position}/${pr.stack.size}`}
+        >
+          <Layers2Icon size={13} strokeWidth={2.2} aria-hidden="true" />
+          <span class="stack-indicator-count" aria-hidden="true">{pr.stack.position}/{pr.stack.size}</span>
         </span>
       {/if}
       {#if parsed.error !== null}
@@ -440,6 +451,21 @@
     color: var(--accent-red);
   }
 
+  .stack-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex: 0 0 auto;
+    color: var(--text-muted);
+  }
+
+  .stack-indicator-count {
+    font-size: var(--font-size-2xs);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
   .ci-unavailable {
     color: var(--state-warn, var(--accent-amber, #c08a2a));
     opacity: 0.85;
@@ -553,6 +579,7 @@
   :global(.mobile-main) .meta-text,
   :global(.mobile-main) .time,
   :global(.mobile-main) .worktree-name,
+  :global(.mobile-main) .stack-indicator-count,
   :global(.mobile-main) .item-number,
   :global(.mobile-main) .repo-name {
     font-size: var(--font-size-sm);

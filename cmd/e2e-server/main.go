@@ -41,6 +41,7 @@ import (
 	"go.kenn.io/forge/internal/profiler"
 	"go.kenn.io/forge/internal/ptyowner"
 	"go.kenn.io/forge/internal/server"
+	"go.kenn.io/forge/internal/server/httpapi"
 	"go.kenn.io/forge/internal/server/workspaceapi"
 	"go.kenn.io/forge/internal/stacks"
 	"go.kenn.io/forge/internal/testutil"
@@ -2765,7 +2766,9 @@ func buildAppState(
 		if r.Method == http.MethodGet &&
 			strings.HasSuffix(r.URL.Path, "/browser/tree") &&
 			failNextRepoBrowserTree.CompareAndSwap(true, false) {
-			http.Error(w, "tree failed", http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/problem+json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(httpapi.NewProblem(http.StatusInternalServerError, httpapi.CodeInternalError, "tree failed", nil))
 			return
 		}
 		if r.Method == http.MethodPost &&

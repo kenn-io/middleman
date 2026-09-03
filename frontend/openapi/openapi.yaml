@@ -106,9 +106,7 @@ components:
         authors:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         use_workspace_activity_for_recency:
           type: boolean
       required:
@@ -236,17 +234,13 @@ components:
         item_activity:
           items:
             $ref: "#/components/schemas/ActivitySubjectResponse"
-          type:
-            - array
-            - "null"
+          type: array
         item_activity_capped:
           type: boolean
         items:
           items:
             $ref: "#/components/schemas/ActivityItemResponse"
-          type:
-            - array
-            - "null"
+          type: array
         next_cursor:
           type: string
         use_workspace_activity_for_recency:
@@ -254,9 +248,7 @@ components:
         workspace_activity:
           items:
             $ref: "#/components/schemas/WorkspaceActivitySubjectResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - items
         - item_activity
@@ -430,9 +422,7 @@ components:
         suggestions:
           items:
             $ref: "#/components/schemas/ApplyReviewSuggestionRequestItem"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - suggestions
       type: object
@@ -453,9 +443,7 @@ components:
         suggestions:
           items:
             $ref: "#/components/schemas/ApplyReviewSuggestionRequestItem"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - suggestions
       type: object
@@ -589,9 +577,7 @@ components:
         repositories:
           items:
             $ref: "#/components/schemas/ArchiveRepositoryRef"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - all
       type: object
@@ -779,9 +765,7 @@ components:
         active_phases:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         archived_items:
           format: int64
           type: integer
@@ -890,24 +874,18 @@ components:
         activity:
           items:
             $ref: "#/components/schemas/ArchiveReportActivityResponse"
-          type:
-            - array
-            - "null"
+          type: array
         contributors:
           items:
             $ref: "#/components/schemas/ArchiveReportContributorResponse"
-          type:
-            - array
-            - "null"
+          type: array
         end:
           format: date-time
           type: string
         repositories:
           items:
             $ref: "#/components/schemas/ArchiveReportRepositoryResponse"
-          type:
-            - array
-            - "null"
+          type: array
         schema:
           type: string
           x-go-name: ReportSchema
@@ -955,9 +933,7 @@ components:
               - hydration
               - prompt_maintenance
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         budget_wait_until:
           format: date-time
           type: string
@@ -1015,9 +991,7 @@ components:
         matches:
           items:
             $ref: "#/components/schemas/SnippetRange"
-          type:
-            - array
-            - "null"
+          type: array
         text:
           type: string
       required:
@@ -1193,15 +1167,11 @@ components:
         references:
           items:
             $ref: "#/components/schemas/CommentAutocompleteReference"
-          type:
-            - array
-            - "null"
+          type: array
         users:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       type: object
     CommitResponse:
       additionalProperties: false
@@ -1242,9 +1212,7 @@ components:
           description: Commits in newest-first order
           items:
             $ref: "#/components/schemas/CommitResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - commits
       type: object
@@ -1681,9 +1649,7 @@ components:
         hunks:
           items:
             $ref: "#/components/schemas/Hunk"
-          type:
-            - array
-            - "null"
+          type: array
         is_binary:
           type: boolean
         is_generated:
@@ -1726,9 +1692,7 @@ components:
         files:
           items:
             $ref: "#/components/schemas/DiffFile"
-          type:
-            - array
-            - "null"
+          type: array
         snapshot_version:
           description: Opaque workspace diff snapshot version used to keep files and patches coherent.
           type: string
@@ -1809,9 +1773,7 @@ components:
         comments:
           items:
             $ref: "#/components/schemas/DiffReviewDraftComment"
-          type:
-            - array
-            - "null"
+          type: array
         draft_id:
           type: string
         native_multiline_ranges:
@@ -1819,9 +1781,7 @@ components:
         supported_actions:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - comments
         - supported_actions
@@ -1948,9 +1908,7 @@ components:
         entries:
           items:
             $ref: "#/components/schemas/DocsBrowseEntry"
-          type:
-            - array
-            - "null"
+          type: array
         parent:
           type: string
         path:
@@ -2099,9 +2057,7 @@ components:
         hits:
           items:
             $ref: "#/components/schemas/CrossFolderHit"
-          type:
-            - array
-            - "null"
+          type: array
         query:
           type: string
         truncated:
@@ -2109,9 +2065,7 @@ components:
         warnings:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - query
         - hits
@@ -2130,9 +2084,7 @@ components:
         hits:
           items:
             $ref: "#/components/schemas/Hit"
-          type:
-            - array
-            - "null"
+          type: array
         query:
           type: string
       required:
@@ -2793,9 +2745,7 @@ components:
         files:
           items:
             $ref: "#/components/schemas/DiffFile"
-          type:
-            - array
-            - "null"
+          type: array
         snapshot_version:
           description: Opaque workspace diff snapshot version to pin on the following workspace diff request.
           type: string
@@ -2822,9 +2772,7 @@ components:
         completions:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - completions
       type: object
@@ -2935,9 +2883,7 @@ components:
         changes:
           items:
             $ref: "#/components/schemas/PublishChange"
-          type:
-            - array
-            - "null"
+          type: array
         ignored_non_markdown_count:
           format: int64
           type: integer
@@ -2976,9 +2922,7 @@ components:
         entries:
           items:
             $ref: "#/components/schemas/GitStatusEntry"
-          type:
-            - array
-            - "null"
+          type: array
         is_repo:
           type: boolean
       required:
@@ -3078,9 +3022,7 @@ components:
         blocksOperations:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         code:
           type: string
         recoverySuggestion:
@@ -3157,9 +3099,7 @@ components:
         diagnostics:
           items:
             $ref: "#/components/schemas/HostDiagnostic"
-          type:
-            - array
-            - "null"
+          type: array
         error:
           type: string
         federationRole:
@@ -3198,9 +3138,7 @@ components:
         tmuxSessions:
           items:
             $ref: "#/components/schemas/TmuxSessionInfo"
-          type:
-            - array
-            - "null"
+          type: array
         version:
           type: string
       required:
@@ -3223,9 +3161,7 @@ components:
         lines:
           items:
             $ref: "#/components/schemas/Line"
-          type:
-            - array
-            - "null"
+          type: array
         new_count:
           format: int64
           type: integer
@@ -3272,9 +3208,7 @@ components:
         sibling_worktree_ids:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - is_dirty
         - dirty_file_count
@@ -3342,15 +3276,11 @@ components:
         assignees:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         labels:
           items:
             $ref: "#/components/schemas/Label"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - ID
         - RepoID
@@ -3388,9 +3318,7 @@ components:
         events:
           items:
             $ref: "#/components/schemas/IssueEvent"
-          type:
-            - array
-            - "null"
+          type: array
         issue:
           $ref: "#/components/schemas/Issue"
         platform_host:
@@ -3536,9 +3464,7 @@ components:
         assignees:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         detail_fetched_at:
           type: string
         detail_loaded:
@@ -3546,9 +3472,7 @@ components:
         labels:
           items:
             $ref: "#/components/schemas/Label"
-          type:
-            - array
-            - "null"
+          type: array
         last_workspace_activity_at:
           format: date-time
           type: string
@@ -3607,9 +3531,7 @@ components:
         assignees:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - assignees
       type: object
@@ -3626,9 +3548,7 @@ components:
         labels:
           items:
             $ref: "#/components/schemas/Label"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - labels
       type: object
@@ -3645,9 +3565,7 @@ components:
         reviewers:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - reviewers
       type: object
@@ -3783,9 +3701,7 @@ components:
         daemons:
           items:
             $ref: "#/components/schemas/KataDaemonResponse"
-          type:
-            - array
-            - "null"
+          type: array
         source:
           type: string
       required:
@@ -3812,9 +3728,7 @@ components:
         provenance:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         reference:
           type: string
         status:
@@ -4136,9 +4050,7 @@ components:
         command:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         cwd:
           type: string
         env:
@@ -4166,9 +4078,7 @@ components:
         command:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         cwd:
           type: string
         env:
@@ -4190,9 +4100,7 @@ components:
         command:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         disabled_reason:
           type: string
         key:
@@ -4259,9 +4167,7 @@ components:
         folders:
           items:
             $ref: "#/components/schemas/DocsFolderResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - folders
       type: object
@@ -4278,9 +4184,7 @@ components:
         sessions:
           items:
             $ref: "#/components/schemas/HostRuntimeSession"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - sessions
       type: object
@@ -4297,9 +4201,7 @@ components:
         launch_targets:
           items:
             $ref: "#/components/schemas/LaunchTarget"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - launch_targets
       type: object
@@ -4316,9 +4218,7 @@ components:
         branches:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - branches
       type: object
@@ -4335,9 +4235,7 @@ components:
         projects:
           items:
             $ref: "#/components/schemas/ProjectResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - projects
       type: object
@@ -4354,9 +4252,7 @@ components:
         repositories:
           items:
             $ref: "#/components/schemas/UserRepository"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - repositories
       type: object
@@ -4373,9 +4269,7 @@ components:
         sessions:
           items:
             $ref: "#/components/schemas/WorkspaceAgentSessionResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - sessions
       type: object
@@ -4392,9 +4286,7 @@ components:
         workspaces:
           items:
             $ref: "#/components/schemas/WorkspaceResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - workspaces
       type: object
@@ -4411,9 +4303,7 @@ components:
         worktrees:
           items:
             $ref: "#/components/schemas/WorktreeResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - worktrees
       type: object
@@ -4746,23 +4636,17 @@ components:
         assignees:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         labels:
           items:
             $ref: "#/components/schemas/Label"
-          type:
-            - array
-            - "null"
+          type: array
         platform_head_sha:
           type: string
         requested_reviewers:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - ID
         - RepoID
@@ -4812,9 +4696,7 @@ components:
         checks:
           items:
             $ref: "#/components/schemas/CICheck"
-          type:
-            - array
-            - "null"
+          type: array
         deferred_merge_pending:
           type: boolean
         detail_fetched_at:
@@ -4826,9 +4708,7 @@ components:
         events:
           items:
             $ref: "#/components/schemas/MergeRequestEventResponse"
-          type:
-            - array
-            - "null"
+          type: array
         head_repo_kind:
           enum:
             - same_repo
@@ -4858,9 +4738,7 @@ components:
         warnings:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         workflow_approval:
           $ref: "#/components/schemas/WorkflowApprovalResponse"
         workspace:
@@ -4868,9 +4746,7 @@ components:
         worktree_links:
           items:
             $ref: "#/components/schemas/WorktreeLinkResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - merge_request
         - events
@@ -5056,9 +4932,7 @@ components:
         assignees:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         detail_fetched_at:
           type: string
         detail_loaded:
@@ -5066,9 +4940,7 @@ components:
         labels:
           items:
             $ref: "#/components/schemas/Label"
-          type:
-            - array
-            - "null"
+          type: array
         last_workspace_activity_at:
           format: date-time
           type: string
@@ -5085,17 +4957,15 @@ components:
         requested_reviewers:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
+        stack:
+          $ref: "#/components/schemas/StackPlacementResponse"
         workspace:
           $ref: "#/components/schemas/WorkspaceRef"
         worktree_links:
           items:
             $ref: "#/components/schemas/WorktreeLinkResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - repo
         - repo_owner
@@ -5255,9 +5125,7 @@ components:
         tmuxSessions:
           items:
             $ref: "#/components/schemas/TmuxSessionInfo"
-          type:
-            - array
-            - "null"
+          type: array
         version:
           type: string
       required:
@@ -5283,38 +5151,28 @@ components:
         hosts:
           items:
             $ref: "#/components/schemas/NeutralHost"
-          type:
-            - array
-            - "null"
+          type: array
         platformAuthenticated:
           type: boolean
         projects:
           items:
             $ref: "#/components/schemas/RawProject"
-          type:
-            - array
-            - "null"
+          type: array
         protocolVersion:
           format: int64
           type: integer
         sessions:
           items:
             $ref: "#/components/schemas/RawSession"
-          type:
-            - array
-            - "null"
+          type: array
         workspaces:
           items:
             $ref: "#/components/schemas/RawWorkspace"
-          type:
-            - array
-            - "null"
+          type: array
         worktrees:
           items:
             $ref: "#/components/schemas/RawWorktree"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - protocolVersion
         - generation
@@ -5333,9 +5191,7 @@ components:
         children:
           items:
             $ref: "#/components/schemas/Node"
-          type:
-            - array
-            - "null"
+          type: array
         is_dir:
           type: boolean
         name:
@@ -5376,9 +5232,7 @@ components:
           items:
             format: int64
             type: integer
-          type:
-            - array
-            - "null"
+          type: array
         mark_read:
           type: boolean
       required:
@@ -5397,23 +5251,17 @@ components:
         failed:
           items:
             $ref: "#/components/schemas/NotificationBulkFailure"
-          type:
-            - array
-            - "null"
+          type: array
         queued:
           items:
             format: int64
             type: integer
-          type:
-            - array
-            - "null"
+          type: array
         succeeded:
           items:
             format: int64
             type: integer
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - succeeded
         - queued
@@ -5561,9 +5409,7 @@ components:
         items:
           items:
             $ref: "#/components/schemas/NotificationResponse"
-          type:
-            - array
-            - "null"
+          type: array
         summary:
           $ref: "#/components/schemas/NotificationSummaryResponse"
         sync:
@@ -5739,9 +5585,7 @@ components:
           description: Optional list of individual error details
           items:
             $ref: "#/components/schemas/ErrorDetail"
-          type:
-            - array
-            - "null"
+          type: array
         instance:
           description: A URI reference that identifies the specific occurrence of the problem.
           examples:
@@ -5853,15 +5697,11 @@ components:
         launch_targets:
           items:
             $ref: "#/components/schemas/LaunchTarget"
-          type:
-            - array
-            - "null"
+          type: array
         sessions:
           items:
             $ref: "#/components/schemas/ProjectWorktreeRuntimeSession"
-          type:
-            - array
-            - "null"
+          type: array
         shell_session:
           $ref: "#/components/schemas/ProjectWorktreeRuntimeSession"
       required:
@@ -5975,9 +5815,7 @@ components:
         supported_review_actions:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         thread_reply:
           type: boolean
         thread_resolve:
@@ -6355,9 +6193,7 @@ components:
         files:
           items:
             $ref: "#/components/schemas/PublishChange"
-          type:
-            - array
-            - "null"
+          type: array
         pushed:
           type: boolean
         short_commit:
@@ -6506,9 +6342,7 @@ components:
         tmuxSessions:
           items:
             $ref: "#/components/schemas/TmuxSessionInfo"
-          type:
-            - array
-            - "null"
+          type: array
         version:
           type: string
       required:
@@ -6618,30 +6452,22 @@ components:
         projects:
           items:
             $ref: "#/components/schemas/RawProject"
-          type:
-            - array
-            - "null"
+          type: array
         protocolVersion:
           format: int64
           type: integer
         sessions:
           items:
             $ref: "#/components/schemas/RawSession"
-          type:
-            - array
-            - "null"
+          type: array
         workspaces:
           items:
             $ref: "#/components/schemas/RawWorkspace"
-          type:
-            - array
-            - "null"
+          type: array
         worktrees:
           items:
             $ref: "#/components/schemas/RawWorktree"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - protocolVersion
         - nodeID
@@ -6658,6 +6484,8 @@ components:
         associatedPRNumber:
           format: int64
           type: integer
+        branchUpstreamMissing:
+          type: boolean
         commitsAhead:
           format: int64
           type: integer
@@ -6771,9 +6599,7 @@ components:
         checksDetail:
           items:
             $ref: "#/components/schemas/CheckDetail"
-          type:
-            - array
-            - "null"
+          type: array
         checksStatus:
           type: string
         diffAdded:
@@ -6796,9 +6622,7 @@ components:
           items:
             format: int64
             type: integer
-          type:
-            - array
-            - "null"
+          type: array
         linkedPRNumber:
           format: int64
           type: integer
@@ -7121,9 +6945,7 @@ components:
         commits:
           items:
             $ref: "#/components/schemas/RepoBrowserCommit"
-          type:
-            - array
-            - "null"
+          type: array
         path:
           type: string
         ref:
@@ -7198,9 +7020,7 @@ components:
         refs:
           items:
             $ref: "#/components/schemas/RepoBrowserRef"
-          type:
-            - array
-            - "null"
+          type: array
         repo:
           $ref: "#/components/schemas/RepoRefResponse"
         truncated:
@@ -7239,9 +7059,7 @@ components:
         entries:
           items:
             $ref: "#/components/schemas/RepoBrowserTreeEntry"
-          type:
-            - array
-            - "null"
+          type: array
         ref:
           $ref: "#/components/schemas/RepoBrowserRef"
         repo:
@@ -7269,9 +7087,7 @@ components:
         labels:
           items:
             $ref: "#/components/schemas/Label"
-          type:
-            - array
-            - "null"
+          type: array
         stale:
           type: boolean
         sync_error:
@@ -7665,9 +7481,7 @@ components:
         active_authors:
           items:
             $ref: "#/components/schemas/RepoSummaryAuthorResponse"
-          type:
-            - array
-            - "null"
+          type: array
         cached_issue_count:
           format: int64
           type: integer
@@ -7677,9 +7491,7 @@ components:
         commit_timeline:
           items:
             $ref: "#/components/schemas/RepoSummaryCommitPointResponse"
-          type:
-            - array
-            - "null"
+          type: array
         commits_since_release:
           format: int64
           type: integer
@@ -7715,15 +7527,11 @@ components:
         recent_issues:
           items:
             $ref: "#/components/schemas/RepoSummaryIssueResponse"
-          type:
-            - array
-            - "null"
+          type: array
         releases:
           items:
             $ref: "#/components/schemas/RepoSummaryReleaseResponse"
-          type:
-            - array
-            - "null"
+          type: array
         repo:
           $ref: "#/components/schemas/RepoRefResponse"
         timeline_updated_at:
@@ -7968,9 +7776,7 @@ components:
         repositories:
           items:
             $ref: "#/components/schemas/RoborevConfiguredRepositoryResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - repositories
         - complete
@@ -8043,9 +7849,7 @@ components:
         command:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         kind:
           type: string
         requires_local_host:
@@ -8265,9 +8069,7 @@ components:
         labels:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - labels
       type: object
@@ -8317,9 +8119,7 @@ components:
           items:
             format: int64
             type: integer
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - linked_issue_numbers
       type: object
@@ -8369,9 +8169,7 @@ components:
         launch_targets:
           items:
             $ref: "#/components/schemas/LaunchTarget"
-          type:
-            - array
-            - "null"
+          type: array
         mcp:
           $ref: "#/components/schemas/McpSettingsResponse"
         modes:
@@ -8431,9 +8229,7 @@ components:
         hosts:
           items:
             $ref: "#/components/schemas/HostSummary"
-          type:
-            - array
-            - "null"
+          type: array
         platformAuthenticated:
           type: boolean
         projectMap:
@@ -8443,30 +8239,22 @@ components:
         projects:
           items:
             $ref: "#/components/schemas/ProjectSummary"
-          type:
-            - array
-            - "null"
+          type: array
         protocolVersion:
           format: int64
           type: integer
         sessions:
           items:
             $ref: "#/components/schemas/SessionSummary"
-          type:
-            - array
-            - "null"
+          type: array
         workspaces:
           items:
             $ref: "#/components/schemas/WorkspaceSummary"
-          type:
-            - array
-            - "null"
+          type: array
         worktrees:
           items:
             $ref: "#/components/schemas/WorktreeSummary"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - protocolVersion
         - generation
@@ -8625,9 +8413,7 @@ components:
         members:
           items:
             $ref: "#/components/schemas/StackMemberResponse"
-          type:
-            - array
-            - "null"
+          type: array
         position:
           format: int64
           type: integer
@@ -8687,6 +8473,21 @@ components:
         - base_branch
         - blocked_by
       type: object
+    StackPlacementResponse:
+      additionalProperties: false
+      properties:
+        position:
+          description: 1-based position of this pull request in its stack
+          format: int64
+          type: integer
+        size:
+          description: Number of visible pull requests in the stack
+          format: int64
+          type: integer
+      required:
+        - position
+        - size
+      type: object
     StackResponse:
       additionalProperties: false
       properties:
@@ -8698,9 +8499,7 @@ components:
         members:
           items:
             $ref: "#/components/schemas/StackMemberResponse"
-          type:
-            - array
-            - "null"
+          type: array
         name:
           type: string
         repo_name:
@@ -8890,9 +8689,7 @@ components:
         windows:
           items:
             $ref: "#/components/schemas/TmuxWindowInfo"
-          type:
-            - array
-            - "null"
+          type: array
         worktreeKey:
           type: string
       required:
@@ -9126,17 +8923,13 @@ components:
         environments:
           items:
             $ref: "#/components/schemas/WorkflowEnvironmentResponse"
-          type:
-            - array
-            - "null"
+          type: array
         repo:
           $ref: "#/components/schemas/RepoRefResponse"
         workflows:
           items:
             $ref: "#/components/schemas/WorkflowDefinitionResponse"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - repo
         - workflows
@@ -9154,9 +8947,7 @@ components:
         inputs:
           items:
             $ref: "#/components/schemas/WorkflowInputResponse"
-          type:
-            - array
-            - "null"
+          type: array
         name:
           type: string
         path:
@@ -9243,9 +9034,7 @@ components:
         options:
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
         required:
           type: boolean
         type:
@@ -9275,9 +9064,7 @@ components:
         items:
           items:
             $ref: "#/components/schemas/WorkflowRunJobResponse"
-          type:
-            - array
-            - "null"
+          type: array
         repo:
           $ref: "#/components/schemas/RepoRefResponse"
       required:
@@ -9304,9 +9091,7 @@ components:
         steps:
           items:
             $ref: "#/components/schemas/WorkflowRunStepResponse"
-          type:
-            - array
-            - "null"
+          type: array
         web_url:
           format: uri
           type: string
@@ -9401,9 +9186,7 @@ components:
         items:
           items:
             $ref: "#/components/schemas/WorkflowRunResponse"
-          type:
-            - array
-            - "null"
+          type: array
         next_cursor:
           type: string
         repo:
@@ -9834,6 +9617,9 @@ components:
         associated_pr_number:
           format: int64
           type: integer
+        branch_upstream_missing:
+          description: True when the current branch has an origin upstream configured but its local remote-tracking ref is absent; clients may offer Push so branch sync can verify or create the remote branch.
+          type: boolean
         commits_ahead:
           format: int64
           type: integer
@@ -9959,15 +9745,11 @@ components:
         launch_targets:
           items:
             $ref: "#/components/schemas/LaunchTarget"
-          type:
-            - array
-            - "null"
+          type: array
         sessions:
           items:
             $ref: "#/components/schemas/SessionInfo"
-          type:
-            - array
-            - "null"
+          type: array
       required:
         - launch_targets
         - sessions
@@ -9993,6 +9775,8 @@ components:
         associated_pr_number:
           format: int64
           type: integer
+        branch_upstream_missing:
+          type: boolean
         commits_ahead:
           format: int64
           type: integer
@@ -10131,9 +9915,7 @@ components:
           items:
             format: int64
             type: integer
-          type:
-            - array
-            - "null"
+          type: array
         merge_request:
           $ref: "#/components/schemas/MergeRequestSummary"
         path:
@@ -10197,9 +9979,7 @@ components:
           items:
             format: int64
             type: integer
-          type:
-            - array
-            - "null"
+          type: array
         path:
           type: string
         project_id:
@@ -10229,9 +10009,7 @@ components:
         checksDetail:
           items:
             $ref: "#/components/schemas/CheckDetail"
-          type:
-            - array
-            - "null"
+          type: array
         checksStatus:
           type: string
         diffAdded:
@@ -10256,9 +10034,7 @@ components:
           items:
             format: int64
             type: integer
-          type:
-            - array
-            - "null"
+          type: array
         linkedPRNumber:
           format: int64
           type: integer
@@ -10520,9 +10296,7 @@ paths:
           schema:
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
         - description: "Item scopes included before limiting activity results: pr, issue, or repo."
           explode: false
           in: query
@@ -10531,9 +10305,7 @@ paths:
             description: "Item scopes included before limiting activity results: pr, issue, or repo."
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
         - explode: false
           in: query
           name: search
@@ -10701,9 +10473,7 @@ paths:
           schema:
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
         - explode: false
           in: query
           name: search
@@ -10816,9 +10586,7 @@ paths:
               schema:
                 items:
                   $ref: "#/components/schemas/ArchivePacingStatusResponse"
-                type:
-                  - array
-                  - "null"
+                type: array
           description: OK
         default:
           content:
@@ -10845,9 +10613,7 @@ paths:
               schema:
                 items:
                   $ref: "#/components/schemas/ArchiveStatusResponse"
-                type:
-                  - array
-                  - "null"
+                type: array
           description: OK
         default:
           content:
@@ -10886,9 +10652,7 @@ paths:
             description: Repeated provider|platform_host/repo_path filters.
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
         - explode: false
           in: query
           name: verbose
@@ -10926,9 +10690,7 @@ paths:
               schema:
                 items:
                   $ref: "#/components/schemas/ArchiveStatusResponse"
-                type:
-                  - array
-                  - "null"
+                type: array
           description: OK
         default:
           content:
@@ -10951,9 +10713,7 @@ paths:
             description: Repeated provider|platform_host/repo_path filters.
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
       responses:
         "200":
           content:
@@ -10961,9 +10721,7 @@ paths:
               schema:
                 items:
                   $ref: "#/components/schemas/ArchiveStatusResponse"
-                type:
-                  - array
-                  - "null"
+                type: array
           description: OK
         default:
           content:
@@ -17154,9 +16912,7 @@ paths:
           schema:
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
       responses:
         "200":
           content:
@@ -17814,9 +17570,7 @@ paths:
               schema:
                 items:
                   $ref: "#/components/schemas/IssueResponse"
-                type:
-                  - array
-                  - "null"
+                type: array
           description: OK
         default:
           content:
@@ -18637,9 +18391,7 @@ paths:
           schema:
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
         - explode: false
           in: query
           name: limit
@@ -18733,18 +18485,14 @@ paths:
           schema:
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
         - explode: false
           in: query
           name: type
           schema:
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
         - explode: false
           in: query
           name: repo
@@ -19615,9 +19363,7 @@ paths:
               schema:
                 items:
                   $ref: "#/components/schemas/MergeRequestResponse"
-                type:
-                  - array
-                  - "null"
+                type: array
           description: OK
         default:
           content:
@@ -21831,9 +21577,7 @@ paths:
           schema:
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
       responses:
         "200":
           content:
@@ -21978,6 +21722,24 @@ paths:
           in: query
           name: limit
           schema:
+            format: int64
+            type: integer
+        - description: Optional item the comment targets; requires item_number.
+          explode: false
+          in: query
+          name: item_type
+          schema:
+            description: Optional item the comment targets; requires item_number.
+            enum:
+              - pr
+              - issue
+            type: string
+        - description: Optional item number the comment targets; requires item_type.
+          explode: false
+          in: query
+          name: item_number
+          schema:
+            description: Optional item number the comment targets; requires item_type.
             format: int64
             type: integer
       responses:
@@ -22375,9 +22137,7 @@ paths:
               schema:
                 items:
                   $ref: "#/components/schemas/RepoResponse"
-                type:
-                  - array
-                  - "null"
+                type: array
           description: OK
         default:
           content:
@@ -22472,9 +22232,7 @@ paths:
               schema:
                 items:
                   $ref: "#/components/schemas/RepoSummaryResponse"
-                type:
-                  - array
-                  - "null"
+                type: array
           description: OK
         default:
           content:
@@ -22886,9 +22644,7 @@ paths:
               schema:
                 items:
                   $ref: "#/components/schemas/StackResponse"
-                type:
-                  - array
-                  - "null"
+                type: array
           description: OK
         default:
           content:
@@ -22987,9 +22743,7 @@ paths:
             description: Optional repository filters to sync first. Accepts repeated provider|platform_host/repo_path values or comma-separated values.
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
         - description: Optional repository filters to sync exclusively. Accepts repeated provider|platform_host/repo_path values or comma-separated values.
           explode: false
           in: query
@@ -22998,9 +22752,7 @@ paths:
             description: Optional repository filters to sync exclusively. Accepts repeated provider|platform_host/repo_path values or comma-separated values.
             items:
               type: string
-            type:
-              - array
-              - "null"
+            type: array
       responses:
         "202":
           description: Accepted

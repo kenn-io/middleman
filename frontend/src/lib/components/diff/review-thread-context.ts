@@ -1,7 +1,19 @@
-import type { components } from "../../api/generated/schema.js";
+import type { DiffReviewThreadResponse } from "../../api/generated/models/index.js";
 import type { DiffLine, DiffResult, PREvent } from "../../api/types.js";
 
-export type ReviewThread = components["schemas"]["DiffReviewThreadResponse"];
+export type ReviewThread = DiffReviewThreadResponse;
+
+export type ReviewThreadSnapshotState = "fresh" | "stale" | "head-unknown";
+
+export type ReviewThreadCardPlacement = "inline" | "file" | "outdated" | "unavailable";
+
+export function reviewThreadSnapshotState(
+  thread: Pick<ReviewThread, "diff_head_sha">,
+  diffHeadSHA: string | undefined,
+): ReviewThreadSnapshotState {
+  if (!thread.diff_head_sha || !diffHeadSHA) return "head-unknown";
+  return thread.diff_head_sha === diffHeadSHA ? "fresh" : "stale";
+}
 
 export type ReviewThreadContextLine = {
   key: string;

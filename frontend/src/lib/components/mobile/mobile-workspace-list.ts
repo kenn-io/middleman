@@ -1,6 +1,10 @@
 import { createRepoLabelFormatter, repoIdentityKey } from "../../utils/repo-label.js";
 import type { WorkspaceListItem } from "../terminal/workspace-list-schema.js";
-import type { WorkspaceListSort } from "../terminal/workspaceListSort.js";
+import {
+  workspaceAgentStatePriority,
+  workspaceAgentStateSortTime,
+  type WorkspaceListSort,
+} from "../terminal/workspaceListSort.js";
 
 export interface MobileWorkspaceGroup {
   key: string;
@@ -76,6 +80,14 @@ export function sortMobileWorkspaces(
   workspaces: readonly WorkspaceListItem[],
   sort: Exclude<WorkspaceListSort, "repo">,
 ): WorkspaceListItem[] {
+  if (sort === "agent-status") {
+    return [...workspaces].sort(
+      (left, right) =>
+        workspaceAgentStatePriority(right.agent_state) - workspaceAgentStatePriority(left.agent_state) ||
+        timeValue(workspaceAgentStateSortTime(right)) - timeValue(workspaceAgentStateSortTime(left)) ||
+        left.id.localeCompare(right.id),
+    );
+  }
   const stamp =
     sort === "activity"
       ? (workspace: WorkspaceListItem) => timeValue(workspace.tmux_last_output_at) || timeValue(workspace.created_at)

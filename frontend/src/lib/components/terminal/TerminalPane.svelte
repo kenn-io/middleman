@@ -1,5 +1,6 @@
 <script lang="ts">
   import XtermTerminalPane from "./XtermTerminalPane.svelte";
+  import type { TerminalKey } from "./terminal-key.js";
 
   interface TerminalPaneProps {
     workspaceId?: string | undefined;
@@ -44,6 +45,10 @@
 
   export function sendPastedInput(data: string, suffix = ""): boolean {
     return xtermPane?.sendPastedInput(data, suffix) ?? false;
+  }
+
+  export function sendKey(key: TerminalKey): boolean {
+    return xtermPane?.sendKey(key) ?? false;
   }
 </script>
 

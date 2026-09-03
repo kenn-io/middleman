@@ -3,9 +3,9 @@ import { Effect } from "effect";
 import type { ComponentProps } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { GeneratedClient } from "../api/generated-api.js";
 import type { OwnedAppRuntime } from "../app/runtime.js";
 import { makeTestAppRuntime } from "../testing/effect-layers.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
 import {
   finishCommentSubmit,
   getCommentDraft,
@@ -31,21 +31,27 @@ interface AutocompleteResponse {
 }
 
 function mockAutocompleteClient() {
-  return {
-    GET: async (
-      path: string,
-      options?: { params?: { path?: Record<string, unknown>; query?: Record<string, unknown> } },
-    ) => {
-      if (
-        path === "/repo/{provider}/{owner}/{name}/comment-autocomplete" ||
-        path === "/host/{platform_host}/repo/{provider}/{owner}/{name}/comment-autocomplete"
-      ) {
-        runtimeAutocompleteQuery?.(options?.params);
-        return { data: runtimeAutocompleteResponse };
-      }
-      return { data: undefined, error: { title: "not mocked" } };
-    },
+  const response = async (
+    path: { provider: string; owner: string; name: string; platformHost?: string },
+    query: Record<string, unknown>,
+  ) => {
+    runtimeAutocompleteQuery?.({
+      path: {
+        provider: path.provider,
+        owner: path.owner,
+        name: path.name,
+        ...(path.platformHost === undefined ? {} : { platform_host: path.platformHost }),
+      },
+      query,
+    });
+    return runtimeAutocompleteResponse;
   };
+  return makeGeneratedClient({
+    RepositoriesService: {
+      getCommentAutocomplete: response,
+      getCommentAutocompleteOnHost: response,
+    },
+  });
 }
 
 function renderCommentHarness(props: HarnessProps) {
@@ -127,7 +133,7 @@ describe("comment draft persistence", () => {
   beforeEach(() => {
     runtimeAutocompleteResponse = { users: [], references: [] };
     runtimeAutocompleteQuery = undefined;
-    runtime = makeTestAppRuntime(mockAutocompleteClient() as unknown as GeneratedClient);
+    runtime = makeTestAppRuntime(mockAutocompleteClient());
   });
 
   afterEach(async () => {
@@ -718,7 +724,7 @@ describe("comment draft persistence", () => {
     });
   });
 
-  it.each(["pull", "issue"] as const)("passes the platform host to %s comment autocomplete", async (kind) => {
+  it.each(["pull", "issue"] as const)("passes the host and item to %s comment autocomplete", async (kind) => {
     const autocompleteQueries: Array<Record<string, unknown> | undefined> = [];
 
     renderCommentHarness({
@@ -747,6 +753,11 @@ describe("comment draft persistence", () => {
     expect(autocompleteQueries.at(-1)).toMatchObject({
       path: {
         platform_host: "ghe.example.com",
+      },
+      query: {
+        trigger: "@",
+        item_type: kind === "pull" ? "pr" : "issue",
+        item_number: 1,
       },
     });
   });

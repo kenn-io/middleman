@@ -26,6 +26,7 @@ import (
 	"go.kenn.io/forge/internal/server/issueapi"
 	"go.kenn.io/forge/internal/server/pullapi"
 	"go.kenn.io/forge/internal/server/workspaceapi"
+	"go.kenn.io/forge/internal/testutil"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/workspace"
 )
@@ -64,7 +65,7 @@ func (*failingProviderResponseBody) Close() error { return nil }
 func TestProviderProxyPreservesHubResponse(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
-	t.Parallel()
+	runParallelServerTest(t)
 
 	hub := httptest.NewTLSServer(http.HandlerFunc(func(
 		w http.ResponseWriter, _ *http.Request,
@@ -99,7 +100,7 @@ func TestProviderProxyPreservesHubResponse(t *testing.T) {
 func TestHubUnavailableDoesNotFallBackToLocalProviderHandler(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
-	t.Parallel()
+	runParallelServerTest(t)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(err)
@@ -130,7 +131,7 @@ func TestHubUnavailableDoesNotFallBackToLocalProviderHandler(t *testing.T) {
 func TestNodeHEADProviderReadUsesHubGETOwnership(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
-	t.Parallel()
+	runParallelServerTest(t)
 
 	var hubReads atomic.Int64
 	hub := httptest.NewTLSServer(http.HandlerFunc(func(
@@ -518,7 +519,7 @@ func TestSpokeUnassignedActivityUsesHubAssignmentWithoutLocalProviderRows(t *tes
 func TestNodeServerRoutesProviderReadsWithoutUsingLocalTables(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
-	t.Parallel()
+	runParallelServerTest(t)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(err)
@@ -774,7 +775,7 @@ func TestFederatedReviewDraftHasOneHubOwner(t *testing.T) {
 		t, "66666666666666666666666666666666", hub.URL, hub.Client(),
 	)
 	path := "/api/v1/host/gitlab.example.com/pulls/gl/group/project/7/review-draft"
-	created := doJSON(t, nodeA, http.MethodPost, path+"/comments", map[string]any{
+	created := testutil.DoJSON(t, nodeA, http.MethodPost, path+"/comments", map[string]any{
 		"body": "comment from spoke A",
 		"range": map[string]any{
 			"path": "internal/server/provider_proxy_test.go", "side": "right",
@@ -782,6 +783,7 @@ func TestFederatedReviewDraftHasOneHubOwner(t *testing.T) {
 			"diff_head_sha": "abc123", "commit_sha": "abc123",
 		},
 	})
+
 	require.Equal(http.StatusCreated, created.Code, created.Body.String())
 	var createdComment struct {
 		ID string `json:"id"`
@@ -789,7 +791,7 @@ func TestFederatedReviewDraftHasOneHubOwner(t *testing.T) {
 	require.NoError(json.NewDecoder(created.Body).Decode(&createdComment))
 	require.NotEmpty(createdComment.ID)
 
-	edited := doJSON(t, nodeA, http.MethodPatch, path+"/comments/"+createdComment.ID, map[string]any{
+	edited := testutil.DoJSON(t, nodeA, http.MethodPatch, path+"/comments/"+createdComment.ID, map[string]any{
 		"body": "edited comment from spoke A",
 		"range": map[string]any{
 			"path": "internal/server/provider_proxy_test.go", "side": "right",
@@ -797,9 +799,10 @@ func TestFederatedReviewDraftHasOneHubOwner(t *testing.T) {
 			"diff_head_sha": "abc123", "commit_sha": "abc123",
 		},
 	})
+
 	require.Equal(http.StatusOK, edited.Code, edited.Body.String())
 
-	read := doJSON(t, nodeB, http.MethodGet, path, nil)
+	read := testutil.DoJSON(t, nodeB, http.MethodGet, path, nil)
 	require.Equal(http.StatusOK, read.Code, read.Body.String())
 	var draft map[string]any
 	require.NoError(json.NewDecoder(read.Body).Decode(&draft))
@@ -810,9 +813,10 @@ func TestFederatedReviewDraftHasOneHubOwner(t *testing.T) {
 	require.True(ok)
 	assert.Equal("edited comment from spoke A", comment["body"])
 
-	published := doJSON(t, nodeB, http.MethodPost, path+"/publish", map[string]any{
+	published := testutil.DoJSON(t, nodeB, http.MethodPost, path+"/publish", map[string]any{
 		"action": "comment",
 	})
+
 	require.Equal(http.StatusOK, published.Code, published.Body.String())
 	assert.Len(provider.publishedReviews, 1)
 
@@ -916,7 +920,7 @@ func newFederatedProviderNodeForTest(
 func TestProviderProxyMapsHubTimeoutToUnavailable(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
-	t.Parallel()
+	runParallelServerTest(t)
 
 	hub := httptest.NewTLSServer(http.HandlerFunc(func(
 		w http.ResponseWriter, r *http.Request,
@@ -998,7 +1002,7 @@ func newProviderProxyTestServer(
 }
 
 func TestProviderProxyHonorsCallerCancellation(t *testing.T) {
-	t.Parallel()
+	runParallelServerTest(t)
 
 	hub := httptest.NewTLSServer(http.HandlerFunc(func(
 		w http.ResponseWriter, r *http.Request,
@@ -1021,7 +1025,7 @@ func TestProviderProxyHonorsCallerCancellation(t *testing.T) {
 func TestProviderProxyRejectsOversizedHubResponse(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
-	t.Parallel()
+	runParallelServerTest(t)
 
 	hub := httptest.NewTLSServer(http.HandlerFunc(func(
 		w http.ResponseWriter, _ *http.Request,

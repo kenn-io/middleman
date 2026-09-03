@@ -2,7 +2,8 @@ import { layer } from "@effect/vitest";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, vi } from "vite-plus/test";
 
-import { GeneratedApiLive } from "./generated-api.js";
+import { makeGeneratedApiLayer } from "./generated-api.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
 import {
   cloneProject,
   listUserRepositories,
@@ -13,13 +14,6 @@ import {
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
-}));
-
-vi.mock("./runtime.ts", () => ({
-  createRuntimeClient: () => ({
-    GET: mocks.get,
-    POST: mocks.post,
-  }),
 }));
 
 function project(id: string) {
@@ -38,67 +32,56 @@ describe("project-intake api", () => {
     mocks.post.mockReset();
   });
 
-  layer(GeneratedApiLive)((it) => {
+  layer(
+    makeGeneratedApiLayer(
+      makeGeneratedClient({
+        FleetService: {
+          cloneFleetProject: mocks.post,
+          registerFleetProject: mocks.post,
+          validateFleetFilesystemRepo: mocks.get,
+        },
+        ProjectsService: { cloneProject: mocks.post, registerProject: mocks.post },
+        SystemService: { listUserRepositories: mocks.get, validateFilesystemRepo: mocks.get },
+      }),
+    ),
+  )((it) => {
     it.effect("validates an existing path before registering the root", () =>
       Effect.gen(function* () {
-        mocks.get.mockResolvedValue({
-          data: { is_valid: true, root_path: "/repo" },
-          response: new Response(),
-        });
-        mocks.post.mockResolvedValue({
-          data: project("prj_1"),
-          response: new Response(),
-        });
+        mocks.get.mockResolvedValue({ is_valid: true, root_path: "/repo" });
+        mocks.post.mockResolvedValue(project("prj_1"));
 
         const result = yield* registerExistingProject("/repo/subdir");
 
         expect(result).toMatchObject({ id: "prj_1" });
-        expect(mocks.get).toHaveBeenCalledWith("/filesystem/validate-repo", {
-          params: { query: { path: "/repo/subdir" } },
-          signal: expect.any(AbortSignal),
-        });
-        expect(mocks.post).toHaveBeenCalledWith("/projects", {
-          body: { local_path: "/repo" },
-          signal: expect.any(AbortSignal),
-        });
+        expect(mocks.get).toHaveBeenCalledWith({ path: "/repo/subdir" }, { signal: expect.any(AbortSignal) });
+        expect(mocks.post).toHaveBeenCalledWith({ local_path: "/repo" }, { signal: expect.any(AbortSignal) });
       }),
     );
 
     it.effect("uses fleet routes when registering on a host", () =>
       Effect.gen(function* () {
-        mocks.get.mockResolvedValue({
-          data: { is_valid: true, root_path: "/srv/repo" },
-          response: new Response(),
-        });
-        mocks.post.mockResolvedValue({
-          data: project("prj_remote"),
-          response: new Response(),
-        });
+        mocks.get.mockResolvedValue({ is_valid: true, root_path: "/srv/repo" });
+        mocks.post.mockResolvedValue(project("prj_remote"));
 
         const result = yield* registerExistingProject("/srv/repo/pkg", { hostKey: "epyc" });
 
         expect(result).toMatchObject({ id: "prj_remote" });
-        expect(mocks.get).toHaveBeenCalledWith("/fleet/hosts/{host_key}/filesystem/validate-repo", {
-          params: {
-            path: { host_key: "epyc" },
-            query: { path: "/srv/repo/pkg" },
-          },
-          signal: expect.any(AbortSignal),
-        });
-        expect(mocks.post).toHaveBeenCalledWith("/fleet/hosts/{host_key}/projects", {
-          params: { path: { host_key: "epyc" } },
-          body: { local_path: "/srv/repo" },
-          signal: expect.any(AbortSignal),
-        });
+        expect(mocks.get).toHaveBeenCalledWith(
+          { hostKey: "epyc" },
+          { path: "/srv/repo/pkg" },
+          { signal: expect.any(AbortSignal) },
+        );
+        expect(mocks.post).toHaveBeenCalledWith(
+          { hostKey: "epyc" },
+          { local_path: "/srv/repo" },
+          { signal: expect.any(AbortSignal) },
+        );
       }),
     );
 
     it.effect("rejects invalid repository paths before registering", () =>
       Effect.gen(function* () {
-        mocks.get.mockResolvedValue({
-          data: { is_valid: false, message: "Not a git repository" },
-          response: new Response(),
-        });
+        mocks.get.mockResolvedValue({ is_valid: false, message: "Not a git repository" });
 
         const message = yield* registerExistingProject("/tmp").pipe(
           Effect.match({
@@ -114,52 +97,43 @@ describe("project-intake api", () => {
 
     it.effect("posts clone body with an optional branch", () =>
       Effect.gen(function* () {
-        mocks.post.mockResolvedValue({
-          data: project("prj_clone"),
-          response: new Response(),
-        });
+        mocks.post.mockResolvedValue(project("prj_clone"));
 
         const result = yield* cloneProject(" git@github.com:octo/repo.git ", " /tmp/repo ", " main ");
 
         expect(result).toMatchObject({ id: "prj_clone" });
-        expect(mocks.post).toHaveBeenCalledWith("/projects/clone", {
-          body: {
+        expect(mocks.post).toHaveBeenCalledWith(
+          {
             url: "git@github.com:octo/repo.git",
             path: "/tmp/repo",
             branch: "main",
           },
-          signal: expect.any(AbortSignal),
-        });
+          { signal: expect.any(AbortSignal) },
+        );
       }),
     );
 
     it.effect("uses the fleet clone route when cloning on a host", () =>
       Effect.gen(function* () {
-        mocks.post.mockResolvedValue({
-          data: project("prj_remote_clone"),
-          response: new Response(),
-        });
+        mocks.post.mockResolvedValue(project("prj_remote_clone"));
 
         const result = yield* cloneProject("git@github.com:octo/repo.git", "/srv/repo", undefined, { hostKey: "epyc" });
 
         expect(result).toMatchObject({ id: "prj_remote_clone" });
-        expect(mocks.post).toHaveBeenCalledWith("/fleet/hosts/{host_key}/projects/clone", {
-          params: { path: { host_key: "epyc" } },
-          body: {
+        expect(mocks.post).toHaveBeenCalledWith(
+          { hostKey: "epyc" },
+          {
             url: "git@github.com:octo/repo.git",
             path: "/srv/repo",
           },
-          signal: expect.any(AbortSignal),
-        });
+          { signal: expect.any(AbortSignal) },
+        );
       }),
     );
 
     it.effect("normalizes a null repository list", () =>
       Effect.gen(function* () {
-        mocks.get.mockResolvedValue({
-          data: { repositories: null },
-          response: new Response(),
-        });
+        mocks.get.mockResolvedValue({ repositories: null });
 
         expect(yield* listUserRepositories()).toEqual([]);
       }),
@@ -167,16 +141,13 @@ describe("project-intake api", () => {
     it.effect("keeps the requested provider host on every discovered repository", () =>
       Effect.gen(function* () {
         mocks.get.mockResolvedValue({
-          data: {
-            repositories: [
-              {
-                name_with_owner: "acme/forge",
-                ssh_url: "git@ghe.example.com:acme/forge.git",
-                default_branch: "main",
-              },
-            ],
-          },
-          error: undefined,
+          repositories: [
+            {
+              name_with_owner: "acme/forge",
+              ssh_url: "git@ghe.example.com:acme/forge.git",
+              default_branch: "main",
+            },
+          ],
         });
 
         expect(yield* listUserRepositories({ provider: "github", platformHost: "ghe.example.com" })).toEqual([
@@ -188,16 +159,14 @@ describe("project-intake api", () => {
             platform_host: "ghe.example.com",
           },
         ]);
-        expect(mocks.get).toHaveBeenCalledWith("/platform/user-repositories", {
-          params: {
-            query: {
-              provider: "github",
-              platform_host: "ghe.example.com",
-              limit: 1000,
-            },
+        expect(mocks.get).toHaveBeenCalledWith(
+          {
+            provider: "github",
+            platform_host: "ghe.example.com",
+            limit: 1000,
           },
-          signal: expect.any(AbortSignal),
-        });
+          { signal: expect.any(AbortSignal) },
+        );
       }),
     );
   });

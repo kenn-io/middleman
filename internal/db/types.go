@@ -1179,6 +1179,13 @@ type StackMemberWithPR struct {
 	MergeableState string
 }
 
+// StackPlacement is a merge request's contiguous position within its stack
+// after hidden members are filtered, plus the visible stack size.
+type StackPlacement struct {
+	Position int
+	Size     int
+}
+
 // GitHubNativeStack is a cached GitHub stack resource. It remains separate
 // from Stack, which is the provider-neutral projection served to the UI.
 type GitHubNativeStack struct {

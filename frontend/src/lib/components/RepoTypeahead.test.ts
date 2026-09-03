@@ -6,10 +6,17 @@ import { createSettingsStore } from "../stores/settings.svelte.js";
 import { getGlobalRepo, setGlobalRepoPresetSelection } from "../stores/filter.svelte.js";
 import { dismissFlash, getFlash, getFlashes } from "../stores/flash.svelte.js";
 import { setWorkspaceRepoCatalog } from "../stores/workspace-repo-catalog.svelte.js";
-import { client } from "../api/runtime.js";
 import RepoTypeahead from "./RepoTypeaheadRuntimeHarness.svelte";
 
 let settingsStore: ReturnType<typeof createSettingsStore>;
+const apiMocks = vi.hoisted(() => ({
+  client: {
+    GET: vi.fn(() => Promise.resolve({ data: [], error: undefined })),
+    POST: vi.fn(),
+    PUT: vi.fn(),
+    DELETE: vi.fn(),
+  },
+}));
 
 vi.mock("../context.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../context.js")>();
@@ -23,20 +30,59 @@ vi.mock("../context.js", async (importOriginal) => {
 
 vi.mock("../api/runtime.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/runtime.js")>()),
-  client: {
-    GET: vi.fn(() => Promise.resolve({ data: [], error: undefined })),
-    POST: vi.fn(),
-    PUT: vi.fn(),
-    DELETE: vi.fn(),
-  },
+  client: apiMocks.client,
 }));
 
-const getRepos = client.GET as unknown as Mock<
+vi.mock("../api/generated/index.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/generated/index.js")>();
+  return {
+    ...actual,
+    RepositoriesService: {
+      ...actual.RepositoriesService,
+      listRepos: async (options?: { signal?: AbortSignal }) =>
+        unwrapMockResult(await apiMocks.client.GET("/repos", options)),
+    },
+    SettingsService: {
+      ...actual.SettingsService,
+      createRepoPreset: async (body: unknown, options?: { signal?: AbortSignal }) =>
+        unwrapMockResult(await apiMocks.client.POST("/settings/repo-presets", { body, ...options })),
+      deleteRepoPreset: async (params: { name: string }, options?: { signal?: AbortSignal }) =>
+        unwrapMockResult(
+          await apiMocks.client.DELETE("/settings/repo-presets/{name}", {
+            params: { path: params },
+            ...options,
+          }),
+        ),
+    },
+  };
+});
+
+async function unwrapMockResult(result: unknown): Promise<unknown> {
+  if (typeof result !== "object" || result === null) return result;
+  const response = result as { data?: unknown; error?: { detail?: string; title?: string }; response?: Response };
+  if (response.error !== undefined) {
+    const { GeneratedProblemResponse } = await import("../api/runtime.js");
+    const status = response.response?.status ?? 500;
+    throw new GeneratedProblemResponse(
+      {
+        type: "about:blank",
+        title: response.error.title ?? "Request failed",
+        status,
+        detail: response.error.detail,
+        code: "internalError",
+      },
+      response.response ?? new Response(null, { status }),
+    );
+  }
+  return response.data;
+}
+
+const getRepos = apiMocks.client.GET as Mock<
   (path: string, options?: { signal?: AbortSignal }) => Promise<{ data: Repo[]; error: undefined }>
 >;
-const putSettings = client.PUT as unknown as Mock;
-const postSettings = client.POST as unknown as Mock;
-const deleteSettings = client.DELETE as unknown as Mock;
+const putSettings = apiMocks.client.PUT;
+const postSettings = apiMocks.client.POST;
+const deleteSettings = apiMocks.client.DELETE;
 
 function presetRepo(repoPath: string, platformRepoId: string) {
   return {

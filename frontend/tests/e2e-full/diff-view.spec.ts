@@ -1552,15 +1552,15 @@ async function mockDiffApiError(page: Page, status: number, detail: string): Pro
   await page.route("**/api/v1/pulls/github/acme/widgets/1/files", async (route) => {
     await route.fulfill({
       status,
-      contentType: "application/json",
-      body: JSON.stringify({ detail }),
+      contentType: "application/problem+json",
+      body: JSON.stringify({ status, code: "notFound", detail }),
     });
   });
   await page.route("**/api/v1/pulls/github/acme/widgets/1/diff*", async (route) => {
     await route.fulfill({
       status,
-      contentType: "application/json",
-      body: JSON.stringify({ detail }),
+      contentType: "application/problem+json",
+      body: JSON.stringify({ status, code: "notFound", detail }),
     });
   });
 }
@@ -2706,7 +2706,7 @@ test.describe("diff view", () => {
     await expect(deletedPreview.locator(".inline-review-thread").filter({ hasText: "Deleted last" })).toBeVisible();
   });
 
-  test("rich preview keeps unmapped review thread cards visible as file-level fallback", async ({ page }) => {
+  test("rich preview keeps unmapped review thread cards visible as line-unavailable fallback", async ({ page }) => {
     const reviewBody = "Unmapped rich preview note should stay visible";
     await mockDiffApi(page, previewDiff);
     await mockFilePreviewApi(page);
@@ -2725,10 +2725,13 @@ test.describe("diff view", () => {
     });
     await expect(fallbackCard).toBeVisible();
     await expect(fallbackCard).toHaveClass(/inline-review-thread--file-level/);
-    await expect(fallbackCard).toContainText("File");
+    await expect(fallbackCard).toContainText("Line unavailable");
     await expect(
       markdownFile.locator(".markdown-rich-diff--unified .inline-review-thread").filter({ hasText: reviewBody }),
     ).toHaveCount(0);
+    await expect(
+      markdownFile.locator(".markdown-rich-diff--unified ~ .inline-review-thread").filter({ hasText: reviewBody }),
+    ).toHaveCount(1);
   });
 
   test("rich preview hides synthetic hunk separators inside spanning markdown blocks", async ({ page }) => {
@@ -2750,7 +2753,7 @@ test.describe("diff view", () => {
     await expect(markdownPreview.locator("hr")).toHaveCount(0);
   });
 
-  test("rich preview keeps hidden hunk-gap review threads as file-level fallback", async ({ page }) => {
+  test("rich preview keeps hidden hunk-gap review threads as line-unavailable fallback", async ({ page }) => {
     const reviewBody = "Hidden hunk gap review note should stay fallback";
     await mockDiffApi(page, multiHunkMarkdownDiff);
     await mockReviewThreadOnPreviewMarkdown(page, reviewBody, 6, "docs/multihunk.md");
@@ -2767,9 +2770,13 @@ test.describe("diff view", () => {
     });
     await expect(fallbackCard).toBeVisible();
     await expect(fallbackCard).toHaveClass(/inline-review-thread--file-level/);
+    await expect(fallbackCard).toContainText("Line unavailable");
     await expect(
       markdownFile.locator(".markdown-rich-diff--unified .inline-review-thread").filter({ hasText: reviewBody }),
     ).toHaveCount(0);
+    await expect(
+      markdownFile.locator(".markdown-rich-diff--unified ~ .inline-review-thread").filter({ hasText: reviewBody }),
+    ).toHaveCount(1);
   });
 
   test("rich preview refetches blob content after a same-PR diff reload", async ({ page }) => {

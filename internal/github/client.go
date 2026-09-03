@@ -7,11 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"mime"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -182,95 +179,6 @@ type repoUserClient interface {
 	GetUserForRepo(
 		ctx context.Context, owner, repo, login string,
 	) (*gh.User, error)
-}
-
-// markdownImageClient carries the full repository identity even though the
-// attachment URL is host-scoped: credential selection is per repository, so a
-// repo-scoped route must be able to pick its own token for the fetch.
-type markdownImageClient interface {
-	GetMarkdownImage(
-		ctx context.Context, owner, repo, sourceURL string,
-	) (platform.MarkdownImage, error)
-}
-
-const maxMarkdownImageBytes = 25 << 20
-
-var allowedMarkdownImageTypes = map[string]struct{}{
-	"image/avif": {},
-	"image/bmp":  {},
-	"image/gif":  {},
-	"image/jpeg": {},
-	"image/png":  {},
-	"image/webp": {},
-}
-
-func (c *liveClient) GetMarkdownImage(
-	ctx context.Context,
-	owner, _, sourceURL string,
-) (platform.MarkdownImage, error) {
-	parsed, err := url.Parse(sourceURL)
-	if err != nil || parsed.Scheme != "https" || parsed.User != nil ||
-		!strings.EqualFold(parsed.Host, c.platformHost) ||
-		!strings.HasPrefix(parsed.EscapedPath(), "/user-attachments/assets/") {
-		return platform.MarkdownImage{}, &platform.Error{
-			Code: platform.ErrCodeInvalidArgument, Provider: platform.KindGitHub,
-			PlatformHost: c.platformHost, Field: "source", Err: errors.New("unsupported markdown image URL"),
-		}
-	}
-
-	// github.com/user-attachments accepts the user's credential but returns
-	// 404 for installation tokens, even when the app can read the repository.
-	authCtx := tokenauth.WithMutationAuth(tokenauth.WithGitHubOwner(ctx, owner))
-	if c.source == nil {
-		return platform.MarkdownImage{}, errors.New("GitHub markdown image token source is unavailable")
-	}
-	token, err := c.source.Token(authCtx)
-	if err != nil {
-		return platform.MarkdownImage{}, err
-	}
-	req, err := http.NewRequestWithContext(authCtx, http.MethodGet, parsed.String(), nil)
-	if err != nil {
-		return platform.MarkdownImage{}, err
-	}
-	req.Header.Set("Accept", "application/octet-stream")
-	req.Header.Set("Authorization", "Bearer "+token)
-	client := c.markdownImageHTTPClient
-	if client == nil {
-		client = http.DefaultClient
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return platform.MarkdownImage{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return platform.MarkdownImage{}, platform.PermissionDenied(platform.KindGitHub, c.platformHost, errors.New(resp.Status))
-	}
-	if resp.StatusCode == http.StatusNotFound {
-		return platform.MarkdownImage{}, &platform.Error{Code: platform.ErrCodeNotFound, Provider: platform.KindGitHub, PlatformHost: c.platformHost}
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return platform.MarkdownImage{}, fmt.Errorf("fetch GitHub markdown image: %s", resp.Status)
-	}
-
-	contentType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-	if err != nil {
-		return platform.MarkdownImage{}, fmt.Errorf("parse GitHub markdown image content type: %w", err)
-	}
-	if _, ok := allowedMarkdownImageTypes[contentType]; !ok {
-		return platform.MarkdownImage{}, &platform.Error{
-			Code: platform.ErrCodeInvalidArgument, Provider: platform.KindGitHub,
-			PlatformHost: c.platformHost, Field: "source", Err: fmt.Errorf("unsupported image content type %q", contentType),
-		}
-	}
-	content, err := io.ReadAll(io.LimitReader(resp.Body, maxMarkdownImageBytes+1))
-	if err != nil {
-		return platform.MarkdownImage{}, err
-	}
-	if len(content) > maxMarkdownImageBytes {
-		return platform.MarkdownImage{}, fmt.Errorf("GitHub markdown image exceeds %d bytes", maxMarkdownImageBytes)
-	}
-	return platform.MarkdownImage{Content: content, ContentType: contentType}, nil
 }
 
 type conditionalPullRequestGetter interface {

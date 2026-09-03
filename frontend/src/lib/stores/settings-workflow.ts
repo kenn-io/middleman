@@ -1,28 +1,40 @@
 import { Context, Data, Effect, Layer, Option, Ref } from "effect";
-import type { components } from "../api/generated/schema.js";
+import type {
+  AddRepoInputBody,
+  BulkAddRepoRequest,
+  FleetSettingsResponse,
+  RepoPreset as GeneratedRepoPreset,
+  RepoPresetRepository as GeneratedRepoPresetRepository,
+  RepoPreviewResponse as GeneratedRepoPreviewResponse,
+  RepoPreviewRow as GeneratedRepoPreviewRow,
+  SettingsResponse,
+  UpdateFleetSettingsInputBody,
+  UpdateSettingsRequest as GeneratedUpdateSettingsRequest,
+} from "../api/generated/models/index.js";
 import { GeneratedApi } from "../api/generated-api.js";
 import type { ApiProblemError, TransientTransportError } from "../api/effect-errors.js";
 import {
   canonicalProvider,
-  providerRepoPath,
   providerRouteParams,
   resolvedPlatformHost,
+  providerHostRouteParams,
+  providerUsesHostRoute,
 } from "../api/provider-routes.js";
 import { retryIdempotentRead } from "../api/retry-policy.js";
 import { StartupWorkflow } from "../app/startup-workflow.js";
 import { CommandQueueClosed, makeOrderedCommandQueue } from "../effect/ordered-command-queue.js";
 
-export type UpdateSettingsRequest = components["schemas"]["UpdateSettingsRequest"];
-export type SettingsSnapshot = components["schemas"]["SettingsResponse"];
-export type FleetSettingsUpdate = components["schemas"]["UpdateFleetSettingsInputBody"];
-export type FleetSettingsSnapshot = components["schemas"]["FleetSettingsResponse"];
-export type RepoRequestOptions = Pick<components["schemas"]["AddRepoInputBody"], "provider" | "host">;
-export type RepoInput = components["schemas"]["BulkAddRepoRequest"];
+export type UpdateSettingsRequest = GeneratedUpdateSettingsRequest;
+export type SettingsSnapshot = SettingsResponse;
+export type FleetSettingsUpdate = UpdateFleetSettingsInputBody;
+export type FleetSettingsSnapshot = FleetSettingsResponse;
+export type RepoRequestOptions = Pick<AddRepoInputBody, "provider" | "host">;
+export type RepoInput = BulkAddRepoRequest;
 export type RepoPromotionInput = RepoInput & Required<Pick<RepoInput, "owner" | "name">>;
-export type RepoPreviewResponse = components["schemas"]["RepoPreviewResponse"];
-export type RepoPreviewRow = components["schemas"]["RepoPreviewRow"];
-export type RepoPreset = components["schemas"]["RepoPreset"];
-export type RepoPresetRepository = components["schemas"]["RepoPresetRepository"];
+export type RepoPreviewResponse = GeneratedRepoPreviewResponse;
+export type RepoPreviewRow = GeneratedRepoPreviewRow;
+export type RepoPreset = GeneratedRepoPreset;
+export type RepoPresetRepository = GeneratedRepoPresetRepository;
 type SettingsCommand =
   | { readonly _tag: "Partial"; readonly request: () => UpdateSettingsRequest }
   | { readonly _tag: "Fleet"; readonly request: FleetSettingsUpdate }
@@ -316,7 +328,7 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
     const uncertainPromotions = yield* Ref.make<ReadonlyMap<string, RepoPromotionStateUncertainError>>(new Map());
     const uncertainMutations = yield* Ref.make<ReadonlyMap<string, RetainedSettingsUncertainty>>(new Map());
     const readSettings = (operation: string) =>
-      retryIdempotentRead(api.execute(operation, (signal) => api.client.GET("/settings", { signal })));
+      retryIdempotentRead(api.execute(operation, (signal) => api.client.SettingsService.getSettings({ signal })));
     const retainUncertainty = (keys: readonly string[], uncertainty: RetainedSettingsUncertainty) =>
       Ref.update(uncertainMutations, (entries) => {
         const next = new Map(entries);
@@ -387,7 +399,7 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
             const settings = yield* runRecoverableSettingsMutation(
               "settings save",
               settingsMutationKeys(request),
-              api.execute("PUT /settings", (signal) => api.client.PUT("/settings", { body: request, signal })),
+              api.execute("PUT /settings", (signal) => api.client.SettingsService.updateSettings(request, { signal })),
               (snapshot) => settingsMatchRequest(snapshot, request),
               (snapshot) => snapshot,
             );
@@ -398,7 +410,7 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
               "fleet settings save",
               ["fleet"],
               api.execute("PUT /settings/fleet", (signal) =>
-                api.client.PUT("/settings/fleet", { body: command.request, signal }),
+                api.client.SettingsService.updateFleetSettings(command.request, { signal }),
               ),
               (settings) => fleetMatchesRequest(settings.fleet, command.request),
               (settings) => settings.fleet,
@@ -410,7 +422,7 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
               "repository preset create",
               ["settings:repo_presets"],
               api.execute("POST /settings/repo-presets", (signal) =>
-                api.client.POST("/settings/repo-presets", { body: command.preset, signal }),
+                api.client.SettingsService.createRepoPreset(command.preset, { signal }),
               ),
               (snapshot) =>
                 snapshot.repo_presets.some(
@@ -425,11 +437,11 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
               "repository preset update",
               ["settings:repo_presets"],
               api.execute("PUT /settings/repo-presets/{name}", (signal) =>
-                api.client.PUT("/settings/repo-presets/{name}", {
-                  params: { path: { name: command.name } },
-                  body: { repos: [...command.repos] },
-                  signal,
-                }),
+                api.client.SettingsService.updateRepoPreset(
+                  { name: command.name },
+                  { repos: [...command.repos] },
+                  { signal },
+                ),
               ),
               (snapshot) =>
                 snapshot.repo_presets.some(
@@ -444,10 +456,7 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
               "repository preset delete",
               ["settings:repo_presets"],
               api.execute("DELETE /settings/repo-presets/{name}", (signal) =>
-                api.client.DELETE("/settings/repo-presets/{name}", {
-                  params: { path: { name: command.name } },
-                  signal,
-                }),
+                api.client.SettingsService.deleteRepoPreset({ name: command.name }, { signal }),
               ),
               (snapshot) => !snapshot.repo_presets.some((preset) => preset.name === command.name),
               (snapshot) => snapshot,
@@ -459,10 +468,10 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
               "repository add",
               [repoMutationKey(command.owner, command.name, command.options)],
               api.execute("POST /repos", (signal) =>
-                api.client.POST("/repos", {
-                  body: { ...command.options, owner: command.owner, name: command.name },
-                  signal,
-                }),
+                api.client.SettingsService.addRepo(
+                  { ...command.options, owner: command.owner, name: command.name },
+                  { signal },
+                ),
               ),
               (snapshot) => containsExactRepo(snapshot, command.owner, command.name, command.options),
               (snapshot) => snapshot,
@@ -475,10 +484,9 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
               "repository removal",
               [repoMutationKey(command.owner, command.name, command.options)],
               api.execute("DELETE repository", (signal) =>
-                api.client.DELETE(providerRepoPath(ref), {
-                  params: { path: providerRouteParams(ref) },
-                  signal,
-                }),
+                providerUsesHostRoute(ref)
+                  ? api.client.SettingsService.deleteRepoOnHost({ ...providerHostRouteParams(ref) }, { signal })
+                  : api.client.SettingsService.deleteRepo({ ...providerRouteParams(ref) }, { signal }),
               ),
               (settings) => !containsExactRepo(settings, command.owner, command.name, command.options),
               () => undefined,
@@ -489,10 +497,9 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
             const ref = repoRef(command.owner, command.name, command.options);
             const settings = yield* retryIdempotentRead(
               api.execute("POST repository refresh", (signal) =>
-                api.client.POST(providerRepoPath(ref, "/refresh"), {
-                  params: { path: providerRouteParams(ref) },
-                  signal,
-                }),
+                providerUsesHostRoute(ref)
+                  ? api.client.SettingsService.refreshRepoOnHost({ ...providerHostRouteParams(ref) }, { signal })
+                  : api.client.SettingsService.refreshRepo({ ...providerRouteParams(ref) }, { signal }),
               ),
             );
             return settingsCommandResult(settings);
@@ -503,11 +510,17 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
               "repository worktree-base save",
               [repoMutationKey(command.owner, command.name, command.options)],
               api.execute("PUT repository worktree base", (signal) =>
-                api.client.PUT(providerRepoPath(ref, "/worktree-base"), {
-                  params: { path: providerRouteParams(ref) },
-                  body: { worktree_base_path: command.worktreeBasePath },
-                  signal,
-                }),
+                providerUsesHostRoute(ref)
+                  ? api.client.SettingsService.updateRepoWorktreeBaseOnHost(
+                      { ...providerHostRouteParams(ref) },
+                      { worktree_base_path: command.worktreeBasePath },
+                      { signal },
+                    )
+                  : api.client.SettingsService.updateRepoWorktreeBase(
+                      { ...providerRouteParams(ref) },
+                      { worktree_base_path: command.worktreeBasePath },
+                      { signal },
+                    ),
               ),
               (snapshot) =>
                 exactRepoWorktreeBaseMatches(
@@ -527,11 +540,17 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
               "repository UI visibility save",
               [repoMutationKey(command.owner, command.name, command.options)],
               api.execute("PUT repository UI visibility", (signal) =>
-                api.client.PUT(providerRepoPath(ref, "/ui-visibility"), {
-                  params: { path: providerRouteParams(ref) },
-                  body: { hidden: command.hidden },
-                  signal,
-                }),
+                providerUsesHostRoute(ref)
+                  ? api.client.SettingsService.updateRepoUiVisibilityOnHost(
+                      { ...providerHostRouteParams(ref) },
+                      { hidden: command.hidden },
+                      { signal },
+                    )
+                  : api.client.SettingsService.updateRepoUiVisibility(
+                      { ...providerRouteParams(ref) },
+                      { hidden: command.hidden },
+                      { signal },
+                    ),
               ),
               (snapshot) =>
                 exactRepoUIVisibilityMatches(snapshot, command.owner, command.name, command.options, command.hidden),
@@ -544,7 +563,7 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
               "bulk repository add",
               command.repos.map(repoInputMutationKey),
               api.execute("POST /repos/bulk", (signal) =>
-                api.client.POST("/repos/bulk", { body: { repos: [...command.repos] }, signal }),
+                api.client.RepositoriesService.bulkAddRepos({ repos: [...command.repos] }, { signal }),
               ),
               (snapshot) => command.repos.every((repo) => containsRepoInput(snapshot, repo)),
               (snapshot) => snapshot,
@@ -585,7 +604,7 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
                 "promotion repository add",
                 [repoMutationKey(owner, name, options)],
                 api.execute("POST /repos/bulk for promotion", (signal) =>
-                  api.client.POST("/repos/bulk", { body: { repos: [command.repo] }, signal }),
+                  api.client.RepositoriesService.bulkAddRepos({ repos: [command.repo] }, { signal }),
                 ),
                 (settings) => containsExactRepo(settings, owner, name, options),
                 (settings) => settings,
@@ -593,28 +612,33 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
             }
             const settings = yield* api
               .execute("PUT promoted repository worktree base", (signal) =>
-                api.client.PUT(providerRepoPath(ref, "/worktree-base"), {
-                  params: { path: providerRouteParams(ref) },
-                  body: { worktree_base_path: command.worktreeBasePath },
-                  signal,
-                }),
+                providerUsesHostRoute(ref)
+                  ? api.client.SettingsService.updateRepoWorktreeBaseOnHost(
+                      { ...providerHostRouteParams(ref) },
+                      { worktree_base_path: command.worktreeBasePath },
+                      { signal },
+                    )
+                  : api.client.SettingsService.updateRepoWorktreeBase(
+                      { ...providerRouteParams(ref) },
+                      { worktree_base_path: command.worktreeBasePath },
+                      { signal },
+                    ),
               )
               .pipe(
                 Effect.catch((failure): Effect.Effect<SettingsSnapshot, RepoPromotionFailure> => {
                   if (exactRepoAlreadyAdded) return Effect.fail(failure);
                   return api
                     .execute("DELETE promoted repository after worktree-base failure", (signal) =>
-                      api.client.DELETE(providerRepoPath(ref), {
-                        params: { path: providerRouteParams(ref) },
-                        signal,
-                      }),
+                      providerUsesHostRoute(ref)
+                        ? api.client.SettingsService.deleteRepoOnHost({ ...providerHostRouteParams(ref) }, { signal })
+                        : api.client.SettingsService.deleteRepo({ ...providerRouteParams(ref) }, { signal }),
                     )
                     .pipe(
                       Effect.matchEffect({
                         onFailure: (rollbackFailure): Effect.Effect<never, RepoPromotionFailure> =>
                           retryIdempotentRead(
                             api.execute("GET /settings after uncertain promotion rollback", (signal) =>
-                              api.client.GET("/settings", { signal }),
+                              api.client.SettingsService.getSettings({ signal }),
                             ),
                           ).pipe(
                             Effect.mapError(
@@ -689,7 +713,7 @@ export const SettingsWorkflowLive = Layer.effect(SettingsWorkflow)(
         submitSettings({ _tag: "UpdateRepoUIVisibility", owner, name, options, hidden }),
       previewRepos: (owner, pattern, options) =>
         api.execute("POST /repos/preview", (signal) =>
-          api.client.POST("/repos/preview", { body: { ...options, owner, pattern }, signal }),
+          api.client.RepositoriesService.previewRepos({ ...options, owner, pattern }, { signal }),
         ),
       bulkAddRepos: (repos) => submitSettings({ _tag: "BulkAddRepos", repos }),
       promoteRepo: (repo, worktreeBasePath, exactRepoAlreadyAdded) =>

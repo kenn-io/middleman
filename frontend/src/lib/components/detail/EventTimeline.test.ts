@@ -1573,6 +1573,27 @@ describe("EventTimeline", () => {
     expect(toggle?.getAttribute("aria-expanded")).toBe("true");
   });
 
+  it("renders the normalized committer identity for rebased commits", () => {
+    const { container } = renderTimeline({
+      props: {
+        activityViewMode: "compact",
+        events: [
+          makeEvent({
+            EventType: "commit",
+            Author: "rebase-committer",
+            MetadataJSON: '{"commit_author":"original-author"}',
+            Summary: "abcdef1234567890",
+            Body: "feat: rewrite commit",
+          }),
+        ],
+      },
+    });
+
+    const row = container.querySelector<HTMLElement>(".event-card--compact-row");
+    expect(row?.textContent).toContain("rebase-committer");
+    expect(row?.textContent).not.toContain("original-author");
+  });
+
   it("keeps compact commit details collapsed when commit details are hidden", () => {
     const { container } = renderTimeline({
       props: {

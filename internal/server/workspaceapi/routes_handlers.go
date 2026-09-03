@@ -2329,6 +2329,13 @@ func applyWorktreeDivergence(
 		return err
 	}
 	if !ok {
+		missing, missingErr := workspace.WorktreeBranchUpstreamMissing(probeCtx, worktreePath)
+		if missingErr != nil {
+			return missingErr
+		}
+		if missing {
+			resp.BranchUpstreamMissing = &missing
+		}
 		return nil
 	}
 	ahead := div.Ahead

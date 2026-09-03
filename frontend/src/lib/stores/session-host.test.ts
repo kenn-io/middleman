@@ -21,6 +21,7 @@ import {
   sessionHostKey,
   sessionHostPrefix,
   sendSessionInput,
+  sendSessionKey,
   sendSessionPastedInput,
   setRetainedSessionLimit,
   setSessionSlotVisible,
@@ -56,6 +57,7 @@ describe("session host registry", () => {
     const first = {
       send: vi.fn(() => true),
       sendPasted: vi.fn(() => true),
+      sendKey: vi.fn(() => true),
     };
     const unregisterFirst = registerSessionInput(agentOnA, first);
 
@@ -63,10 +65,13 @@ describe("session host registry", () => {
     expect(first.send).toHaveBeenCalledWith("status\r");
     expect(sendSessionPastedInput(agentOnA, "one\ntwo", "\r")).toBe(true);
     expect(first.sendPasted).toHaveBeenCalledWith("one\ntwo", "\r");
+    expect(sendSessionKey(agentOnA, "ArrowUp")).toBe(true);
+    expect(first.sendKey).toHaveBeenCalledWith("ArrowUp");
 
     const second = {
       send: vi.fn(() => true),
       sendPasted: vi.fn(() => true),
+      sendKey: vi.fn(() => true),
     };
     const unregisterSecond = registerSessionInput(agentOnA, second);
     unregisterFirst();
@@ -76,6 +81,7 @@ describe("session host registry", () => {
     unregisterSecond();
     expect(sendSessionInput(agentOnA, "ignored\r")).toBe(false);
     expect(sendSessionPastedInput(agentOnA, "ignored", "\r")).toBe(false);
+    expect(sendSessionKey(agentOnA, "ArrowUp")).toBe(false);
   });
 
   it("keeps parts that contain the separator distinct", () => {

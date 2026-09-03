@@ -28,10 +28,11 @@ import {
 import {
   canonicalProvider,
   providerDefaultHost,
-  providerItemPath,
   providerRouteParams,
   resolvedPlatformHost,
   type ProviderRouteRef,
+  providerHostRouteParams,
+  providerUsesHostRoute,
 } from "../api/provider-routes.js";
 import { DetailWorkflow, type DetailReadError } from "./detail-workflow.js";
 import { showFlash } from "./flash.svelte.js";
@@ -641,10 +642,9 @@ export function createDetailStore(opts: DetailStoreOptions) {
         apply: () => Effect.void,
         commit: commit(ref),
         refreshOnStale: executeGeneratedApiRequest(`sync after ${operation}`, (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.syncPullOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: number }, { signal }),
         ).pipe(Effect.asVoid),
       });
       const shouldReconcile = yield* Effect.sync(() => {
@@ -706,11 +706,13 @@ export function createDetailStore(opts: DetailStoreOptions) {
       "approve pull request",
       (ref) =>
         executeGeneratedApiRequest("POST approve pull request", (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/approve"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            body: input,
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.approvePullOnHost({ ...providerHostRouteParams(ref), number: number }, input, {
+                signal,
+              })
+            : client.PullRequestsService.approvePull({ ...providerRouteParams(ref), number: number }, input, {
+                signal,
+              }),
         ).pipe(Effect.asVoid),
       callbacks,
     );
@@ -723,10 +725,15 @@ export function createDetailStore(opts: DetailStoreOptions) {
       "mark pull request ready for review",
       (ref) =>
         executeGeneratedApiRequest("POST mark pull request ready for review", (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/ready-for-review"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.markPullReadyForReviewOnHost(
+                { ...providerHostRouteParams(ref), number: number },
+                { signal },
+              )
+            : client.PullRequestsService.markPullReadyForReview(
+                { ...providerRouteParams(ref), number: number },
+                { signal },
+              ),
         ).pipe(Effect.asVoid),
       callbacks,
     );
@@ -744,11 +751,15 @@ export function createDetailStore(opts: DetailStoreOptions) {
       "request changes on pull request",
       (ref) =>
         executeGeneratedApiRequest("POST request changes on pull request", (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/request-changes"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            body: input,
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.requestPullChangesOnHost(
+                { ...providerHostRouteParams(ref), number: number },
+                input,
+                { signal },
+              )
+            : client.PullRequestsService.requestPullChanges({ ...providerRouteParams(ref), number: number }, input, {
+                signal,
+              }),
         ).pipe(Effect.asVoid),
       callbacks,
     );
@@ -761,10 +772,15 @@ export function createDetailStore(opts: DetailStoreOptions) {
       "approve pull request workflows",
       (ref) =>
         executeGeneratedApiRequest("POST approve pull request workflows", (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/approve-workflows"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.approvePullWorkflowsOnHost(
+                { ...providerHostRouteParams(ref), number: number },
+                { signal },
+              )
+            : client.PullRequestsService.approvePullWorkflows(
+                { ...providerRouteParams(ref), number: number },
+                { signal },
+              ),
         ).pipe(Effect.asVoid),
       callbacks,
     );
@@ -781,18 +797,24 @@ export function createDetailStore(opts: DetailStoreOptions) {
     const commit = (ref: DetailRequestRef) =>
       deferred
         ? executeGeneratedApiRequest("POST deferred pull request merge", (client, signal) =>
-            client.POST(providerItemPath("pulls", ref, "/merge/deferred"), {
-              params: { path: { ...providerRouteParams(ref), number } },
-              body: input,
-              signal,
-            }),
+            providerUsesHostRoute(ref)
+              ? client.PullRequestsService.deferMergePullOnHost(
+                  { ...providerHostRouteParams(ref), number: number },
+                  input,
+                  { signal },
+                )
+              : client.PullRequestsService.deferMergePull({ ...providerRouteParams(ref), number: number }, input, {
+                  signal,
+                }),
           ).pipe(Effect.asVoid)
         : executeGeneratedApiRequest("POST pull request merge", (client, signal) =>
-            client.POST(providerItemPath("pulls", ref, "/merge"), {
-              params: { path: { ...providerRouteParams(ref), number } },
-              body: input,
-              signal,
-            }),
+            providerUsesHostRoute(ref)
+              ? client.PullRequestsService.mergePullOnHost({ ...providerHostRouteParams(ref), number: number }, input, {
+                  signal,
+                })
+              : client.PullRequestsService.mergePull({ ...providerRouteParams(ref), number: number }, input, {
+                  signal,
+                }),
           ).pipe(
             Effect.flatMap((result) => {
               if (!result.merged) {
@@ -971,15 +993,15 @@ export function createDetailStore(opts: DetailStoreOptions) {
     detailLoaded = false;
     const envelopeTick = nextWorkspaceLifecycleTick();
     const read = executeGeneratedApiRequest("GET pull request", (client, signal) =>
-      client.GET(providerItemPath("pulls", requestRef, ""), {
-        params: {
-          path: {
-            ...providerRouteParams(requestRef),
-            number: requestRef.number,
-          },
-        },
-        signal,
-      }),
+      providerUsesHostRoute(requestRef)
+        ? client.PullRequestsService.getPullOnHost(
+            { ...providerHostRouteParams(requestRef), number: requestRef.number },
+            { signal },
+          )
+        : client.PullRequestsService.getPull(
+            { ...providerRouteParams(requestRef), number: requestRef.number },
+            { signal },
+          ),
     ).pipe(
       retryIdempotentRead,
       Effect.map((data): PullDetail => ({ ...data, events: data.events ?? [] })),
@@ -997,15 +1019,15 @@ export function createDetailStore(opts: DetailStoreOptions) {
         initialRead.failure.problem.code === ProblemCodes.pullNotFound
       ) {
         data = yield* executeGeneratedApiRequest("POST synchronize missing pull request", (client, signal) =>
-          client.POST(providerItemPath("pulls", requestRef, "/sync"), {
-            params: {
-              path: {
-                ...providerRouteParams(requestRef),
-                number: requestRef.number,
-              },
-            },
-            signal,
-          }),
+          providerUsesHostRoute(requestRef)
+            ? client.PullRequestsService.syncPullOnHost(
+                { ...providerHostRouteParams(requestRef), number: requestRef.number },
+                { signal },
+              )
+            : client.PullRequestsService.syncPull(
+                { ...providerRouteParams(requestRef), number: requestRef.number },
+                { signal },
+              ),
         ).pipe(Effect.map((synced): PullDetail => ({ ...synced, events: synced.events ?? [] })));
         recoveredBySync = true;
       } else {
@@ -1075,10 +1097,12 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const ref = detailRequestRef(owner, name, number, identity);
       if (gen === syncGeneration) syncing = true;
       return executeGeneratedApiRequest("POST asynchronous pull request synchronization", (client, signal) =>
-        client.POST(providerItemPath("pulls", ref, "/sync/async"), {
-          params: { path: { ...providerRouteParams(ref), number: ref.number } },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.enqueuePrSyncOnHost(
+              { ...providerHostRouteParams(ref), number: ref.number },
+              { signal },
+            )
+          : client.PullRequestsService.enqueuePrSync({ ...providerRouteParams(ref), number: ref.number }, { signal }),
       ).pipe(
         Effect.andThen(refreshAfterBackgroundDetailSyncEffect(owner, name, number, gen, previousFetchedAt, ref)),
         Effect.ensuring(
@@ -1176,10 +1200,12 @@ export function createDetailStore(opts: DetailStoreOptions) {
           cause: new Error("a foreground detail read replaced event reconciliation"),
         });
       const read = executeGeneratedApiRequest("GET pull request detail after provider event", (client, signal) =>
-        client.GET(providerItemPath("pulls", ref, ""), {
-          params: { path: { ...providerRouteParams(ref), number: ref.number } },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.getPullOnHost(
+              { ...providerHostRouteParams(ref), number: ref.number },
+              { signal },
+            )
+          : client.PullRequestsService.getPull({ ...providerRouteParams(ref), number: ref.number }, { signal }),
       );
       return read.pipe(
         Effect.matchEffect({
@@ -1244,10 +1270,12 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const isCurrent = () => expectedGeneration === syncGeneration && activeSelectionKey === key;
       if (isCurrent()) syncing = true;
       return executeGeneratedApiRequest("POST synchronize pull request detail", (client, signal) =>
-        client.POST(providerItemPath("pulls", ref, "/sync"), {
-          params: { path: { ...providerRouteParams(ref), number: ref.number } },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.syncPullOnHost(
+              { ...providerHostRouteParams(ref), number: ref.number },
+              { signal },
+            )
+          : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: ref.number }, { signal }),
       ).pipe(
         Effect.map((data): PullDetail => ({ ...data, events: data.events ?? [] })),
         Effect.tap(() => Effect.sync(reconcileListsAfterDetailSync)),
@@ -1323,10 +1351,12 @@ export function createDetailStore(opts: DetailStoreOptions) {
     const envelopeTick = nextWorkspaceLifecycleTick();
     if (gen === syncGeneration) syncing = true;
     const request = executeGeneratedApiRequest("POST refresh pull request CI checks", (client, signal) =>
-      client.POST(providerItemPath("pulls", ref, "/ci-refresh"), {
-        params: { path: { ...providerRouteParams(ref), number: ref.number } },
-        signal,
-      }),
+      providerUsesHostRoute(ref)
+        ? client.PullRequestsService.refreshPullCiOnHost(
+            { ...providerHostRouteParams(ref), number: ref.number },
+            { signal },
+          )
+        : client.PullRequestsService.refreshPullCi({ ...providerRouteParams(ref), number: ref.number }, { signal }),
     ).pipe(Effect.map((data): PullDetail => ({ ...data, events: data.events ?? [] })));
     const program = Effect.gen(function* () {
       const workflow = yield* DetailWorkflow;
@@ -1401,19 +1431,24 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const mutations = yield* ProviderMutations;
       mutationTick = nextWorkspaceLifecycleTick();
       const commit = executeGeneratedApiRequest<void>("PUT pull request kanban state", (client, signal) =>
-        client.PUT(providerItemPath("pulls", ref, "/state"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          body: { status },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.setKanbanStateOnHost(
+              { ...providerHostRouteParams(ref), number: number },
+              { status },
+              { signal },
+            )
+          : client.PullRequestsService.setKanbanState(
+              { ...providerRouteParams(ref), number: number },
+              { status },
+              { signal },
+            ),
       ).pipe(Effect.as<KanbanProjection>({ detail: status, pulls: status }));
       const refreshOnStale = executeGeneratedApiRequest(
         "sync pull request after stale kanban mutation",
         (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.syncPullOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(
         Effect.map((next): KanbanProjection => {
           const confirmed = normalizeKanbanStatus(next.merge_request.KanbanStatus);
@@ -1476,11 +1511,17 @@ export function createDetailStore(opts: DetailStoreOptions) {
       "change pull request state",
       (ref) =>
         executeGeneratedApiRequest("POST pull request state", (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/github-state"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            body: { state },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.setPrGithubStateOnHost(
+                { ...providerHostRouteParams(ref), number: number },
+                { state },
+                { signal },
+              )
+            : client.PullRequestsService.setPrGithubState(
+                { ...providerRouteParams(ref), number: number },
+                { state },
+                { signal },
+              ),
         ).pipe(Effect.asVoid),
       callbacks,
     );
@@ -1508,19 +1549,24 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const previousLabels = detail?.merge_request.labels ?? [];
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("PUT pull request labels", (client, signal) =>
-        client.PUT(providerItemPath("pulls", ref, "/labels"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          body: { labels: labels.map((label) => label.name) },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.setPrLabelsOnHost(
+              { ...providerHostRouteParams(ref), number: number },
+              { labels: labels.map((label) => label.name) },
+              { signal },
+            )
+          : client.PullRequestsService.setPrLabels(
+              { ...providerRouteParams(ref), number: number },
+              { labels: labels.map((label) => label.name) },
+              { signal },
+            ),
       ).pipe(Effect.map((response) => response.labels ?? []));
       const refreshOnStale = executeGeneratedApiRequest(
         "sync pull request after stale label mutation",
         (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.syncPullOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => response.merge_request.labels ?? []));
       const apply = (nextLabels: Label[]) =>
         Effect.sync(() => {
@@ -1573,19 +1619,24 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const previousAssignees = detail?.merge_request.assignees ?? [];
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("PUT pull request assignees", (client, signal) =>
-        client.PUT(providerItemPath("pulls", ref, "/assignees"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          body: { assignees },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.setPrAssigneesOnHost(
+              { ...providerHostRouteParams(ref), number: number },
+              { assignees },
+              { signal },
+            )
+          : client.PullRequestsService.setPrAssignees(
+              { ...providerRouteParams(ref), number: number },
+              { assignees },
+              { signal },
+            ),
       ).pipe(Effect.map((response) => response.assignees ?? []));
       const refreshOnStale = executeGeneratedApiRequest(
         "sync pull request after stale assignee mutation",
         (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.syncPullOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => response.merge_request.assignees ?? []));
       const apply = (nextAssignees: string[]) =>
         Effect.sync(() => {
@@ -1641,19 +1692,24 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const previousReviewers = detail?.merge_request.requested_reviewers ?? [];
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("PUT pull request reviewers", (client, signal) =>
-        client.PUT(providerItemPath("pulls", ref, "/reviewers"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          body: { reviewers },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.setPrReviewersOnHost(
+              { ...providerHostRouteParams(ref), number: number },
+              { reviewers },
+              { signal },
+            )
+          : client.PullRequestsService.setPrReviewers(
+              { ...providerRouteParams(ref), number: number },
+              { reviewers },
+              { signal },
+            ),
       ).pipe(Effect.map((response) => response.reviewers ?? []));
       const refreshOnStale = executeGeneratedApiRequest(
         "sync pull request after stale reviewer mutation",
         (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.syncPullOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => response.merge_request.requested_reviewers ?? []));
       const apply = (nextReviewers: string[]) =>
         Effect.sync(() => {
@@ -1746,11 +1802,15 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const commit = Effect.suspend(() => {
         const envelopeTick = nextWorkspaceLifecycleTick();
         return executeGeneratedApiRequest("PATCH pull request content", (client, signal) =>
-          client.PATCH(providerItemPath("pulls", ref, ""), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            body: fields,
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.editPrContentOnHost(
+                { ...providerHostRouteParams(ref), number: number },
+                fields,
+                { signal },
+              )
+            : client.PullRequestsService.editPrContent({ ...providerRouteParams(ref), number: number }, fields, {
+                signal,
+              }),
         ).pipe(
           Effect.map((response): PullDetail => ({ ...response, events: response.events ?? [] })),
           Effect.tap((response) =>
@@ -1785,10 +1845,9 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const refreshOnStale = Effect.suspend(() => {
         const refreshTick = nextWorkspaceLifecycleTick();
         return executeGeneratedApiRequest("sync pull request after stale content mutation", (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.syncPullOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: number }, { signal }),
         ).pipe(
           Effect.map((response): PullDetail => ({ ...response, events: response.events ?? [] })),
           Effect.tap((response) =>
@@ -2049,19 +2108,18 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const commit = (
         baseline
           ? executeGeneratedApiRequest<void>("DELETE pull request star", (client, signal) =>
-              client.DELETE("/starred", { params: { query: starredItem }, signal }),
+              client.SettingsService.unsetStarred(starredItem, { signal }),
             )
           : executeGeneratedApiRequest<void>("PUT pull request star", (client, signal) =>
-              client.PUT("/starred", { body: starredItem, signal }),
+              client.SettingsService.setStarred(starredItem, { signal }),
             )
       ).pipe(Effect.as(optimistic));
       const refreshOnStale = executeGeneratedApiRequest(
         "GET pull request after stale star mutation",
         (client, signal) =>
-          client.GET(providerItemPath("pulls", ref, ""), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.getPullOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.PullRequestsService.getPull({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => response.merge_request.Starred ?? baseline));
       yield* mutations.submit({
         key: pullMutationKey(ref, "star"),
@@ -2120,11 +2178,17 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const key = pullMutationKey(ref, "comment-posts");
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("POST pull request comment", (client, signal) =>
-        client.POST(providerItemPath("pulls", ref, "/comments"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          body: { body },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.postPrCommentOnHost(
+              { ...providerHostRouteParams(ref), number: number },
+              { body },
+              { signal },
+            )
+          : client.PullRequestsService.postPrComment(
+              { ...providerRouteParams(ref), number: number },
+              { body },
+              { signal },
+            ),
       ).pipe(Effect.asVoid);
       yield* mutations.submit({
         key,
@@ -2135,10 +2199,12 @@ export function createDetailStore(opts: DetailStoreOptions) {
         refreshOnStale: executeGeneratedApiRequest(
           "sync pull request after stale comment submission",
           (client, signal) =>
-            client.POST(providerItemPath("pulls", ref, "/sync"), {
-              params: { path: { ...providerRouteParams(ref), number } },
-              signal,
-            }),
+            providerUsesHostRoute(ref)
+              ? client.PullRequestsService.syncPullOnHost(
+                  { ...providerHostRouteParams(ref), number: number },
+                  { signal },
+                )
+              : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: number }, { signal }),
         ).pipe(Effect.asVoid),
       });
       const gen = yield* Effect.sync(() => {
@@ -2209,19 +2275,24 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const optimistic: PullCommentMutationState = { ...baseline, event: { ...previousEvent, Body: body } };
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("PATCH pull request comment", (client, signal) =>
-        client.PATCH(providerItemPath("pulls", ref, "/comments/{comment_id}"), {
-          params: { path: { ...providerRouteParams(ref), number, comment_id: commentID } },
-          body: { body },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.editPrCommentOnHost(
+              { ...providerHostRouteParams(ref), number: number, commentId: commentID },
+              { body },
+              { signal },
+            )
+          : client.PullRequestsService.editPrComment(
+              { ...providerRouteParams(ref), number: number, commentId: commentID },
+              { body },
+              { signal },
+            ),
       ).pipe(Effect.as(optimistic));
       const refreshOnStale = executeGeneratedApiRequest(
         "sync pull request after stale comment edit",
         (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.syncPullOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => pullCommentState(response.events ?? [], commentID, baseline)));
       const apply = (state: PullCommentMutationState) => applyPullCommentState(ref, commentID, state);
       yield* Effect.sync(() => trackPullCommentMutation(commentID, baseline));
@@ -2298,19 +2369,22 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const optimistic: PullCommentMutationState = { ...baseline, present: false };
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("DELETE pull request comment", (client, signal) =>
-        client.DELETE(providerItemPath("pulls", ref, "/comments/{comment_id}"), {
-          headers: { "Content-Type": "application/json" },
-          params: { path: { ...providerRouteParams(ref), number, comment_id: commentID } },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.deletePrCommentOnHost(
+              { ...providerHostRouteParams(ref), number: number, commentId: commentID },
+              { headers: { "Content-Type": "application/json" }, signal },
+            )
+          : client.PullRequestsService.deletePrComment(
+              { ...providerRouteParams(ref), number: number, commentId: commentID },
+              { headers: { "Content-Type": "application/json" }, signal },
+            ),
       ).pipe(Effect.as(optimistic));
       const refreshOnStale = executeGeneratedApiRequest(
         "sync pull request after stale comment deletion",
         (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.syncPullOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => pullCommentState(response.events ?? [], commentID, baseline)));
       const apply = (state: PullCommentMutationState) => applyPullCommentState(ref, commentID, state);
       yield* Effect.sync(() => {
@@ -2385,11 +2459,17 @@ export function createDetailStore(opts: DetailStoreOptions) {
       const key = pullMutationKey(ref, `discussion\u0000${discussionID}\u0000replies`);
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("POST pull request discussion reply", (client, signal) =>
-        client.POST(providerItemPath("pulls", ref, "/discussions/{discussion_id}/reply"), {
-          params: { path: { ...providerRouteParams(ref), number, discussion_id: discussionID } },
-          body: { body },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.replyToDiscussionOnHost(
+              { ...providerHostRouteParams(ref), number: number, discussionId: discussionID },
+              { body },
+              { signal },
+            )
+          : client.PullRequestsService.replyToDiscussion(
+              { ...providerRouteParams(ref), number: number, discussionId: discussionID },
+              { body },
+              { signal },
+            ),
       ).pipe(Effect.asVoid);
       yield* mutations.submit({
         key,
@@ -2397,11 +2477,15 @@ export function createDetailStore(opts: DetailStoreOptions) {
         optimistic: undefined,
         apply: () => Effect.void,
         commit,
-        refreshOnStale: executeGeneratedApiRequest("sync pull request after stale discussion reply", (client, signal) =>
-          client.POST(providerItemPath("pulls", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+        refreshOnStale: executeGeneratedApiRequest(
+          "sync pull request after stale discussion reply",
+          (client, signal) =>
+            providerUsesHostRoute(ref)
+              ? client.PullRequestsService.syncPullOnHost(
+                  { ...providerHostRouteParams(ref), number: number },
+                  { signal },
+                )
+              : client.PullRequestsService.syncPull({ ...providerRouteParams(ref), number: number }, { signal }),
         ).pipe(Effect.asVoid),
       });
       const shouldReconcile = yield* Effect.sync(() => {
@@ -2459,23 +2543,31 @@ export function createDetailStore(opts: DetailStoreOptions) {
     const program = Effect.gen(function* () {
       if (requestSelectionGeneration !== selectionGeneration || !isDetailShowingRef(ref)) return false;
       const request = executeGeneratedApiRequest("POST apply pull request review suggestions", (client, signal) =>
-        client.POST(providerItemPath("pulls", ref, "/review-suggestions/apply"), {
-          params: {
-            path: {
-              ...providerRouteParams(ref),
-              number,
-            },
-          },
-          body: {
-            expected_head_sha: expectedHeadSHA,
-            ...(input.message ? { message: input.message } : {}),
-            suggestions: input.suggestions.map((suggestion) => ({
-              thread_id: suggestion.threadID,
-              replacement: suggestion.replacement,
-            })),
-          },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.applyPrReviewSuggestionsOnHost(
+              { ...providerHostRouteParams(ref), number: number },
+              {
+                expected_head_sha: expectedHeadSHA,
+                ...(input.message ? { message: input.message } : {}),
+                suggestions: input.suggestions.map((suggestion) => ({
+                  thread_id: suggestion.threadID,
+                  replacement: suggestion.replacement,
+                })),
+              },
+              { signal },
+            )
+          : client.PullRequestsService.applyPrReviewSuggestions(
+              { ...providerRouteParams(ref), number: number },
+              {
+                expected_head_sha: expectedHeadSHA,
+                ...(input.message ? { message: input.message } : {}),
+                suggestions: input.suggestions.map((suggestion) => ({
+                  thread_id: suggestion.threadID,
+                  replacement: suggestion.replacement,
+                })),
+              },
+              { signal },
+            ),
       );
       const requestResult = yield* Effect.result(request);
       if (requestSelectionGeneration !== selectionGeneration || !isDetailShowingRef(ref)) {

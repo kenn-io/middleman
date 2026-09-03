@@ -426,18 +426,38 @@ function proxiedMarkdownImageSource(source: string, repo: RepoContext): string |
       provider === "gitlab" ? normalizedGitLabMarkdownImageSource(source, host, repo.repoPath) : source;
     if (!normalizedSource) return null;
     const url = new URL(normalizedSource);
-    if (url.protocol !== "https:" || url.host.toLowerCase() !== host.toLowerCase()) return null;
-    if (provider === "github" && !url.pathname.startsWith("/user-attachments/assets/")) return null;
+    if (url.protocol !== "https:") return null;
+    if (provider === "github" && !isProxiedGitHubImage(url, host, repo.repoPath)) return null;
     if (
       provider === "gitlab" &&
-      !url.pathname.startsWith(`/${repo.repoPath}/uploads/`) &&
-      !/^\/-\/project\/\d+\/uploads\//.test(url.pathname)
+      (url.host.toLowerCase() !== host.toLowerCase() ||
+        (!url.pathname.startsWith(`/${repo.repoPath}/uploads/`) && !/^\/-\/project\/\d+\/uploads\//.test(url.pathname)))
     )
       return null;
     return providerRepoResourceURL(repo, "/markdown-image", { source: url.toString() });
   } catch {
     return null;
   }
+}
+
+// GitHub images that need the repository credential: private user-attachments
+// uploads, and files committed to this repository referenced through blob or
+// raw web URLs. Other repositories' files stay on direct loading because the
+// route's credential is only known to reach this repository. The server
+// applies the same rules (internal/github/markdown_images.go).
+function isProxiedGitHubImage(url: URL, host: string, repoPath: string): boolean {
+  const urlHost = url.host.toLowerCase();
+  const platformHost = host.toLowerCase();
+  const segments = url.pathname.split("/").filter(Boolean);
+  const inRepository = segments.slice(0, 2).join("/").toLowerCase() === repoPath.toLowerCase();
+  if (urlHost === platformHost) {
+    if (url.pathname.startsWith("/user-attachments/assets/")) return true;
+    return inRepository && (segments[2] === "blob" || segments[2] === "raw") && segments.length >= 5;
+  }
+  if (urlHost === "raw.githubusercontent.com" && platformHost === "github.com") {
+    return inRepository && segments.length >= 4;
+  }
+  return false;
 }
 
 function normalizedGitLabMarkdownImageSource(source: string, host: string, repoPath: string): string | null {

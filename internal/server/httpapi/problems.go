@@ -19,8 +19,10 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -728,6 +730,18 @@ func platformErrorDetails(provider, host string) map[string]any {
 // already produces a code (status-derived) and migration becomes
 // incremental.
 func init() {
+	huma.DefaultArrayNullable = false
+	huma.DefaultJSONFormat = huma.Format{
+		Marshal: func(w io.Writer, value any) error {
+			return jsonv2.MarshalWrite(w, value)
+		},
+		Unmarshal: func(data []byte, value any) error {
+			return jsonv2.Unmarshal(data, value)
+		},
+	}
+	huma.DefaultFormats["application/json"] = huma.DefaultJSONFormat
+	huma.DefaultFormats["json"] = huma.DefaultJSONFormat
+
 	huma.NewError = func(status int, msg string, errs ...error) huma.StatusError {
 		details := make([]*huma.ErrorDetail, 0, len(errs))
 		for _, e := range errs {

@@ -676,12 +676,14 @@ describe("IssueDetail inline workspace handoff", () => {
     expect(screen.queryByLabelText("New branch name")).toBeNull();
     await fireEvent.click(useExistingDirectory);
 
-    expect(apiClient.POST.mock.calls[1]?.[1]).toMatchObject({
-      body: {
-        git_head_ref: "kenn-forge/issue-7-original-title",
-        reuse_existing_directory: true,
-      },
-    });
+    await vi.waitFor(() =>
+      expect(apiClient.POST.mock.calls[1]?.[1]).toMatchObject({
+        body: {
+          git_head_ref: "kenn-forge/issue-7-original-title",
+          reuse_existing_directory: true,
+        },
+      }),
+    );
     await vi.waitFor(() => {
       expect(controller.recordCreated).toHaveBeenCalledWith(identity, {
         id: "ws-recovered",
@@ -710,8 +712,8 @@ describe("IssueDetail inline workspace handoff", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Create Workspace" }));
     await fireEvent.click(await screen.findByRole("button", { name: "Use Existing Directory" }));
 
-    expect(screen.getByRole("dialog", { name: "Existing Workspace Directory" })).toBeTruthy();
-    expect(screen.getByText("the expected Kenn Forge worktree directory does not exist")).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Existing Workspace Directory" })).toBeTruthy();
+    expect(await screen.findByText("the expected Kenn Forge worktree directory does not exist")).toBeTruthy();
   });
 
   it("explains when the existing branch is checked out elsewhere", async () => {
@@ -726,7 +728,7 @@ describe("IssueDetail inline workspace handoff", () => {
     await fireEvent.click(await screen.findByRole("button", { name: "Use Existing Branch" }));
 
     expect(
-      screen.getByText("This branch is already checked out in another worktree. Create a new branch instead."),
+      await screen.findByText("This branch is already checked out in another worktree. Create a new branch instead."),
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Use Existing Directory" })).toBeNull();
   });
@@ -813,7 +815,7 @@ describe("IssueDetail inline workspace handoff", () => {
     await rerender({ provider: "gh", platformHost: undefined });
     await fireEvent.click(screen.getByRole("button", { name: "Create Workspace" }));
 
-    expect(apiClient.POST).toHaveBeenCalled();
+    await vi.waitFor(() => expect(apiClient.POST).toHaveBeenCalled());
   });
 
   it("keeps the primary workspace create action launch-free", async () => {

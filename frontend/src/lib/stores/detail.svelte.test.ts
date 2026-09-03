@@ -5,7 +5,9 @@ import { ProblemCodes, type ProblemBody } from "../api/problems.js";
 import type { PullDetail } from "../api/types.js";
 import type { OwnedAppRuntime } from "../app/runtime.js";
 import type { GeneratedClient } from "../api/generated-api.js";
+import { GeneratedProblemResponse } from "../api/runtime.js";
 import { makeTestAppRuntime } from "../testing/effect-layers.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
 import type { ApplySuggestionRequest } from "../utils/markdown-suggestions.js";
 import {
   type ApplySuggestionConflict,
@@ -756,14 +758,10 @@ describe("createDetailStore", () => {
   });
 
   it("syncs detail and resolves after applying the refreshed head", async () => {
-    const post = vi.fn().mockResolvedValue({
-      data: pullDetail("fresh-head"),
-      error: undefined,
-      response: new Response("{}", { status: 200 }),
-    });
+    const syncPull = vi.fn().mockResolvedValue(pullDetail("fresh-head"));
     const pulls = { loadPulls: vi.fn().mockResolvedValue(undefined) };
     const store = createDetailStore({
-      client: mockClient({ POST: post }),
+      client: makeGeneratedClient({ PullRequestsService: { syncPull } }),
       getPage: () => "pulls",
       pulls,
     });
@@ -1515,7 +1513,7 @@ describe("createDetailStore", () => {
     expect(getFlash()).toMatchObject({ message: "provider rejected suggestion", tone: "danger" });
   });
 
-  it("fails closed when apply-suggestion conflict refresh returns no detail", async () => {
+  it("fails closed when apply-suggestion conflict refresh fails", async () => {
     const tests = [
       {
         reason: "stale_state",
@@ -1533,18 +1531,18 @@ describe("createDetailStore", () => {
       },
     ] as const;
     for (const tt of tests) {
-      const get = vi.fn().mockResolvedValue({ data: pullDetail("old-head") });
-      const post = vi.fn(async (path: string) => {
-        if (path.endsWith("/review-suggestions/apply")) {
-          return { error: conflictProblem(tt.reason) };
-        }
-        if (path.endsWith("/sync")) {
-          return { error: undefined };
-        }
-        return { error: undefined };
+      const conflict = conflictProblem(tt.reason);
+      const client = makeGeneratedClient({
+        PullRequestsService: {
+          getPull: vi.fn().mockResolvedValue(pullDetail("old-head")),
+          applyPrReviewSuggestions: vi
+            .fn()
+            .mockRejectedValue(new GeneratedProblemResponse(conflict, Response.json(conflict, { status: 409 }))),
+          syncPull: vi.fn().mockRejectedValue(new Error("sync failed")),
+        },
       });
       const store = createDetailStore({
-        client: mockClient({ GET: get, POST: post }),
+        client,
       });
       await loadDetail(store, "acme", "widget", 7, {
         provider: "github",

@@ -1,5 +1,5 @@
 import { expect, request as playwrightRequest, test, type APIRequestContext } from "@playwright/test";
-import type { components } from "../../src/lib/api/generated/schema.js";
+import type { SettingsResponse as GeneratedSettingsResponse } from "../../src/lib/api/generated/models/index.js";
 import { startIsolatedE2EServer, type IsolatedE2EServer } from "./support/e2eServer";
 import { openSettingsPanel } from "./support/settingsPanel";
 
@@ -20,7 +20,7 @@ test.afterAll(async () => {
   await isolatedServer?.stop();
 });
 
-type SettingsResponse = components["schemas"]["SettingsResponse"];
+type SettingsResponse = GeneratedSettingsResponse;
 
 test("activity default view mode and time range persist through the segmented controls", async ({ page }) => {
   await page.goto(`${isolatedServer!.info.base_url}/settings`);

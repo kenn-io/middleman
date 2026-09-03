@@ -188,7 +188,7 @@ func TestClearDeferredMergeInFlightKeepsNewerHandle(t *testing.T) {
 
 func TestSpokePreparationTracksDeferredMergeUntilClearOrSupersede(t *testing.T) {
 	require := require.New(t)
-	gate := providerplane.NewProviderWriteGate(dbtest.Open(t))
+	gate := providerplane.NewProviderWriteGate(dbtest.Open(t), true)
 	handler := New(Deps{ProviderWriteGate: gate})
 	key := "github:github.com:acme/widget#7"
 

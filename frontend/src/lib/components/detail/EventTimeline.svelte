@@ -64,6 +64,7 @@
     repoName?: string;
     repoPath?: string | undefined;
     number?: number | undefined;
+    itemType?: "pull" | "issue" | undefined;
     currentHeadSHA?: string | undefined;
     canResolveReviewThreads?: boolean;
     canReplyToThreads?: boolean;
@@ -112,6 +113,7 @@
     repoName,
     repoPath,
     number = undefined,
+    itemType = undefined,
     currentHeadSHA = "",
     canResolveReviewThreads = false,
     canReplyToThreads = false,
@@ -1652,6 +1654,8 @@
             owner={repoOwner}
             name={repoName}
             {repoPath}
+            {itemType}
+            itemNumber={number}
             value={editDraft}
             disabled={savingEditId === event.ID}
             autofocus
@@ -1772,6 +1776,8 @@
           owner={repoOwner}
           name={repoName}
           {repoPath}
+          {itemType}
+          itemNumber={number}
           value={editDraft}
           disabled={savingEditId === event.ID}
           autofocus
@@ -1827,6 +1833,8 @@
 	      owner={repoOwner}
 	      name={repoName}
 	      {repoPath}
+	      {itemType}
+	      itemNumber={number}
 	      value={replyDraft}
 	      placeholder="Reply to thread... (Cmd+Enter to submit)"
 	      disabled={savingReplyThreadID === targetID}

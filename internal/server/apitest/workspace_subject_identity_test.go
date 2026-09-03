@@ -108,7 +108,7 @@ func assertWorkspaceIdentitySurfaces(
 	require.NotNil(activityResponse.JSON200)
 	require.NotNil(activityResponse.JSON200.Items)
 	activityByType := make(map[string]generated.ActivityItemResponse)
-	for _, item := range *activityResponse.JSON200.Items {
+	for _, item := range activityResponse.JSON200.Items {
 		if item.RepoName == repoName && (item.ItemNumber == 61 || item.ItemNumber == 62) {
 			activityByType[item.ItemType] = item
 		}

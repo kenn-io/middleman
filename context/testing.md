@@ -187,6 +187,14 @@ the diff, so scope diff locators to `.diff-area`.
 Pane tab headers are `role="tab"` with an `aria-label`, so use
 `getByRole("tab", { name })` — `getByRole(..., { hasText })` is not a valid
 option and silently matches every tab.
+The mock Playwright config's 30 s timeout covers the whole test, and every
+`page.goto` is a full Vite dev-server load that slows several-fold under CI's
+14 workers; keep a test to two navigations or split it, or it fails on the
+first attempt and only passes on retry. (`frontend/playwright.config.ts`)
+Sidebar item rows are `<button>`s whose accessible name concatenates every
+descendant label, including indicator `aria-label`s such as "Stacked: 2/7", so
+a page-wide `getByRole("button", { name })` for a detail chip also matches the
+row; scope chip assertions to the chip's test id.
 
 Every `@lucide/svelte/icons/<name>` import added anywhere in `frontend/src`
 must also be added to the `optimizeDeps.include` list in
@@ -436,6 +444,9 @@ instead of serializing the whole test.
   (`frontend/tests/e2e-full/support/e2eServer.ts::cleanupE2ETmuxDir`).
 - Real-tmux Go test binaries install signal cleanup because termination skips
   code after `m.Run` and `t.Cleanup` (`internal/testutil/testsignal.Install`).
+- Long-lived package-level tmux servers must use `testtmux.Owner`; its reaper
+  reaps servers after uncatchable owner death, which signal cleanup cannot handle.
+  (`internal/testutil/testtmux/reaper_unix.go::startOwnerReaper`)
 
 Windows test binaries that launch restart-durable PTY processes must contain
 their descendants in a kill-on-close Job Object; test timeouts bypass normal

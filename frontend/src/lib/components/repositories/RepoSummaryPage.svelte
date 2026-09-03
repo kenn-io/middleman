@@ -329,7 +329,7 @@
     roborevExecution?.interrupt();
     roborevExecution = appRuntime.runCommand(
       executeGeneratedApiRequest("load Roborev configured repositories", (generatedClient, signal) =>
-        generatedClient.GET("/roborev/configured-repositories", { signal }),
+        generatedClient.RoborevService.listRoborevConfiguredRepositories({ signal }),
       ).pipe(
         Effect.tap((data) =>
           Effect.sync(() => {
@@ -353,7 +353,7 @@
   function refreshSummaries(): void {
     refreshExecution = appRuntime.runCommand(
       executeGeneratedApiRequest("refresh repository summaries", (generatedClient, signal) =>
-        generatedClient.POST("/sync", { signal }),
+        generatedClient.SyncService.triggerSync(undefined, { signal }),
       ).pipe(
         Effect.andThen(readSummariesProgram()),
         Effect.tap((loaded) =>

@@ -56,9 +56,9 @@ func TestWorkspaceAPIHidesRemovedAssociatedPullRequestE2E(t *testing.T) {
 	require.Equal(http.StatusOK, list.StatusCode(), string(list.Body))
 	require.NotNil(list.JSON200)
 	require.NotNil(list.JSON200.Workspaces)
-	require.Len(*list.JSON200.Workspaces, 1)
-	require.Equal("ws-adhoc", (*list.JSON200.Workspaces)[0].Id)
-	require.Nil((*list.JSON200.Workspaces)[0].AssociatedPrNumber)
+	require.Len(list.JSON200.Workspaces, 1)
+	require.Equal("ws-adhoc", list.JSON200.Workspaces[0].Id)
+	require.Nil(list.JSON200.Workspaces[0].AssociatedPrNumber)
 
 	detail, err := client.HTTP.GetWorkspaceWithResponse(ctx, "ws-adhoc")
 	require.NoError(err)
@@ -142,9 +142,9 @@ func TestWorkspaceAPIRetainsProviderMetadataAcrossReusedRouteE2E(t *testing.T) {
 	require.Equal(http.StatusOK, list.StatusCode(), string(list.Body))
 	require.NotNil(list.JSON200)
 	require.NotNil(list.JSON200.Workspaces)
-	require.Len(*list.JSON200.Workspaces, 2)
+	require.Len(list.JSON200.Workspaces, 2)
 	byID := make(map[string]generated.WorkspaceResponse, 2)
-	for _, workspace := range *list.JSON200.Workspaces {
+	for _, workspace := range list.JSON200.Workspaces {
 		byID[workspace.Id] = workspace
 	}
 	require.NotNil(byID["ws-associated"].AssociatedPrNumber)

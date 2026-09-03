@@ -515,7 +515,7 @@ func run(opts serve.Options) error {
 	var syncer *ghclient.Syncer
 	var telemetryReporter *telemetry.Reporter
 	var profilerSrv *profiler.Server
-	var notificationLoops *notificationLoopHandle
+	var backgroundLoops *backgroundLoopHandle
 	defer func() {
 		if err := waitForRuntimeShutdownDelay(); err != nil {
 			slog.Warn("test shutdown delay", "err", err)
@@ -524,11 +524,11 @@ func run(opts serve.Options) error {
 			context.Background(),
 			mainShutdownCallbacks{
 				StopSignals: stopSignalsOnce,
-				StopNotificationLoops: func(ctx context.Context) error {
-					if notificationLoops == nil {
+				StopBackgroundLoops: func(ctx context.Context) error {
+					if backgroundLoops == nil {
 						return nil
 					}
-					return notificationLoops.Stop(ctx)
+					return backgroundLoops.Stop(ctx)
 				},
 				ShutdownMCPHTTP: func(shutdownCtx context.Context) error {
 					if mcpHTTPSrv == nil {
@@ -640,6 +640,7 @@ func run(opts serve.Options) error {
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
+	backgroundLoops = startBackgroundLoops(ctx, database)
 	tokenSources := tokenauth.NewSourceSet(tokenauth.Options{
 		GitHubCLI: config.GitHubCLITokenForHost,
 		GitHubApp: func(
@@ -797,7 +798,7 @@ func run(opts serve.Options) error {
 		)
 		syncer.Start(ctx)
 		if !opts.DisableSync && cfg.NotificationsEnabled() {
-			notificationLoops = startNotificationLoops(ctx, syncer, cfg)
+			startNotificationLoops(backgroundLoops, syncer, cfg)
 		}
 	}
 
@@ -872,15 +873,15 @@ func waitForRuntimeGate(ctx context.Context, gatePath, phase string) error {
 }
 
 type mainShutdownCallbacks struct {
-	StopSignals           func()
-	StopNotificationLoops func(context.Context) error
-	ShutdownMCPHTTP       func(context.Context) error
-	ShutdownPrimaryHTTP   func(context.Context) error
-	StopSyncer            func()
-	ShutdownProfiler      func(context.Context) error
-	CloseTelemetry        func() error
-	CloseMCP              func() error
-	CloseDatabase         func() error
+	StopSignals         func()
+	StopBackgroundLoops func(context.Context) error
+	ShutdownMCPHTTP     func(context.Context) error
+	ShutdownPrimaryHTTP func(context.Context) error
+	StopSyncer          func()
+	ShutdownProfiler    func(context.Context) error
+	CloseTelemetry      func() error
+	CloseMCP            func() error
+	CloseDatabase       func() error
 }
 
 type mainShutdownError struct {
@@ -896,13 +897,13 @@ func runMainShutdown(
 	if callbacks.StopSignals != nil {
 		callbacks.StopSignals()
 	}
-	if callbacks.StopNotificationLoops != nil {
+	if callbacks.StopBackgroundLoops != nil {
 		if err := runContextShutdown(
-			ctx, shutdownbudget.NotificationLoop,
-			callbacks.StopNotificationLoops,
+			ctx, shutdownbudget.BackgroundLoops,
+			callbacks.StopBackgroundLoops,
 		); err != nil {
 			errs = append(errs, mainShutdownError{
-				message: "notification loops shutdown",
+				message: "background loops shutdown",
 				err:     err,
 			})
 		}

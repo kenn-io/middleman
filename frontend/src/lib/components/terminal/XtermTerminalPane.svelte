@@ -5,6 +5,8 @@
   import { observeResize } from "../../browser/observers.js";
   import { getStores } from "../../context.js";
   import { showFlash } from "../../stores/flash.svelte.js";
+  import { parseConfiguredProviderItemURL } from "../../utils/item-reference.js";
+  import { resolveItemReference } from "../../utils/itemRefHandler.js";
   import { Terminal } from "@xterm/xterm";
   import type { ILinkHandler } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
@@ -44,6 +46,7 @@
     type TerminalSessionController,
   } from "./terminal-session.js";
   import { terminalAttachment } from "./terminal-attachment.js";
+  import type { TerminalKey } from "./terminal-key.js";
   import { currentTerminalGeometryIntent } from "./terminalGeometryIntent.js";
   import { decodeTerminalControlMessage } from "./terminal-control-message.js";
 
@@ -94,6 +97,10 @@
   let containerEl: HTMLElement;
   let terminal: Terminal | null = $state(null);
   let hoveredTerminalLink: string | null = $state(null);
+  let itemLinkExecution: { interrupt: () => void } | null = null;
+  const hoveredTerminalLinkIsItem = $derived(
+    hoveredTerminalLink !== null && configuredItemReference(hoveredTerminalLink) !== null,
+  );
   let fitAddon: FitAddon | null = null;
   let imageAddon: ImageAddon | null = null;
   let ligaturesAddon: LigaturesAddon | null = null;
@@ -163,6 +170,52 @@
     return true;
   }
 
+  const terminalKeyEvents: Record<TerminalKey, { key: string; code: string; keyCode: number }> = {
+    Escape: { key: "Escape", code: "Escape", keyCode: 27 },
+    Tab: { key: "Tab", code: "Tab", keyCode: 9 },
+    ArrowLeft: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
+    ArrowUp: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
+    ArrowDown: { key: "ArrowDown", code: "ArrowDown", keyCode: 40 },
+    ArrowRight: { key: "ArrowRight", code: "ArrowRight", keyCode: 39 },
+    Space: { key: " ", code: "Space", keyCode: 32 },
+    Enter: { key: "Enter", code: "Enter", keyCode: 13 },
+  };
+
+  function terminalKeyEvent(type: "keydown" | "keypress" | "keyup", key: TerminalKey): KeyboardEvent {
+    const definition = terminalKeyEvents[key];
+    const event = new KeyboardEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      code: definition.code,
+      key: definition.key,
+    });
+    Object.defineProperties(event, {
+      charCode: { value: key === "Space" && type === "keypress" ? definition.keyCode : 0 },
+      keyCode: { value: definition.keyCode },
+      which: { value: definition.keyCode },
+    });
+    return event;
+  }
+
+  export function sendKey(key: TerminalKey): boolean {
+    if (disabled || !terminal || !terminalSession?.isConnected()) return false;
+    const input = containerEl.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
+    if (!input) return false;
+    if (!claimTerminalResize()) return false;
+    applyTerminalSoftwareKeyboardPolicy(input);
+    const previousFocus = input.ownerDocument.activeElement;
+    const keyDownAllowed = input.dispatchEvent(terminalKeyEvent("keydown", key));
+    if (key === "Space" && keyDownAllowed) input.dispatchEvent(terminalKeyEvent("keypress", key));
+    input.dispatchEvent(terminalKeyEvent("keyup", key));
+    if (previousFocus !== input && input.ownerDocument.activeElement === input) {
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+      }
+      if (input.ownerDocument.activeElement === input) input.blur();
+    }
+    return true;
+  }
+
   const TERMINAL_SMOOTH_SCROLL_DURATION = 0;
   const TERMINAL_MINIMUM_CONTRAST_RATIO = 4.5;
   const TERMINAL_FONT_WAIT_MS = 300;
@@ -206,7 +259,21 @@
     }
     if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
+    // Pull request and issue links for a configured repository stay inside
+    // the app: the resolve endpoint decides whether the repo is tracked and
+    // falls back to opening the provider page when it is not.
+    const itemRef = configuredItemReference(url.href);
+    if (itemRef) {
+      itemLinkExecution?.interrupt();
+      itemLinkExecution = resolveItemReference(runtime, itemRef);
+      return;
+    }
+
     window.open(url.href, "_blank", "noopener,noreferrer");
+  }
+
+  function configuredItemReference(href: string) {
+    return parseConfiguredProviderItemURL(href, settingsStore.getConfiguredRepos());
   }
 
   function terminalLinkModifierPressed(event: MouseEvent): boolean {
@@ -245,11 +312,7 @@
     // policy first.
     if (active && (event.pointerType === "touch" || event.pointerType === "pen")) {
       const input = containerEl.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
-      if (containerEl.closest('[data-terminal-software-keyboard="manual"]')) {
-        input?.setAttribute("inputmode", "none");
-      } else {
-        input?.removeAttribute("inputmode");
-      }
+      if (input) applyTerminalSoftwareKeyboardPolicy(input);
       terminal?.focus();
     }
     if (!event.isTrusted) return;
@@ -267,7 +330,15 @@
     try {
       containerEl.setPointerCapture(event.pointerId);
     } catch {
-      // The watchdog and global cancellation handlers still bound the gesture.
+      // The timeout and global cancellation handlers still bound the gesture.
+    }
+  }
+
+  function applyTerminalSoftwareKeyboardPolicy(input: HTMLTextAreaElement): void {
+    if (containerEl.closest('[data-terminal-software-keyboard="manual"]')) {
+      input.setAttribute("inputmode", "none");
+    } else {
+      input.removeAttribute("inputmode");
     }
   }
 
@@ -933,6 +1004,8 @@
   function cleanup(): void {
     disposed = true;
     pointerOrigin = null;
+    itemLinkExecution?.interrupt();
+    itemLinkExecution = null;
     clipboardWriter?.dispose();
     clipboardWriter = undefined;
     mouseDragAutoscroll?.dispose();
@@ -1272,7 +1345,7 @@
   {#if hoveredTerminalLink}
     <div class="terminal-link-tooltip">
       <span>{hoveredTerminalLink}</span>
-      <small>{terminalLinkModifierLabel}+Click to open link</small>
+      <small>{terminalLinkModifierLabel}+Click to {hoveredTerminalLinkIsItem ? "open in kenn-forge" : "open link"}</small>
     </div>
     {/if}
 </div>

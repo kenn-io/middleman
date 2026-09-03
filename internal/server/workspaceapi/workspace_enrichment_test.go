@@ -16,10 +16,27 @@ import (
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/providerplane"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 	"go.kenn.io/forge/internal/workspace"
 	"go.kenn.io/forge/internal/workspace/localruntime"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
+
+func TestApplyWorktreeDivergenceReportsMissingConfiguredUpstream(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+	work := gitfixture.DivergenceWorktree(t)
+	gitfixture.Run(t, work, "update-ref", "-d", "refs/remotes/origin/feature")
+	resp := workspaceResponse{ID: "ws-first-push"}
+
+	err := applyWorktreeDivergence(t.Context(), &resp, work)
+
+	require.NoError(err)
+	require.NotNil(resp.BranchUpstreamMissing)
+	assert.True(*resp.BranchUpstreamMissing)
+	assert.Nil(resp.CommitsAhead)
+	assert.Nil(resp.CommitsBehind)
+}
 
 func newEnrichmentTestHandler(t *testing.T, tmuxScript string) *Handler {
 	t.Helper()

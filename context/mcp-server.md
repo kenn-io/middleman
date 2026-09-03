@@ -107,6 +107,12 @@
   hook-authoritative sessions. `hook_observed=false` distinguishes a launched
   runtime awaiting its first hook from a workspace with no agent runtime
   (`internal/mcpserver/tools_agent.go::Server.listWorkspaceAgentSessions`).
+- Follow-up MCP messages address one existing live agent runtime by workspace ID
+  and runtime session key. They reuse the initial prompt's serialized
+  bracketed-paste and Enter path, then return without launching, persisting, or
+  waiting for hook activity
+  (`internal/mcpserver/tools_agent.go::Server.sendAgentMessage`,
+  `internal/workspace/localruntime/manager.go::Manager.SubmitAgentMessage`).
 - An omitted MCP agent target selects the most-used available workspace agent
   from the prior 14 days; ties prefer recent use, then key, and empty history
   falls back to configured order (`internal/mcpserver/tools_agent_spawn.go::Server.defaultAgentTarget`).

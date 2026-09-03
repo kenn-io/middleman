@@ -114,7 +114,7 @@ func seedMergeRequestForRepo(
 // same-repo merge request: the head branch is fetched from the project's
 // origin, materialized as a new worktree, and registered.
 func TestCreateWorktreeFromMergeRequestRoute(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := Require.New(t)
 	assert := assert.New(t)
 
@@ -313,7 +313,7 @@ func worktreeConfigForRoute(t *testing.T, dir, key string) string {
 // TestCreateWorktreeFromMergeRequestRouteUnknownNumber: an unsynced merge
 // request is a 404 with the pullNotFound code, and nothing touches disk.
 func TestCreateWorktreeFromMergeRequestRouteUnknownNumber(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := Require.New(t)
 	assert := assert.New(t)
 
@@ -346,7 +346,7 @@ func TestCreateWorktreeFromMergeRequestRouteUnknownNumber(t *testing.T) {
 // TestCreateWorktreeFromMergeRequestRouteNoIdentity: a local-only project
 // cannot resolve merge requests.
 func TestCreateWorktreeFromMergeRequestRouteNoIdentity(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := Require.New(t)
 
 	srv, _ := setupProjectServer(t)
@@ -371,7 +371,7 @@ func TestCreateWorktreeFromMergeRequestRouteNoIdentity(t *testing.T) {
 // import instead of failing with pullNotFound, so a caller (e.g. a fleet
 // hub proxying into this host) does not need a separate sync step.
 func TestCreateWorktreeFromMergeRequestRouteSyncsOnDemand(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := Require.New(t)
 	assert := assert.New(t)
 
@@ -461,7 +461,7 @@ func TestCreateWorktreeFromMergeRequestRouteSyncsOnDemand(t *testing.T) {
 }
 
 func TestCreateWorktreeFromMergeRequestRouteDoesNotSyncRemovedItem(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := Require.New(t)
 
 	repoPath := initLifecycleRouteRepo(t)

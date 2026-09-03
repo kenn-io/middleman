@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { Effect } from "effect";
-import { createRuntimeClient } from "../api/runtime.js";
 import { makeTestAppRuntime } from "../testing/effect-layers.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
 import { getStackDepth, getTopFrame, resetModalStack } from "../stores/keyboard/modal-stack.svelte.js";
 import { expandMarkdownImages, observeMarkdownImageExpansion } from "./markdownImages";
 
@@ -40,7 +40,7 @@ describe("expandMarkdownImages", () => {
   });
 
   test("enhances markdown images while the app runtime owns the observer", async () => {
-    const runtime = makeTestAppRuntime(createRuntimeClient(() => Promise.resolve(Response.json({}))));
+    const runtime = makeTestAppRuntime(makeGeneratedClient());
     const root = document.createElement("div");
     const execution = runtime.runCommand(Effect.scoped(observeMarkdownImageExpansion(root)), {
       operation: "test markdown image observer",

@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/apiclient/generated"
 	"go.kenn.io/forge/internal/db"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
 
 func TestWorkspaceCreateUsesPRBranchAndFallbackBranch(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	assert := assert.New(t)
 	require := require.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
@@ -38,16 +38,15 @@ func TestWorkspaceCreateUsesPRBranchAndFallbackBranch(t *testing.T) {
 	tracked := create(1)
 	assert.Equal("feature", gitOutputForLifecycle(t, tracked.WorktreePath, "branch", "--show-current"))
 	assert.Equal("origin", gitOutputForLifecycle(t, tracked.WorktreePath, "config", "--get", "branch.feature.remote"))
-	runGit(t, fixture.bare, "fetch", "--prune", "origin")
+	gitfixture.Run(t, fixture.bare, "fetch", "--prune", "origin")
 
 	fallback := create(2)
 	assert.Equal("kenn-forge/pr-2", gitOutputForLifecycle(t, fallback.WorktreePath, "branch", "--show-current"))
-	assert.Equal(testGitSHA(t, tracked.WorktreePath, "HEAD"), testGitSHA(t, fallback.WorktreePath, "HEAD"))
+	assert.Equal(gitfixture.SHA(t, tracked.WorktreePath, "HEAD"), gitfixture.SHA(t, fallback.WorktreePath, "HEAD"))
 }
 
 func TestWorkspaceDeleteRecreatesForkBranchName(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	assert := assert.New(t)
 	require := require.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
@@ -56,9 +55,9 @@ func TestWorkspaceDeleteRecreatesForkBranchName(t *testing.T) {
 	)
 	require.NoError(err)
 	require.NotNil(repo)
-	headSHA := testGitSHA(t, fixture.remote, "feature")
-	runGit(t, fixture.remote, "update-ref", "refs/heads/fork-feature", headSHA)
-	runGit(
+	headSHA := gitfixture.SHA(t, fixture.remote, "feature")
+	gitfixture.Run(t, fixture.remote, "update-ref", "refs/heads/fork-feature", headSHA)
+	gitfixture.Run(
 		t, fixture.bare, "config", "--add",
 		"url."+fixture.remote+".insteadOf", "https://github.com/fork/widget.git",
 	)
@@ -98,7 +97,7 @@ func TestWorkspaceDeleteRecreatesForkBranchName(t *testing.T) {
 
 	second := create()
 	assert.Equal("fork-feature", gitOutputForLifecycle(t, second.WorktreePath, "branch", "--show-current"))
-	assert.Equal(headSHA, testGitSHA(t, second.WorktreePath, "HEAD"))
+	assert.Equal(headSHA, gitfixture.SHA(t, second.WorktreePath, "HEAD"))
 }
 
 func gitOutputForLifecycle(t *testing.T, dir string, args ...string) string {

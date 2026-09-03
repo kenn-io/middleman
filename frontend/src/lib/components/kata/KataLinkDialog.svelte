@@ -2,9 +2,9 @@
   import { Button, Modal, SearchInput, SelectDropdown } from "@kenn-io/kit-ui";
   import { untrack } from "svelte";
 
-  import type { components } from "../../api/generated/schema.js";
+  import type { KataDaemonResponse, KataIssueReference } from "../../api/generated/models/index.js";
+  import * as runtimeClient from "../../api/generated/index.js";
   import type { GeneratedClient } from "../../api/generated-api.js";
-  import { client as runtimeClient } from "../../api/runtime.js";
   import {
     createKataLink,
     type KataEffectiveLinksResponse,
@@ -12,8 +12,8 @@
   } from "../../stores/kata-links.svelte.js";
   import { pushModalFrame } from "../../stores/keyboard/modal-stack.svelte.js";
 
-  type KataDaemon = components["schemas"]["KataDaemonResponse"];
-  type KataReference = components["schemas"]["KataIssueReference"];
+  type KataDaemon = KataDaemonResponse;
+  type KataReference = KataIssueReference;
 
   interface Props {
     subject: KataLinksSubject;
@@ -60,14 +60,6 @@
     return `Kata daemon health: ${selectedDaemon.health}.`;
   });
 
-  function problemMessage(problem: unknown, fallback: string): string {
-    if (typeof problem !== "object" || problem === null) return fallback;
-    const value = problem as { detail?: unknown; title?: unknown };
-    if (typeof value.detail === "string" && value.detail !== "") return value.detail;
-    if (typeof value.title === "string" && value.title !== "") return value.title;
-    return fallback;
-  }
-
   function cancelScheduledSearch(): void {
     if (searchTimer !== null) {
       clearTimeout(searchTimer);
@@ -102,16 +94,9 @@
     searchController = controller;
     searching = true;
     try {
-      const result = await apiClient.GET("/kata/daemons/{daemon_id}/references", {
-        params: { path: { daemon_id: daemonID }, query: { q: text, limit: 50 } },
-        signal: controller.signal,
-      });
+      const result = await apiClient.KataService.listKataReferences({ daemonId: daemonID }, { q: text, limit: 50 }, { signal: controller.signal });
       if (generation !== searchGeneration || controller.signal.aborted) return;
-      if (!result.data) {
-        error = problemMessage(result.error, "Unable to search Kata issues.");
-        return;
-      }
-      references = result.data.issues;
+      references = result.issues;
     } catch (cause) {
       if (controller.signal.aborted || generation !== searchGeneration) return;
       error = cause instanceof Error ? cause.message : "Unable to search Kata issues.";
@@ -136,11 +121,7 @@
         issue_uid: selectedReference.uid,
         project_uid: selectedReference.project_uid,
       });
-      if (!result.data) {
-        error = problemMessage(result.error, "Unable to link Kata issue.");
-        return;
-      }
-      await onlinked(result.data);
+      await onlinked(result);
       onclose();
     } catch (cause) {
       error = cause instanceof Error ? cause.message : "Unable to link Kata issue.";
@@ -155,13 +136,9 @@
       rosterLoading = true;
       error = null;
       try {
-        const result = await apiClient.GET("/kata/daemons", { signal: controller.signal });
+        const result = await apiClient.KataService.listKataDaemons({ signal: controller.signal });
         if (controller.signal.aborted) return;
-        if (!result.data) {
-          error = problemMessage(result.error, "Unable to load Kata daemons.");
-          return;
-        }
-        daemons = result.data.daemons ?? [];
+        daemons = result.daemons ?? [];
         selectedDaemonID = daemons.find((daemon) => daemon.default)?.id ?? daemons[0]?.id ?? "";
       } catch (cause) {
         if (!controller.signal.aborted) {

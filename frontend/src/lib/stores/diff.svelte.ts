@@ -4,14 +4,23 @@ import { ApiProblemError, TransientTransportError } from "../api/effect-errors.j
 import { executeGeneratedApiRequest, GeneratedApi, type GeneratedClient } from "../api/generated-api.js";
 import type { AppExecution, AppRuntime } from "../app/runtime.js";
 import {
-  providerItemPath,
-  providerRepoPath,
   providerRouteParams,
   resolvedPlatformHost,
   type ProviderRouteRef,
+  providerHostRouteParams,
+  providerUsesHostRoute,
 } from "../api/provider-routes.js";
-import type { components } from "../api/generated/schema.js";
+import type {
+  CommitsResponse as GeneratedCommitsResponse,
+  DiffFile as GeneratedDiffFile,
+  DiffResponse as GeneratedDiffResponse,
+  FilePreviewResponse as GeneratedFilePreviewResponse,
+  FilesResponse as GeneratedFilesResponse,
+  Hunk,
+  Line,
+} from "../api/generated/models/index.js";
 import { isProblem, ProblemCodes } from "../api/problems.js";
+import { GeneratedProblemResponse } from "../api/runtime.js";
 import { retryIdempotentRead } from "../api/retry-policy.js";
 import {
   countDiffFilesByCategory,
@@ -111,22 +120,17 @@ const executeGeneratedDefaultResponse = Effect.fn("GeneratedApi.executeDefaultRe
   const api = yield* GeneratedApi;
   const result = yield* Effect.tryPromise({
     try: (signal) => request(api.client, signal),
-    catch: (cause) => TransientTransportError.make({ operation, cause }),
+    catch: (cause) =>
+      cause instanceof GeneratedProblemResponse
+        ? new ApiProblemError({ operation, problem: cause.problem })
+        : TransientTransportError.make({ operation, cause }),
   });
-  if (typeof result !== "object" || result === null) {
-    return yield* Effect.fail(
-      TransientTransportError.make({ operation, cause: new Error("Generated request returned an invalid result") }),
-    );
-  }
-  const data = "data" in result ? result.data : undefined;
-  const error = "error" in result ? result.error : undefined;
-  const payload = data ?? error;
-  if (payload !== undefined && isSuccess(payload)) return payload;
-  if (payload !== undefined && isProblem(payload)) {
-    return yield* Effect.fail(new ApiProblemError({ operation, problem: payload }));
-  }
+  if (isSuccess(result)) return result;
   return yield* Effect.fail(
-    TransientTransportError.make({ operation, cause: new Error("Generated request returned no response body") }),
+    TransientTransportError.make({
+      operation,
+      cause: new Error("Generated request returned an invalid response body"),
+    }),
   );
 });
 
@@ -161,10 +165,10 @@ function isSnapshotChanged(error: unknown): boolean {
   return isProblem(error) && error.code === ProblemCodes.conflict && error.details?.["reason"] === "snapshot_changed";
 }
 
-type DiffResponse = components["schemas"]["DiffResponse"];
-type FilesResponse = components["schemas"]["FilesResponse"];
-type CommitsResponse = components["schemas"]["CommitsResponse"];
-type FilePreviewResponse = components["schemas"]["FilePreviewResponse"];
+type DiffResponse = GeneratedDiffResponse;
+type FilesResponse = GeneratedFilesResponse;
+type CommitsResponse = GeneratedCommitsResponse;
+type FilePreviewResponse = GeneratedFilePreviewResponse;
 
 function isFilePreviewResponse(value: unknown): value is FilePreviewResponse {
   return (
@@ -184,7 +188,7 @@ function isFilePreviewResponse(value: unknown): value is FilePreviewResponse {
   );
 }
 
-function normalizeDiffLine(line: components["schemas"]["Line"]): DiffLine {
+function normalizeDiffLine(line: Line): DiffLine {
   switch (line.type) {
     case "context":
     case "add":
@@ -195,14 +199,14 @@ function normalizeDiffLine(line: components["schemas"]["Line"]): DiffLine {
   }
 }
 
-function normalizeDiffHunk(hunk: components["schemas"]["Hunk"]): DiffHunk {
+function normalizeDiffHunk(hunk: Hunk): DiffHunk {
   return {
     ...hunk,
     lines: (hunk.lines ?? []).map(normalizeDiffLine),
   };
 }
 
-function normalizeDiffFile(file: components["schemas"]["DiffFile"]): DiffFile {
+function normalizeDiffFile(file: GeneratedDiffFile): DiffFile {
   switch (file.status) {
     case "added":
     case "modified":
@@ -579,10 +583,12 @@ export function createDiffStore(opts: DiffStoreOptions) {
   ): Effect.Effect<ProviderDiffRead, DiffReadError, GeneratedApi> {
     const filesRead = includeFiles
       ? executeGeneratedApiRequest("GET pull request files", (client, signal) =>
-          client.GET(providerItemPath("pulls", ref, "/files"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.getPullFilesOnHost(
+                { ...providerHostRouteParams(ref), number: number },
+                { signal },
+              )
+            : client.PullRequestsService.getPullFiles({ ...providerRouteParams(ref), number: number }, { signal }),
         ).pipe(
           retryIdempotentRead,
           Effect.catch(() => Effect.succeed(null)),
@@ -596,13 +602,15 @@ export function createDiffStore(opts: DiffStoreOptions) {
         )
       : Effect.succeed(null);
     const diffRead = executeGeneratedApiRequest("GET pull request diff", (client, signal) =>
-      client.GET(providerItemPath("pulls", ref, "/diff"), {
-        params: {
-          path: { ...providerRouteParams(ref), number },
-          query: diffQuery(),
-        },
-        signal,
-      }),
+      providerUsesHostRoute(ref)
+        ? client.PullRequestsService.getPullDiffOnHost(
+            { ...providerHostRouteParams(ref), number: number },
+            diffQuery(),
+            { signal },
+          )
+        : client.PullRequestsService.getPullDiff({ ...providerRouteParams(ref), number: number }, diffQuery(), {
+            signal,
+          }),
     ).pipe(
       retryIdempotentRead,
       Effect.tap((data) =>
@@ -782,22 +790,36 @@ export function createDiffStore(opts: DiffStoreOptions) {
       path,
       side ?? "preview",
     ].join("\u0000");
-    const request = executeGeneratedApiRequest<FilePreviewResponse>("GET pull request file preview", (client, signal) =>
-      client.GET(providerItemPath("pulls", ref, "/file-preview"), {
-        params: {
-          path: { ...providerRouteParams(ref), number },
-          query: {
-            path,
-            ...(side && { side }),
-            ...(requestScope.kind === "commit" && { commit: requestScope.sha }),
-            ...(requestScope.kind === "range" && {
-              from: requestScope.fromSha,
-              to: requestScope.toSha,
-            }),
-          },
-        },
-        signal,
-      }),
+    const request = executeGeneratedApiRequest<FilePreviewResponse>(
+      "GET pull request file preview",
+      (client, signal) =>
+        providerUsesHostRoute(ref)
+          ? client.PullRequestsService.getPullFilePreviewOnHost(
+              { ...providerHostRouteParams(ref), number: number },
+              {
+                path,
+                ...(side && { side }),
+                ...(requestScope.kind === "commit" && { commit: requestScope.sha }),
+                ...(requestScope.kind === "range" && {
+                  from: requestScope.fromSha,
+                  to: requestScope.toSha,
+                }),
+              },
+              { signal },
+            )
+          : client.PullRequestsService.getPullFilePreview(
+              { ...providerRouteParams(ref), number: number },
+              {
+                path,
+                ...(side && { side }),
+                ...(requestScope.kind === "commit" && { commit: requestScope.sha }),
+                ...(requestScope.kind === "range" && {
+                  from: requestScope.fromSha,
+                  to: requestScope.toSha,
+                }),
+              },
+              { signal },
+            ),
     ).pipe(retryIdempotentRead);
     return Effect.gen(function* () {
       const workflow = yield* FilePreviewWorkflow;
@@ -860,28 +882,19 @@ export function createDiffStore(opts: DiffStoreOptions) {
           ...(side && { side }),
           ...(currentRevision && { revision: currentRevision }),
         };
-        const params = { query };
         const previewRequest = workspaceHostKey
           ? executeGeneratedDefaultResponse<FilePreviewResponse>(
               "GET remote workspace file preview",
               (client, signal) =>
-                client.GET("/fleet/hosts/{host_key}/workspaces/{id}/file-preview", {
-                  params: {
-                    ...params,
-                    path: { host_key: workspaceHostKey, id: workspaceID },
-                  },
-                  signal,
-                }),
+                client.FleetService.getFleetWorkspaceFilePreview(
+                  { hostKey: workspaceHostKey, id: workspaceID },
+                  query,
+                  { signal },
+                ),
               isFilePreviewResponse,
             )
           : executeGeneratedApiRequest<FilePreviewResponse>("GET workspace file preview", (client, signal) =>
-              client.GET("/workspaces/{id}/file-preview", {
-                params: {
-                  ...params,
-                  path: { id: workspaceID },
-                },
-                signal,
-              }),
+              client.WorkspacesService.getWorkspaceFilePreview({ id: workspaceID }, query, { signal }),
             );
         const previewResult = yield* Effect.result(retryIdempotentRead(previewRequest));
         if (!workspaceIsCurrent(previewGeneration)) {
@@ -1160,21 +1173,16 @@ export function createDiffStore(opts: DiffStoreOptions) {
             ? executeGeneratedDefaultResponse<FilesResponse>(
                 "GET remote workspace diff files",
                 (client, signal) =>
-                  client.GET("/fleet/hosts/{host_key}/workspaces/{id}/files", {
-                    params: {
-                      path: { host_key: workspaceHostKey, id: workspaceID },
-                      query: workspaceDiffQuery(base),
-                    },
-                    signal,
-                  }),
+                  client.FleetService.getFleetWorkspaceFiles(
+                    { hostKey: workspaceHostKey, id: workspaceID },
+                    workspaceDiffQuery(base),
+                    { signal },
+                  ),
                 (value): value is FilesResponse =>
                   typeof value === "object" && value !== null && "files" in value && !isProblem(value),
               )
             : executeGeneratedApiRequest<FilesResponse>("GET workspace diff files", (client, signal) =>
-                client.GET("/workspaces/{id}/files", {
-                  params: { path: { id: workspaceID }, query: workspaceDiffQuery(base) },
-                  signal,
-                }),
+                client.WorkspacesService.getWorkspaceFiles({ id: workspaceID }, workspaceDiffQuery(base), { signal }),
               );
           const filesResult = yield* Effect.result(retryIdempotentRead(filesRequest));
           if (!isCurrent()) return;
@@ -1195,18 +1203,14 @@ export function createDiffStore(opts: DiffStoreOptions) {
             ? executeGeneratedDefaultResponse<DiffResponse>(
                 "GET remote workspace diff",
                 (client, signal) =>
-                  client.GET("/fleet/hosts/{host_key}/workspaces/{id}/diff", {
-                    params: { path: { host_key: workspaceHostKey, id: workspaceID }, query },
+                  client.FleetService.getFleetWorkspaceDiff({ hostKey: workspaceHostKey, id: workspaceID }, query, {
                     signal,
                   }),
                 (value): value is DiffResponse =>
                   typeof value === "object" && value !== null && "files" in value && !isProblem(value),
               )
             : executeGeneratedApiRequest<DiffResponse>("GET workspace diff", (client, signal) =>
-                client.GET("/workspaces/{id}/diff", {
-                  params: { path: { id: workspaceID }, query },
-                  signal,
-                }),
+                client.WorkspacesService.getWorkspaceDiff({ id: workspaceID }, query, { signal }),
               );
           const diffResult = yield* Effect.result(retryIdempotentRead(diffRequest));
           if (!isCurrent()) return;
@@ -1318,18 +1322,21 @@ export function createDiffStore(opts: DiffStoreOptions) {
     let settled = false;
     const isCurrent = () => generation === workspaceLoadGeneration && currentCommitSHA === sha;
     const program = executeGeneratedApiRequest("GET repository commit diff", (client, signal) =>
-      client.GET(providerRepoPath(ref, "/commits/{sha}/diff"), {
-        params: {
-          path: {
-            ...providerRouteParams(ref),
-            sha,
-          },
-          query: {
-            ...(hideWhitespace && { whitespace: "hide" }),
-          },
-        },
-        signal,
-      }),
+      providerUsesHostRoute(ref)
+        ? client.RepositoriesService.getRepoCommitDiffOnHost(
+            { ...providerHostRouteParams(ref), sha: sha },
+            {
+              ...(hideWhitespace && { whitespace: "hide" }),
+            },
+            { signal },
+          )
+        : client.RepositoriesService.getRepoCommitDiff(
+            { ...providerRouteParams(ref), sha: sha },
+            {
+              ...(hideWhitespace && { whitespace: "hide" }),
+            },
+            { signal },
+          ),
     ).pipe(
       retryIdempotentRead,
       Effect.tap((data) =>
@@ -1468,24 +1475,23 @@ export function createDiffStore(opts: DiffStoreOptions) {
           ? executeGeneratedDefaultResponse<CommitsResponse>(
               "GET remote workspace commits",
               (client, signal) =>
-                client.GET("/fleet/hosts/{host_key}/workspaces/{id}/commits", {
-                  params: { path: { host_key: workspaceHostKey, id: workspaceID } },
-                  signal,
-                }),
+                client.FleetService.getFleetWorkspaceCommits(
+                  { hostKey: workspaceHostKey, id: workspaceID },
+                  { signal },
+                ),
               (value): value is CommitsResponse =>
                 typeof value === "object" && value !== null && "commits" in value && !isProblem(value),
             )
           : executeGeneratedApiRequest<CommitsResponse>("GET workspace commits", (client, signal) =>
-              client.GET("/workspaces/{id}/commits", {
-                params: { path: { id: workspaceID } },
-                signal,
-              }),
+              client.WorkspacesService.getWorkspaceCommits({ id: workspaceID }, { signal }),
             )
         : executeGeneratedApiRequest<CommitsResponse>("GET pull request commits", (client, signal) =>
-            client.GET(providerItemPath("pulls", ref, "/commits"), {
-              params: { path: { ...providerRouteParams(ref), number } },
-              signal,
-            }),
+            providerUsesHostRoute(ref)
+              ? client.PullRequestsService.getPullCommitsOnHost(
+                  { ...providerHostRouteParams(ref), number: number },
+                  { signal },
+                )
+              : client.PullRequestsService.getPullCommits({ ...providerRouteParams(ref), number: number }, { signal }),
           );
       return request.pipe(
         retryIdempotentRead,

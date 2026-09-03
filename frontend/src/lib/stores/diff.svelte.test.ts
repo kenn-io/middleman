@@ -1537,6 +1537,8 @@ describe("createDiffStore loadDiff", () => {
     // Deferred responses to control resolution order.
     let resolveFilesB: () => void = () => {};
     let resolveDiffB: () => void = () => {};
+    let filesBStarted = false;
+    let diffBStarted = false;
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -1550,11 +1552,13 @@ describe("createDiffStore loadDiff", () => {
       }
       // PR B: both deferred so we control timing explicitly.
       if (url.includes("/2/files")) {
+        filesBStarted = true;
         return new Promise((resolve) => {
           resolveFilesB = () => resolve(Response.json(filesB));
         });
       }
       if (url.includes("/2/diff")) {
+        diffBStarted = true;
         return new Promise((resolve) => {
           resolveDiffB = () => resolve(Response.json(diffB));
         });
@@ -1575,6 +1579,10 @@ describe("createDiffStore loadDiff", () => {
     // Both stale PR A values must be null immediately.
     expect(store.getDiff()).toBeNull();
     expect(store.getFileList()).toBeNull();
+    await vi.waitFor(() => {
+      expect(filesBStarted).toBe(true);
+      expect(diffBStarted).toBe(true);
+    });
 
     // Release /files for B and let it settle.
     resolveFilesB();
@@ -1599,12 +1607,15 @@ describe("createDiffStore loadDiff", () => {
 
     let diffAAborted = false;
     let filesAAborted = false;
+    let diffAStarted = false;
+    let filesAStarted = false;
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       const signal = input instanceof Request ? input.signal : init?.signal;
 
       if (url.includes("/1/files")) {
+        filesAStarted = true;
         return new Promise((_resolve, reject) => {
           signal?.addEventListener("abort", () => {
             filesAAborted = true;
@@ -1613,6 +1624,7 @@ describe("createDiffStore loadDiff", () => {
         });
       }
       if (url.includes("/1/diff")) {
+        diffAStarted = true;
         return new Promise((_resolve, reject) => {
           signal?.addEventListener("abort", () => {
             diffAAborted = true;
@@ -1633,6 +1645,10 @@ describe("createDiffStore loadDiff", () => {
 
     // Start loading PR A (will hang).
     store.loadDiff("owner", "repo", 1, ownerRepoRef);
+    await vi.waitFor(() => {
+      expect(diffAStarted).toBe(true);
+      expect(filesAStarted).toBe(true);
+    });
 
     // Switch to PR B — should abort PR A.
     await loadDiff(store, "owner", "repo", 2, ownerRepoRef);
@@ -1712,7 +1728,7 @@ describe("createDiffStore loadDiff", () => {
     store.loadDiff("owner", "repo", 1, ownerRepoRef);
 
     // Verify /diff request includes whitespace=hide query param.
-    expect(fetchedUrls.some((u) => u.includes("diff?whitespace=hide"))).toBe(true);
+    await vi.waitFor(() => expect(fetchedUrls.some((u) => u.includes("diff?whitespace=hide"))).toBe(true));
 
     // /files arrives first — shows unfiltered preview.
     resolveFiles();

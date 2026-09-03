@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -358,6 +359,65 @@ func (d *DB) getStackForPRWhere(ctx context.Context, where string, args ...any) 
 		members = append(members, m)
 	}
 	return &stack, members, rows.Err()
+}
+
+// ListStackPlacementsForMRs returns the visible stack position and size for
+// each merge request that belongs to a stack. Members hidden as removed
+// upstream are excluded and the remaining members are renumbered contiguously,
+// matching GetStackForPR. The IDs are bound once as a JSON array so the pull
+// list size is not limited by SQLite's bind-parameter ceiling.
+func (d *DB) ListStackPlacementsForMRs(ctx context.Context, mrIDs []int64) (map[int64]StackPlacement, error) {
+	placements := make(map[int64]StackPlacement)
+	if len(mrIDs) == 0 {
+		return placements, nil
+	}
+
+	payload, err := json.Marshal(mrIDs)
+	if err != nil {
+		return nil, fmt.Errorf("encode stack placement ids: %w", err)
+	}
+
+	rows, err := d.roQueryContext(ctx, `
+		WITH requested AS (
+		    SELECT CAST(value AS INTEGER) AS merge_request_id FROM json_each(?)
+		),
+		visible AS (
+		    SELECT sm.stack_id, sm.merge_request_id,
+		           ROW_NUMBER() OVER (PARTITION BY sm.stack_id ORDER BY sm.position) AS position,
+		           COUNT(*) OVER (PARTITION BY sm.stack_id) AS size
+		    FROM forge_stack_members sm
+		    JOIN forge_merge_requests p ON p.id = sm.merge_request_id
+		    WHERE sm.stack_id IN (
+		        SELECT stack_id FROM forge_stack_members
+		        WHERE merge_request_id IN (SELECT merge_request_id FROM requested)
+		    )
+		    AND NOT EXISTS (
+		        SELECT 1 FROM forge_archive_items ai
+		        WHERE ai.repo_id = p.repo_id
+		          AND ai.item_type = 'merge_request'
+		          AND ai.item_number = p.number
+		          AND ai.lifecycle_state = 'removed_upstream'
+		    )
+		)
+		SELECT merge_request_id, position, size
+		FROM visible
+		WHERE merge_request_id IN (SELECT merge_request_id FROM requested)`,
+		string(payload),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list stack placements: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int64
+		var placement StackPlacement
+		if err := rows.Scan(&id, &placement.Position, &placement.Size); err != nil {
+			return nil, fmt.Errorf("scan stack placement: %w", err)
+		}
+		placements[id] = placement
+	}
+	return placements, rows.Err()
 }
 
 // ListMRsBlockedByStackConflicts returns merge request IDs whose stack has an

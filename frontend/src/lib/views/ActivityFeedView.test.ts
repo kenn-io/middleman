@@ -39,6 +39,16 @@ function issueDrawer(number = 9) {
   return { ...repo, itemType: "issue" as const, number, detailTab: "conversation" as const };
 }
 
+function commitDrawer() {
+  return {
+    ...repo,
+    itemType: "commit" as const,
+    branchName: "main",
+    commitSha: "abcdef1234567890abcdef1234567890abcdef12",
+    title: "Fix the thing",
+  };
+}
+
 function pullDetailFixture(number: number, workspace?: { id: string; status: string }) {
   return {
     repo_owner: repo.owner,
@@ -61,6 +71,8 @@ function issueDetailFixture(number: number, workspace?: { id: string; status: st
 
 interface RenderOptions {
   drawerItem?: unknown;
+  commitItem?: unknown;
+  onSelectCommit?: (item: unknown) => void;
   inlineWorkspace?: InlineWorkspaceController | null;
   pullDetail?: unknown;
   issueDetail?: unknown;
@@ -87,6 +99,8 @@ function renderActivity(options: RenderOptions = {}) {
     ...render(ActivityFeedView, {
       props: {
         drawerItem: options.drawerItem ?? null,
+        ...(options.commitItem !== undefined ? { commitItem: options.commitItem } : {}),
+        ...(options.onSelectCommit !== undefined ? { onSelectCommit: options.onSelectCommit } : {}),
         ...(options.inlineWorkspace !== undefined ? { inlineWorkspace: options.inlineWorkspace } : {}),
         ...(options.workspacePaneControls !== undefined
           ? { workspacePaneControls: options.workspacePaneControls }
@@ -193,6 +207,34 @@ describe("ActivityFeedView detail panes", () => {
 
     await fireEvent.focusIn(commitPanel);
     expect(commitPanel.dataset.inputActive).toBe("true");
+  });
+
+  it("renders a controlled commit pane", () => {
+    renderActivity({ commitItem: commitDrawer() });
+
+    expect(screen.getByRole("tab", { name: "Commit" })).toBeTruthy();
+    expect(screen.getByTestId("commit-diff-panel")).toBeTruthy();
+  });
+
+  it("sends a branch-commit click to the controlled callback", async () => {
+    const onSelectCommit = vi.fn();
+    renderActivity({ onSelectCommit });
+
+    screen.getByTestId("select-branch-commit").click();
+    await tick();
+
+    expect(onSelectCommit).toHaveBeenCalledWith({
+      itemType: "commit",
+      provider: "github",
+      platformHost: "github.com",
+      repoPath: "acme/widgets",
+      owner: "acme",
+      name: "widgets",
+      branchName: "main",
+      commitSha: "abcdef1234567890abcdef1234567890abcdef12",
+      title: "Fix the thing",
+    });
+    expect(screen.queryByRole("tab", { name: "Commit" })).toBeNull();
   });
 
   it("renders a promoted session's pane in the activity drawer", () => {

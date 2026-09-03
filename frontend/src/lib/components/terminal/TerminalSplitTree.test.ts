@@ -125,6 +125,32 @@ describe("TerminalSplitTree", () => {
     }
   });
 
+  it("uses the launch target harness icon in an agent pane header", () => {
+    const agentSessions = [
+      {
+        ...sessions[0]!,
+        key: "ws-1:codex-review",
+        target_key: "codex-review",
+        label: "Review Agent",
+        kind: "agent" as const,
+      },
+      sessions[1]!,
+    ];
+    renderTerminalSplitTree({
+      workspaceId: "ws-1",
+      node: {
+        ...split(),
+        first: leaf("leaf-a", agentSessions[0]!.key),
+      },
+      sessions: agentSessions,
+      displayLabels: {},
+      activeSessionKey: agentSessions[0]!.key,
+    });
+
+    const header = screen.getByRole("group", { name: "Review Agent terminal pane" });
+    expect(header.querySelector(".kit-harness-icon--openai")).not.toBeNull();
+  });
+
   it("hides every leaf while the host is parked", async () => {
     renderTerminalSplitTree({
       workspaceId: "ws-1",

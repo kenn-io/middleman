@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"runtime"
 
 	"github.com/cenkalti/backoff/v7"
 	ptyownerruntime "go.kenn.io/forge/internal/ptyowner/runtime"
@@ -50,7 +52,13 @@ func startPtyOwnerSession(
 	if len(command) == 0 || command[0] == "" {
 		return nil, errors.New("session command is empty")
 	}
-	ptySession, err := owner.Start(ctx, info.Key, cwd, command, extraStripVars)
+	var extraEnv map[string]string
+	if info.Kind == LaunchTargetPlainShell {
+		if locale := shellCharacterLocaleDefault(os.Environ(), runtime.GOOS); locale != "" {
+			extraEnv = map[string]string{"LC_CTYPE": locale}
+		}
+	}
+	ptySession, err := owner.Start(ctx, info.Key, cwd, command, extraStripVars, extraEnv)
 	if err != nil {
 		return nil, fmt.Errorf("start pty owner: %w", err)
 	}

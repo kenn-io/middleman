@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { makeAppRuntime } from "../app/runtime.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
 
 const mocks = vi.hoisted(() => ({
   post: vi.fn(),
@@ -33,7 +34,14 @@ vi.mock("../stores/flash.svelte.js", () => ({
 
 async function clickItemRef(attributes: Record<string, string>): Promise<void> {
   const { initItemRefHandler } = await import("./itemRefHandler.js");
-  const runtime = makeAppRuntime();
+  const runtime = makeAppRuntime(
+    makeGeneratedClient({
+      RepositoriesService: {
+        resolveRepoItem: mocks.post,
+        resolveRepoItemOnHost: mocks.post,
+      },
+    }),
+  );
   const cleanup = initItemRefHandler(runtime);
   const anchor = document.createElement("a");
   anchor.className = "item-ref";
@@ -51,8 +59,8 @@ async function clickItemRef(attributes: Record<string, string>): Promise<void> {
       button: 0,
     }),
   );
-  await Promise.resolve();
-  await Promise.resolve();
+  await vi.waitFor(() => expect(mocks.post).toHaveBeenCalled());
+  await new Promise((resolve) => setTimeout(resolve, 0));
   cleanup();
   await Effect.runPromise(runtime.disposeEffect);
 }
@@ -68,11 +76,7 @@ describe("itemRefHandler", () => {
 
   it("navigates internally when the referenced repo is tracked", async () => {
     const open = vi.spyOn(window, "open").mockImplementation(() => null);
-    mocks.post.mockResolvedValue({
-      data: { repo_tracked: true, item_type: "pr" },
-      error: undefined,
-      response: { status: 200 },
-    });
+    mocks.post.mockResolvedValue({ repo_tracked: true, item_type: "pr" });
 
     await clickItemRef({
       "data-provider": "github",
@@ -85,28 +89,18 @@ describe("itemRefHandler", () => {
       "data-external-url": "https://github.com/acme/widgets/pull/12",
     });
 
-    expect(mocks.post).toHaveBeenCalledWith("/repo/{provider}/{owner}/{name}/resolve/{number}", {
-      signal: expect.any(AbortSignal),
-      params: {
-        path: {
-          provider: "github",
-          owner: "acme",
-          name: "widgets",
-          number: 12,
-        },
-      },
-    });
+    expect(mocks.post).toHaveBeenCalledWith(
+      { provider: "github", owner: "acme", name: "widgets", number: 12 },
+      undefined,
+      { signal: expect.any(AbortSignal) },
+    );
     expect(mocks.navigate).toHaveBeenCalledWith("/pulls/github/acme/widgets/12");
     expect(open).not.toHaveBeenCalled();
     expect(mocks.showFlash).not.toHaveBeenCalled();
   });
 
   it("passes item type hints only for GitLab references", async () => {
-    mocks.post.mockResolvedValue({
-      data: { repo_tracked: true, item_type: "pr" },
-      error: undefined,
-      response: { status: 200 },
-    });
+    mocks.post.mockResolvedValue({ repo_tracked: true, item_type: "pr" });
 
     await clickItemRef({
       "data-provider": "gitlab",
@@ -119,27 +113,21 @@ describe("itemRefHandler", () => {
       "data-external-url": "https://gitlab.example.com/group/project/-/merge_requests/12",
     });
 
-    expect(mocks.post).toHaveBeenCalledWith("/host/{platform_host}/repo/{provider}/{owner}/{name}/resolve/{number}", {
-      signal: expect.any(AbortSignal),
-      params: {
-        path: {
-          platform_host: "gitlab.example.com",
-          provider: "gitlab",
-          owner: "group",
-          name: "project",
-          number: 12,
-        },
-        query: { item_type: "pr" },
-      },
-    });
+    expect(mocks.post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platformHost: "gitlab.example.com",
+        provider: "gitlab",
+        owner: "group",
+        name: "project",
+        number: 12,
+      }),
+      { item_type: "pr" },
+      expect.objectContaining({ signal: expect.anything() }),
+    );
   });
 
   it("passes GitLab issue item type hints", async () => {
-    mocks.post.mockResolvedValue({
-      data: { repo_tracked: true, item_type: "issue" },
-      error: undefined,
-      response: { status: 200 },
-    });
+    mocks.post.mockResolvedValue({ repo_tracked: true, item_type: "issue" });
 
     await clickItemRef({
       "data-provider": "gitlab",
@@ -152,28 +140,22 @@ describe("itemRefHandler", () => {
       "data-external-url": "https://gitlab.example.com/group/project/-/issues/10",
     });
 
-    expect(mocks.post).toHaveBeenCalledWith("/host/{platform_host}/repo/{provider}/{owner}/{name}/resolve/{number}", {
-      signal: expect.any(AbortSignal),
-      params: {
-        path: {
-          platform_host: "gitlab.example.com",
-          provider: "gitlab",
-          owner: "group",
-          name: "project",
-          number: 10,
-        },
-        query: { item_type: "issue" },
-      },
-    });
+    expect(mocks.post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platformHost: "gitlab.example.com",
+        provider: "gitlab",
+        owner: "group",
+        name: "project",
+        number: 10,
+      }),
+      { item_type: "issue" },
+      expect.objectContaining({ signal: expect.anything() }),
+    );
   });
 
   it("opens the provider URL when an untracked reference has an external fallback", async () => {
     const open = vi.spyOn(window, "open").mockImplementation(() => null);
-    mocks.post.mockResolvedValue({
-      data: { repo_tracked: false, item_type: "issue" },
-      error: undefined,
-      response: { status: 200 },
-    });
+    mocks.post.mockResolvedValue({ repo_tracked: false, item_type: "issue" });
 
     await clickItemRef({
       "data-provider": "github",
@@ -192,11 +174,7 @@ describe("itemRefHandler", () => {
 
   it("rejects non-http external fallbacks for untracked references", async () => {
     const open = vi.spyOn(window, "open").mockImplementation(() => null);
-    mocks.post.mockResolvedValue({
-      data: { repo_tracked: false, item_type: "issue" },
-      error: undefined,
-      response: { status: 200 },
-    });
+    mocks.post.mockResolvedValue({ repo_tracked: false, item_type: "issue" });
 
     await clickItemRef({
       "data-provider": "github",
@@ -216,11 +194,7 @@ describe("itemRefHandler", () => {
   });
 
   it("keeps the not-tracked flash for references without an external fallback", async () => {
-    mocks.post.mockResolvedValue({
-      data: { repo_tracked: false, item_type: "issue" },
-      error: undefined,
-      response: { status: 200 },
-    });
+    mocks.post.mockResolvedValue({ repo_tracked: false, item_type: "issue" });
 
     await clickItemRef({
       "data-provider": "github",

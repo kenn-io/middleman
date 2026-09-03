@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/testutil/gitfake"
+	"go.kenn.io/forge/internal/testutil/gitsafe"
 	"go.kenn.io/forge/internal/tokenauth"
 )
 
@@ -189,6 +190,124 @@ exit 1
 	)
 	require.Error(err)
 	assert.Contains(t, err.Error(), "repository-local URL rewrites")
+}
+
+func TestRunGitForRepoRemoteValidatesSelectedRemote(t *testing.T) {
+	require := require.New(t)
+	dir := t.TempDir()
+	gitPath := filepath.Join(dir, "git")
+	require.NoError(os.WriteFile(gitPath, []byte(`#!/bin/sh
+set -eu
+if [ "$1" = "config" ] && [ "$2" = "--local" ]; then exit 1; fi
+if [ "$1" = "config" ] && [ "$2" = "--get-all" ]; then
+	case "$3" in
+	remote.upstream.url) echo "https://github.com/acme/widgets.git"; exit 0 ;;
+	remote.upstream.pushurl) exit 1 ;;
+	esac
+fi
+exit 0
+`), 0o755))
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	source := &mutableTestTokenSource{token: "secret-token"}
+	mgr := New(t.TempDir(), testRouteResolver{repos: map[string]tokenauth.Source{
+		"github.com/acme/widgets": source,
+	}})
+
+	_, err := mgr.RunGitForRepoRemote(
+		t.Context(), "github", "github.com", "acme", "widgets",
+		"upstream", dir, "fetch", "upstream",
+	)
+
+	require.NoError(err)
+	assert.Equal(t, 1, source.resolved)
+}
+
+func TestRunGitForNamedRemoteUsesRemoteRepositoryCredential(t *testing.T) {
+	require := require.New(t)
+	dir := t.TempDir()
+	gitPath := filepath.Join(dir, "git")
+	require.NoError(os.WriteFile(gitPath, []byte(`#!/bin/sh
+set -eu
+if [ "$1" = "config" ] && [ "$2" = "--local" ]; then exit 1; fi
+if [ "$1" = "config" ] && [ "$2" = "--get-all" ]; then
+	case "$3" in
+	remote.origin.url) echo "https://github.com/forker/widgets.git"; exit 0 ;;
+	remote.origin.pushurl) exit 1 ;;
+	esac
+fi
+exit 0
+`), 0o755))
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	canonical := &mutableTestTokenSource{token: "canonical-token"}
+	fork := &mutableTestTokenSource{token: "fork-token"}
+	mgr := New(t.TempDir(), testRouteResolver{repos: map[string]tokenauth.Source{
+		"github.com/acme/widgets":   canonical,
+		"github.com/forker/widgets": fork,
+	}})
+
+	_, err := mgr.RunGitForNamedRemote(
+		t.Context(), "github", "github.com", "acme", "widgets",
+		"origin", dir, "fetch", "origin",
+	)
+
+	require.NoError(err)
+	assert.Zero(t, canonical.resolved)
+	assert.Equal(t, 1, fork.resolved)
+}
+
+func TestRunGitForNamedRemoteRejectsInsecurePushURLForLocalFetchURL(t *testing.T) {
+	require := require.New(t)
+	dir := t.TempDir()
+	gitPath := filepath.Join(dir, "git")
+	require.NoError(os.WriteFile(gitPath, []byte(`#!/bin/sh
+set -eu
+if [ "$1" = "config" ] && [ "$2" = "--local" ]; then exit 1; fi
+if [ "$1" = "config" ] && [ "$2" = "--get-all" ]; then
+	case "$3" in
+	remote.origin.url) echo "/tmp/widgets.git"; exit 0 ;;
+	remote.origin.pushurl) echo "http://git.example.test/acme/widgets.git"; exit 0 ;;
+	esac
+fi
+exit 0
+`), 0o755))
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	source := &mutableTestTokenSource{token: "secret-token"}
+	mgr := New(t.TempDir(), testRouteResolver{repos: map[string]tokenauth.Source{
+		"git.example.test/acme/widgets": source,
+	}})
+
+	_, err := mgr.RunGitForNamedRemote(
+		t.Context(), "gitea", "git.example.test", "acme", "widgets",
+		"origin", dir, "push", "origin", "HEAD:feature",
+	)
+
+	require.ErrorContains(err, "allow_insecure = true")
+	require.Zero(source.resolved)
+}
+
+func TestRunGitForNamedRemoteAllowsAnonymousLocalURLRewrite(t *testing.T) {
+	require := require.New(t)
+	root := t.TempDir()
+	remote := filepath.Join(root, "remote.git")
+	repo := filepath.Join(root, "repo")
+	const hostedURL = "https://github.com/acme/widgets.git"
+	runner := gitsafe.MutableRunner(t).WithConfig("init.defaultBranch", "main")
+	_, err := runner.Output(t.Context(), root, "init", "--bare", remote)
+	require.NoError(err)
+	_, err = runner.Output(t.Context(), root, "init", repo)
+	require.NoError(err)
+	_, err = runner.Output(t.Context(), repo, "remote", "add", "origin", hostedURL)
+	require.NoError(err)
+	_, err = runner.Output(t.Context(), repo, "config", "url."+remote+".insteadOf", hostedURL)
+	require.NoError(err)
+	mgr := New(t.TempDir(), nil)
+
+	_, err = mgr.RunGitForNamedRemote(
+		t.Context(), "github", "github.com", "acme", "widgets",
+		"origin", repo, "fetch", "origin",
+	)
+
+	require.NoError(err)
 }
 
 func TestRunGitForRemoteRequiresAcknowledgedHTTPTransport(t *testing.T) {

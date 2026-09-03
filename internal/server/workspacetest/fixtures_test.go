@@ -21,9 +21,20 @@ import (
 	ghclient "go.kenn.io/forge/internal/github"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 	"go.kenn.io/forge/internal/testutil/servertest"
-	gitcmd "go.kenn.io/kit/git/cmd"
+	"golang.org/x/sync/semaphore"
 )
+
+var parallelWorkspaceTestSlots = semaphore.NewWeighted(4)
+
+func runParallelWorkspacePTYTest(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+	require.NoError(t, parallelWorkspaceTestSlots.Acquire(t.Context(), 1))
+	t.Cleanup(func() { parallelWorkspaceTestSlots.Release(1) })
+	acquireWorkspaceGitSlot(t)
+}
 
 type workspaceServerFixture struct {
 	server           *server.Server
@@ -90,29 +101,29 @@ func setupWorkspaceServerFixtureWithTmuxInjection(
 	remoteDir := filepath.Join(dir, "remote")
 	require.NoError(t, os.MkdirAll(remoteDir, 0o755))
 	remote := filepath.Join(remoteDir, "widget.git")
-	runGit(t, dir, "init", "--bare", "--initial-branch=main", remote)
+	gitfixture.Run(t, dir, "init", "--bare", "--initial-branch=main", remote)
 
 	tmpWork := filepath.Join(dir, "work")
-	runGit(t, dir, "clone", remote, tmpWork)
-	runGit(t, tmpWork, "config", "user.email", "test@test.com")
-	runGit(t, tmpWork, "config", "user.name", "Test")
+	gitfixture.Run(t, dir, "clone", remote, tmpWork)
+	gitfixture.Run(t, tmpWork, "config", "user.email", "test@test.com")
+	gitfixture.Run(t, tmpWork, "config", "user.name", "Test")
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(tmpWork, "base.txt"),
 		[]byte("base\n"), 0o644,
 	))
-	runGit(t, tmpWork, "add", ".")
-	runGit(t, tmpWork, "commit", "-m", "base commit")
-	runGit(t, tmpWork, "push", "origin", "main")
+	gitfixture.Run(t, tmpWork, "add", ".")
+	gitfixture.Run(t, tmpWork, "commit", "-m", "base commit")
+	gitfixture.Run(t, tmpWork, "push", "origin", "main")
 
-	runGit(t, tmpWork, "checkout", "-b", "feature")
+	gitfixture.Run(t, tmpWork, "checkout", "-b", "feature")
 	require.NoError(t, os.WriteFile(
 		filepath.Join(tmpWork, "new.txt"),
 		[]byte("new\n"), 0o644,
 	))
-	runGit(t, tmpWork, "add", ".")
-	runGit(t, tmpWork, "commit", "-m", "feature commit")
-	runGit(t, tmpWork, "push", "origin", "feature")
+	gitfixture.Run(t, tmpWork, "add", ".")
+	gitfixture.Run(t, tmpWork, "commit", "-m", "feature commit")
+	gitfixture.Run(t, tmpWork, "push", "origin", "feature")
 
 	bareDir := filepath.Join(dir, "clones")
 	require.NoError(t, os.MkdirAll(bareDir, 0o755))
@@ -122,12 +133,12 @@ func setupWorkspaceServerFixtureWithTmuxInjection(
 		"github", "github.com", "acme", "widget",
 	)
 	require.NoError(t, err)
-	runGit(t, dir, "clone", "--bare", remote, bare)
-	runGit(
+	gitfixture.Run(t, dir, "clone", "--bare", remote, bare)
+	gitfixture.Run(
 		t, bare, "remote", "set-url", "origin",
 		"https://github.com/acme/widget.git",
 	)
-	runGit(
+	gitfixture.Run(
 		t, bare, "config", "--add",
 		"url."+remote+".insteadOf", "https://github.com/acme/widget.git",
 	)
@@ -222,20 +233,6 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
-}
-
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	runner := gitcmd.New().WithConfig("init.defaultBranch", "main")
-	out, stderr, err := runner.Run(t.Context(), dir, nil, args...)
-	require.NoError(t, err, "git %v failed: %s%s", args, out, stderr)
-}
-
-func testGitSHA(t *testing.T, dir, ref string) string {
-	t.Helper()
-	out, err := gitcmd.New().Output(t.Context(), dir, "rev-parse", ref)
-	require.NoError(t, err)
-	return strings.TrimSpace(string(out))
 }
 
 func seedPROnHost(

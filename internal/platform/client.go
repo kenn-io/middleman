@@ -43,6 +43,10 @@ type RepositoryReader interface {
 type MarkdownImage struct {
 	Content     []byte
 	ContentType string
+	// Mutable marks a source whose bytes can change under the same URL, such
+	// as a file read through a branch or tag ref. Callers must cache it
+	// briefly instead of treating the URL as content-addressed.
+	Mutable bool
 }
 
 // MarkdownImageReader fetches provider-hosted images embedded in repository

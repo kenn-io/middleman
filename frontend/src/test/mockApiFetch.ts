@@ -10,9 +10,9 @@
 // This module must stay free of @playwright/test imports. Unhandled paths
 // get a JSON 404 so optional endpoints fail softly in both suites.
 
-import type { components } from "../lib/api/generated/schema.js";
+import type { SettingsResponse as GeneratedSettingsResponse } from "../lib/api/generated/models/index.js";
 
-type SettingsResponse = components["schemas"]["SettingsResponse"];
+type SettingsResponse = GeneratedSettingsResponse;
 
 const defaultProviderCapabilities = {
   read_repositories: true,

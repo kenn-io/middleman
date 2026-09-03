@@ -14,7 +14,7 @@
       name: "widgets",
     },
     branch_name: "main",
-    commit_sha: "abcdef1234567890",
+    commit_sha: "abcdef1234567890abcdef1234567890abcdef12",
     body_preview: "Fix the thing",
   };
 </script>

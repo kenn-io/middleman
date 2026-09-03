@@ -185,6 +185,9 @@ and the root event stream.
 - Trusted forwarded-host support adds validation of the canonical forwarded
   authority; it never replaces validation of the raw backend `Host`
   (`internal/server/host_check.go::checkHost`).
+- After trusted forwarded-host validation, mutation origin checks compare with
+  that public authority rather than the reverse proxy's backend `Host`
+  (`internal/server/server.go::checkCrossOrigin`).
 
 ## Event Replay
 

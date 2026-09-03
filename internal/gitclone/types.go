@@ -42,7 +42,7 @@ type Hunk struct {
 type Line struct {
 	Type      string `json:"type"` // context, add, delete
 	Content   string `json:"content"`
-	OldNum    int    `json:"old_num,omitempty"`
-	NewNum    int    `json:"new_num,omitempty"`
+	OldNum    int    `json:"old_num,omitempty,omitzero"`
+	NewNum    int    `json:"new_num,omitempty,omitzero"`
 	NoNewline bool   `json:"no_newline,omitempty"`
 }

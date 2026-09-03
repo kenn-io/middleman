@@ -191,6 +191,7 @@
     return registerSessionInput(session.hostKey, {
       send: (data) => pane.sendInput(data),
       sendPasted: (data, suffix) => pane.sendPastedInput(data, suffix),
+      sendKey: (key) => pane.sendKey(key),
     });
   });
 

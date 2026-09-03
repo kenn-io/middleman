@@ -633,6 +633,27 @@ func (b mcpBackend) GetWorkspaceRuntime(
 	return out, nil
 }
 
+func (b mcpBackend) SubmitAgentMessage(
+	ctx context.Context, req mcpserver.AgentMessageRequest,
+) (mcpserver.AgentMessageResult, error) {
+	result, err := b.server.workspaceAPI.SubmitAgentMessageService(
+		ctx, req.WorkspaceID, req.RuntimeSessionKey, req.Message,
+	)
+	if errors.Is(err, workspaceapi.ErrInitialMessageInputModeNotReady) {
+		return mcpserver.AgentMessageResult{}, &mcpserver.Error{
+			Kind: "unavailable", Code: mcpserver.ErrorCodeInitialMessageInputModeNotReady,
+			Message: err.Error(), Retryable: true,
+		}
+	}
+	if err != nil {
+		return mcpserver.AgentMessageResult{}, mcpBackendError(err)
+	}
+	return mcpserver.AgentMessageResult{
+		TargetKey: result.TargetKey, MessageBytes: result.MessageBytes,
+		SubmittedAt: result.SubmittedAt,
+	}, nil
+}
+
 func (b mcpBackend) SubmitInitialMessage(
 	ctx context.Context, req mcpserver.InitialMessageRequest,
 ) (mcpserver.InitialMessageStatus, error) {

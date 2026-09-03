@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"go.kenn.io/forge/internal/config"
+	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
 )
 
-type notificationLoopHandle struct {
+const databaseOptimizeInterval = 24 * time.Hour
+
+type backgroundLoopHandle struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -22,7 +25,7 @@ type notificationLoopSettings struct {
 	batchSize           int
 }
 
-func (h *notificationLoopHandle) Stop(ctx context.Context) error {
+func (h *backgroundLoopHandle) Stop(ctx context.Context) error {
 	if h == nil {
 		return nil
 	}
@@ -40,8 +43,13 @@ func (h *notificationLoopHandle) Stop(ctx context.Context) error {
 	}
 }
 
-func startNotificationLoops(ctx context.Context, syncer *ghclient.Syncer, cfg *config.Config) *notificationLoopHandle {
-	handle := newNotificationLoopHandle(ctx)
+func startBackgroundLoops(ctx context.Context, database *db.DB) *backgroundLoopHandle {
+	handle := newBackgroundLoopHandle(ctx)
+	handle.startTickerAfterInterval("database optimize", databaseOptimizeInterval, database.Optimize)
+	return handle
+}
+
+func startNotificationLoops(handle *backgroundLoopHandle, syncer *ghclient.Syncer, cfg *config.Config) {
 	settings := notificationLoopSettingsFromConfig(cfg)
 	handle.startTicker("notification sync", settings.syncInterval, func(runCtx context.Context) error {
 		return syncer.RunNotificationSync(runCtx)
@@ -49,7 +57,6 @@ func startNotificationLoops(ctx context.Context, syncer *ghclient.Syncer, cfg *c
 	handle.startTicker("notification read propagation", settings.propagationInterval, func(runCtx context.Context) error {
 		return syncer.ProcessQueuedNotificationReadsForAllHosts(runCtx, settings.batchSize)
 	})
-	return handle
 }
 
 func notificationLoopSettingsFromConfig(cfg *config.Config) notificationLoopSettings {
@@ -60,12 +67,29 @@ func notificationLoopSettingsFromConfig(cfg *config.Config) notificationLoopSett
 	}
 }
 
-func newNotificationLoopHandle(parent context.Context) *notificationLoopHandle {
+func newBackgroundLoopHandle(parent context.Context) *backgroundLoopHandle {
 	ctx, cancel := context.WithCancel(parent)
-	return &notificationLoopHandle{ctx: ctx, cancel: cancel}
+	return &backgroundLoopHandle{ctx: ctx, cancel: cancel}
 }
 
-func (h *notificationLoopHandle) startTicker(name string, interval time.Duration, run func(context.Context) error) {
+func (h *backgroundLoopHandle) startTicker(name string, interval time.Duration, run func(context.Context) error) {
+	h.startTickerLoop(name, interval, true, run)
+}
+
+func (h *backgroundLoopHandle) startTickerAfterInterval(
+	name string,
+	interval time.Duration,
+	run func(context.Context) error,
+) {
+	h.startTickerLoop(name, interval, false, run)
+}
+
+func (h *backgroundLoopHandle) startTickerLoop(
+	name string,
+	interval time.Duration,
+	runImmediately bool,
+	run func(context.Context) error,
+) {
 	h.wg.Go(func() {
 		ctx := h.ctx
 		runOnce := func() {
@@ -76,9 +100,11 @@ func (h *notificationLoopHandle) startTicker(name string, interval time.Duration
 		if ctx.Err() != nil {
 			return
 		}
-		runOnce()
-		if ctx.Err() != nil {
-			return
+		if runImmediately {
+			runOnce()
+			if ctx.Err() != nil {
+				return
+			}
 		}
 
 		ticker := time.NewTicker(interval)

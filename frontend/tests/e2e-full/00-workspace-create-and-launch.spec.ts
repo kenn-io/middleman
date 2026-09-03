@@ -516,6 +516,61 @@ test.describe("workspace create-and-launch full stack", () => {
         .poll(async () => (await sessionWebSockets(phonePage, created.id)).flatMap((socket) => socket.sent))
         .toContain("\x1b[200~printf 'mobile-input-ok\\n'\rprintf 'second-line\\n'\x1b[201~\r");
 
+      await phonePage.getByRole("button", { name: "Show special terminal keys" }).tap();
+      await expect(input).toBeFocused();
+      const specialKeys = phonePage.getByRole("group", { name: "Special terminal keys" });
+      await expect(specialKeys).toBeVisible();
+      await expect.poll(async () => (await specialKeys.boundingBox())?.height).toBeLessThanOrEqual(44);
+      const expectedSpecialKeyNames = [
+        "Escape",
+        "Tab",
+        "Arrow left",
+        "Arrow up",
+        "Arrow down",
+        "Arrow right",
+        "Space",
+        "Return",
+      ];
+      await expect
+        .poll(() =>
+          specialKeys
+            .getByRole("button")
+            .evaluateAll((buttons) =>
+              buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim()),
+            ),
+        )
+        .toEqual(expectedSpecialKeyNames);
+      const expectedSpecialKeyInput = [
+        "\x1b",
+        "\t",
+        /^\x1b(?:\[|O)D$/,
+        /^\x1b(?:\[|O)A$/,
+        /^\x1b(?:\[|O)B$/,
+        /^\x1b(?:\[|O)C$/,
+        " ",
+        "\r",
+      ];
+      for (const [index, keyName] of expectedSpecialKeyNames.entries()) {
+        const sentBefore = (await sessionWebSockets(phonePage, created.id)).flatMap((socket) => socket.sent).length;
+        await specialKeys.getByRole("button", { name: keyName, exact: true }).tap();
+        await expect(input).toBeFocused();
+        await expect
+          .poll(async () => {
+            const sent = (await sessionWebSockets(phonePage, created.id)).flatMap((socket) => socket.sent);
+            const newFrames = sent.slice(sentBefore);
+            return newFrames.some((frame, frameIndex) => {
+              if (!frame.includes('"type":"claim_resize"')) return false;
+              const inputFrame = newFrames[frameIndex + 1];
+              const expected = expectedSpecialKeyInput[index];
+              if (expected === undefined) return false;
+              return typeof expected === "string"
+                ? inputFrame === expected
+                : inputFrame !== undefined && expected.test(inputFrame);
+            });
+          })
+          .toBe(true);
+      }
+
       expect(ready.worktree_path).toBeTruthy();
       const hookResponse = await api.post("/api/v1/agent-hooks/claude", {
         headers: { "X-Kenn-Forge-Runtime-Session-Key": launchedSession.key },

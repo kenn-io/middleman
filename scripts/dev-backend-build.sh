@@ -6,9 +6,8 @@ state_dir="tmp/air"
 input_hash_file="$state_dir/openapi-inputs.sha256"
 frontend_spec="frontend/openapi/openapi.yaml"
 backend_spec="internal/apiclient/spec/openapi.json"
-frontend_schema="frontend/src/lib/api/generated/schema.ts"
-frontend_client="frontend/src/lib/api/generated/client.ts"
 frontend_constraints="frontend/src/lib/api/generated/schema-constraints.ts"
+frontend_client_generator="frontend/scripts/generate-api-client.mjs"
 constraints_generator="scripts/generate-schema-constraints.mjs"
 
 mkdir -p "$state_dir"
@@ -48,7 +47,7 @@ fi
 
 compute_inputs_hash() {
   {
-    printf '%s\n' "go.mod" "go.sum" "$constraints_generator"
+    printf '%s\n' "go.mod" "go.sum" "frontend/package.json" "$frontend_client_generator" "$constraints_generator"
     find cmd/kenn-forge-openapi internal/server -type f -name '*.go' | sort
   } | while IFS= read -r path; do
     [ -f "$path" ] || continue
@@ -69,57 +68,26 @@ write_if_changed() {
   return 0
 }
 
-generate_frontend_client() {
-  tmp_client="$(mktemp "$state_dir/frontend-client.XXXXXX")"
-
-  cat > "$tmp_client" <<'EOF'
-/**
- * This file was auto-generated from frontend/openapi/openapi.yaml.
- * Do not make direct changes to the file.
- */
-
-import createClient, { type ClientOptions } from "openapi-fetch";
-import type { paths } from "./schema";
-
-export function createAPIClient(baseUrl: string, options: Pick<ClientOptions, "fetch" | "querySerializer"> = {}) {
-  return createClient<paths>({ baseUrl, ...options });
-}
-EOF
-
-  write_if_changed "$frontend_client" "$tmp_client" >/dev/null 2>&1 || true
-}
-
 generate_api_artifacts() {
   tmp_frontend_spec="$(mktemp "$state_dir/frontend-openapi.XXXXXX")"
   tmp_backend_spec="$(mktemp "$state_dir/backend-openapi.XXXXXX")"
-  frontend_changed=0
 
   mkdir -p "$(dirname "$backend_spec")"
 
   GOCACHE="${GOCACHE:-/tmp/kenn-forge-gocache}" "$GO_BIN" run ./cmd/kenn-forge-openapi -out "$tmp_frontend_spec" -format yaml
   GOCACHE="${GOCACHE:-/tmp/kenn-forge-gocache}" "$GO_BIN" run ./cmd/kenn-forge-openapi -out "$tmp_backend_spec" -version 3.0
 
-  if write_if_changed "$frontend_spec" "$tmp_frontend_spec"; then
-    frontend_changed=1
-  fi
+  write_if_changed "$frontend_spec" "$tmp_frontend_spec" >/dev/null 2>&1 || true
 
   write_if_changed "$backend_spec" "$tmp_backend_spec" >/dev/null 2>&1 || true
 
-  # Numeric bounds for frontend validation come from the backend JSON spec,
-  # so regenerate them alongside the other frontend artifacts.
+  "$NODE_BIN" "$frontend_client_generator" openapi/openapi.yaml
+
+  # Numeric bounds come from the backend JSON spec. Generate them after Orval,
+  # which replaces the generated client directory atomically.
   tmp_constraints="$(mktemp "$state_dir/frontend-schema-constraints.XXXXXX")"
   "$NODE_BIN" "$constraints_generator" "$backend_spec" "$tmp_constraints"
   write_if_changed "$frontend_constraints" "$tmp_constraints" >/dev/null 2>&1 || true
-
-  if [ "$frontend_changed" -eq 1 ]; then
-    tmp_schema="$(mktemp "$state_dir/frontend-schema.XXXXXX")"
-    (
-      cd frontend
-      "$NODE_BIN" ./node_modules/openapi-typescript/bin/cli.js openapi/openapi.yaml --enum-values -o "../$tmp_schema"
-    )
-    write_if_changed "$frontend_schema" "$tmp_schema" >/dev/null 2>&1 || true
-    generate_frontend_client
-  fi
 
   GOCACHE="${GOCACHE:-/tmp/kenn-forge-gocache}" "$GO_BIN" generate ./internal/apiclient/generated
 }

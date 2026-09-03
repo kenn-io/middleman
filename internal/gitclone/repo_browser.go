@@ -1144,7 +1144,7 @@ func (m *Manager) validateLegacyClone(
 		}
 		return false, err
 	}
-	if err := m.validateOriginIdentity(ctx, legacyPath, host, owner, name); err != nil {
+	if err := m.validateRemoteIdentity(ctx, legacyPath, "origin", host, owner, name); err != nil {
 		return false, err
 	}
 	return true, nil

@@ -1,10 +1,14 @@
 import { Effect, Schema } from "effect";
-import type { components } from "../../api/generated/schema.js";
+import type {
+  HostSummary as GeneratedHostSummary,
+  WorkspaceRepositorySummary,
+  WorkspaceSummary,
+} from "../../api/generated/models/index.js";
 import { InvalidExternalPayload } from "../../api/effect-errors.js";
 
-type GeneratedWorkspace = components["schemas"]["WorkspaceSummary"];
-type GeneratedRepo = components["schemas"]["WorkspaceRepositorySummary"];
-type HostSummary = components["schemas"]["HostSummary"];
+type GeneratedWorkspace = WorkspaceSummary;
+type GeneratedRepo = WorkspaceRepositorySummary;
+type HostSummary = GeneratedHostSummary;
 
 export type WorkspaceListItem = Pick<
   GeneratedWorkspace,
@@ -27,6 +31,7 @@ export type WorkspaceListItem = Pick<
     readonly agent_state?: GeneratedWorkspace["agent_state"] | null;
     readonly agent_state_updated_at?: string | null;
     readonly associated_pr_number?: Exclude<GeneratedWorkspace["associated_pr_number"], undefined> | null;
+    readonly branch_upstream_missing?: boolean;
     readonly commits_ahead?: number | null;
     readonly commits_behind?: number | null;
     readonly error_message?: GeneratedWorkspace["error_message"] | null;
@@ -69,6 +74,7 @@ const Workspace = Schema.Struct({
   agent_state: Schema.optionalKey(Schema.NullOr(Schema.Literals(["idle", "working", "input", "approval", "done"]))),
   agent_state_updated_at: Schema.optionalKey(Schema.NullOr(Schema.String)),
   associated_pr_number: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+  branch_upstream_missing: Schema.optionalKey(Schema.Boolean),
   commits_ahead: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   commits_behind: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   created_at: Schema.String,

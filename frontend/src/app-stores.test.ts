@@ -7,8 +7,8 @@ import type { IssuesStoreOptions } from "./lib/stores/issues.svelte.js";
 import { DEFAULT_TERMINAL_SETTINGS, type ConfigRepo, type Settings, type SyncStatus } from "./lib/api/types.js";
 import type { AppServices, OwnedAppRuntime } from "./lib/app/runtime.js";
 import { createAppStores, type AppStoreOptions } from "./lib/app-stores.svelte.js";
-import { client } from "./lib/api/runtime.js";
 import { makeTestAppRuntime } from "./lib/testing/effect-layers.js";
+import { makeGeneratedClient } from "./lib/testing/generated-client.js";
 import { makeStartupSnapshot } from "./test/startupSnapshot.js";
 
 type LaunchTargets = NonNullable<Settings["launch_targets"]>;
@@ -226,13 +226,12 @@ const getSettings = vi.fn();
 let runtime: OwnedAppRuntime;
 
 beforeEach(() => {
-  runtime = makeTestAppRuntime(client);
+  runtime = makeTestAppRuntime(makeGeneratedClient({ SettingsService: { getSettings: getSettings as never } }));
   captured.store = null;
   captured.settings = null;
   captured.detailOptions = null;
   captured.issuesOptions = null;
   getSettings.mockReset();
-  vi.spyOn(client, "GET").mockImplementation(getSettings);
   loadPulls.mockClear();
   loadPullsEffect.mockClear();
   reconcilePullsEffect.mockClear();
@@ -324,7 +323,7 @@ describe("app store event wiring", () => {
       terminal: { ...DEFAULT_TERMINAL_SETTINGS, cursor_blink: false },
       launch_targets: [codexTarget],
     });
-    getSettings.mockResolvedValue({ data: settings });
+    getSettings.mockResolvedValue(settings);
 
     compose({ getPage: () => "mobile-activity" });
     captured.settings?.setLaunchTargets([staleTarget]);

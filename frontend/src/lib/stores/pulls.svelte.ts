@@ -2,13 +2,15 @@ import { Effect } from "effect";
 import { executeGeneratedApiRequest, GeneratedApi } from "../api/generated-api.js";
 import { TransientTransportError, type ApiProblemError } from "../api/effect-errors.js";
 import { retryIdempotentRead } from "../api/retry-policy.js";
+import { GeneratedProblemResponse } from "../api/runtime.js";
 import type { KanbanStatus, PullRequest, PullsParams, UnsetStarredParams } from "../api/types.js";
 import type { AppRuntime } from "../app/runtime.js";
 import {
   providerDefaultHost,
-  providerItemPath,
   providerRouteParams,
   type ProviderRouteRef,
+  providerHostRouteParams,
+  providerUsesHostRoute,
 } from "../api/provider-routes.js";
 import { bucketCIChecks, parseCIChecks } from "../utils/ci-buckets.js";
 import { normalizeKanbanStatus } from "./workflow.svelte.js";
@@ -341,19 +343,18 @@ export function createPullsStore(opts: PullsStoreOptions) {
       const commit = (
         currentlyStarred
           ? executeGeneratedApiRequest<void>("DELETE pull request star", (client, signal) =>
-              client.DELETE("/starred", { params: { query: starredItem }, signal }),
+              client.SettingsService.unsetStarred(starredItem, { signal }),
             )
           : executeGeneratedApiRequest<void>("PUT pull request star", (client, signal) =>
-              client.PUT("/starred", { body: starredItem, signal }),
+              client.SettingsService.setStarred(starredItem, { signal }),
             )
       ).pipe(Effect.as(nextStarred));
       const refreshOnStale = executeGeneratedApiRequest(
         "GET pull request after stale list star mutation",
         (client, signal) =>
-          client.GET(providerItemPath("pulls", ref, ""), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.PullRequestsService.getPullOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.PullRequestsService.getPull({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => Boolean(response.merge_request.Starred)));
       yield* mutations.submit({
         key: providerMutationKey(
@@ -412,33 +413,34 @@ export function createPullsStore(opts: PullsStoreOptions) {
     const program = Effect.gen(function* () {
       const api = yield* GeneratedApi;
       const request = Effect.tryPromise({
-        try: (signal) =>
-          api.client.GET(providerItemPath("pulls", ref, ""), {
-            params: {
-              path: { ...providerRouteParams(ref), number },
-            },
-            signal,
-          }),
+        try: async (signal): Promise<FetchPullResult> => {
+          try {
+            const data = providerUsesHostRoute(ref)
+              ? await api.client.PullRequestsService.getPullOnHost(
+                  { ...providerHostRouteParams(ref), number },
+                  { signal },
+                )
+              : await api.client.PullRequestsService.getPull({ ...providerRouteParams(ref), number }, { signal });
+            const pull: PullRequest = {
+              ...data.merge_request,
+              repo: data.repo,
+              platform_host: data.platform_host,
+              repo_owner: data.repo_owner,
+              repo_name: data.repo_name,
+              detail_loaded: data.detail_loaded,
+              ...(data.detail_fetched_at !== undefined && { detail_fetched_at: data.detail_fetched_at }),
+              worktree_links: data.worktree_links,
+            };
+            return { status: "found", pull };
+          } catch (cause) {
+            if (cause instanceof GeneratedProblemResponse && cause.problem.status === 404) {
+              return { status: "not-found" };
+            }
+            throw cause;
+          }
+        },
         catch: (cause) => TransientTransportError.make({ operation: "GET pull request", cause }),
       }).pipe(
-        Effect.map(({ data, error, response }): FetchPullResult => {
-          if (error || !data) {
-            return response.status === 404
-              ? { status: "not-found" }
-              : { status: "error", message: `API returned ${response.status}` };
-          }
-          const pull: PullRequest = {
-            ...data.merge_request,
-            repo: data.repo,
-            platform_host: data.platform_host,
-            repo_owner: data.repo_owner,
-            repo_name: data.repo_name,
-            detail_loaded: data.detail_loaded,
-            ...(data.detail_fetched_at !== undefined && { detail_fetched_at: data.detail_fetched_at }),
-            worktree_links: data.worktree_links,
-          };
-          return { status: "found", pull };
-        }),
         Effect.catch((failure) => {
           const result: FetchPullResult = { status: "error", message: readErrorMessage(failure) };
           return Effect.succeed(result);
@@ -487,7 +489,7 @@ export function createPullsStore(opts: PullsStoreOptions) {
       ...params,
     };
     const read = executeGeneratedApiRequest("GET /pulls", (client, signal) =>
-      client.GET("/pulls", { params: { query }, signal }),
+      client.PullRequestsService.listPulls(query, { signal }),
     ).pipe(
       retryIdempotentRead,
       Effect.map((result) => result ?? []),
@@ -532,7 +534,7 @@ export function createPullsStore(opts: PullsStoreOptions) {
         ...params,
       };
       const read = executeGeneratedApiRequest("GET /pulls after provider event", (client, signal) =>
-        client.GET("/pulls", { params: { query }, signal }),
+        client.PullRequestsService.listPulls(query, { signal }),
       ).pipe(
         retryIdempotentRead,
         Effect.map((result) => result ?? []),

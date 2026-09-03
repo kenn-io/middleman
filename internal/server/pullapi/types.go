@@ -26,6 +26,16 @@ type MergeRequestResponse struct {
 	LastWorkspaceActivityAt string                     `json:"last_workspace_activity_at,omitempty" format:"date-time"`
 	DetailLoaded            bool                       `json:"detail_loaded"`
 	DetailFetchedAt         string                     `json:"detail_fetched_at,omitempty"`
+	// Stack is present only when the pull request belongs to a stack with more
+	// than one visible member, so list rows can show a stack indicator without
+	// loading the full stack context.
+	Stack *StackPlacementResponse `json:"stack,omitempty"`
+}
+
+// StackPlacementResponse is a pull request's position within its stack.
+type StackPlacementResponse struct {
+	Position int `json:"position" doc:"1-based position of this pull request in its stack"`
+	Size     int `json:"size" doc:"Number of visible pull requests in the stack"`
 }
 
 type mergeRequestEventResponse struct {

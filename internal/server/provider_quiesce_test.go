@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/db"
+	"go.kenn.io/forge/internal/federation"
 	"go.kenn.io/forge/internal/providerplane"
 	"go.kenn.io/forge/internal/server/httpapi"
 	"go.kenn.io/forge/internal/testutil/dbtest"
@@ -31,11 +33,61 @@ func authenticatedProviderRequest(
 	return response
 }
 
+func TestStandaloneProviderWritesDoNotRequireSpokePreparationState(t *testing.T) {
+	database := dbtest.Open(t)
+	_, err := database.WriteDB().ExecContext(t.Context(), "DROP TABLE forge_spoke_preparation")
+	require.NoError(t, err)
+
+	srv := New(database, nil, nil, "/", nil, ServerOptions{})
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/pulls/github/acme/widget/1/comments",
+		bytes.NewReader([]byte(`{"body":""}`)),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	srv.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+	require.NotContains(t, rr.Body.String(), "spoke preparation")
+}
+
+func TestLocalEnrollmentRestoresSpokePreparationBarrier(t *testing.T) {
+	database := dbtest.Open(t)
+	gate := providerplane.NewProviderWriteGate(database, true)
+	_, err := gate.BeginQuiesce(t.Context(), db.SpokePreparationBinding{
+		EnrollmentID: preparationEnrollmentID, HubNodeID: preparationHubNodeID,
+		LocalNodeID: preparationLocalNodeID, ProtocolVersion: federation.ProtocolVersion,
+	})
+	require.NoError(t, err)
+
+	enrollments, _ := openFederationPreparationStores(t, "restore-barrier")
+	require.NoError(t, enrollments.SaveLocal(t.Context(), federation.LocalEnrollment{
+		EnrollmentID: preparationEnrollmentID, NodeID: preparationLocalNodeID,
+		SpokeBaseURL: "https://spoke.example", HubID: preparationHubNodeID,
+		HubURL: "https://hub.example", ProtocolVersion: federation.ProtocolVersion,
+		State: federation.EnrollmentPending, ExpiresAt: time.Now().Add(time.Hour),
+	}))
+
+	srv := New(database, nil, nil, "/", nil, ServerOptions{
+		DaemonAccess:          DaemonAccessOptions{Token: "local-secret", RequireAPIAuth: true},
+		FederationEnrollments: enrollments,
+	})
+	daemon := httptest.NewServer(srv)
+	t.Cleanup(daemon.Close)
+	blocked := authenticatedProviderRequest(
+		t, daemon, http.MethodPost, "/api/v1/notifications/read",
+	)
+
+	require.Equal(t, http.StatusConflict, blocked.StatusCode)
+}
+
 func TestSpokePreparationBarrierGatesAuthenticatedProviderWritesAndSurvivesRestart(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	database := dbtest.Open(t)
-	gate := providerplane.NewProviderWriteGate(database)
+	gate := providerplane.NewProviderWriteGate(database, true)
 	releaseWrite, err := gate.Admit(t.Context())
 	require.NoError(err)
 	releaseDeferred, err := gate.BeginDeferredMerge(t.Context())
@@ -79,7 +131,7 @@ func TestSpokePreparationBarrierGatesAuthenticatedProviderWritesAndSurvivesResta
 	require.NoError(err)
 	assert.NotNil(status.DrainAckGeneration)
 
-	restarted := providerplane.NewProviderWriteGate(database)
+	restarted := providerplane.NewProviderWriteGate(database, true)
 	second := newDaemon(restarted)
 	blocked = authenticatedProviderRequest(
 		t, second, http.MethodPost, "/api/v1/notifications/read",

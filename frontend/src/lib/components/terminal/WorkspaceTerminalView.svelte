@@ -522,7 +522,7 @@
       Effect.gen(function* () {
         const api = yield* GeneratedApi;
         const settings = yield* api.execute("load workspace launch targets", (signal) =>
-          api.client.GET("/settings", { signal }),
+          api.client.SettingsService.getSettings({ signal }),
         );
         yield* Effect.sync(() => {
           emptyLaunchTargets = settings.launch_targets ?? [];
@@ -1263,6 +1263,7 @@
         key: workflowTabKeyForSession(session.key),
         label,
         kind: session.kind === "plain_shell" ? "plain_shell" : "agent",
+        targetKey: session.target_key,
         status: workflowSessionStatus(session, label),
         renamable: true,
         movableToTerminal: true,
@@ -2168,16 +2169,10 @@
       recordWorkspaceSwitchPhase("workspace-request-start", id, hostKey);
       const data = hostKey
         ? yield* executeOpaqueGeneratedApiRequest("load fleet workspace", (generatedClient, signal) =>
-            generatedClient.GET("/fleet/hosts/{host_key}/workspaces/{id}", {
-              params: { path: { host_key: hostKey, id } },
-              signal,
-            }),
+            generatedClient.FleetService.getFleetWorkspace({ hostKey, id }, { signal }),
           )
         : yield* executeGeneratedApiRequest("load workspace", (generatedClient, signal) =>
-            generatedClient.GET("/workspaces/{id}", {
-              params: { path: { id } },
-              signal,
-            }),
+            generatedClient.WorkspacesService.getWorkspace({ id }, { signal }),
           );
       const nextWorkspace = yield* decodeWorkspaceDetail(data, hostKey);
       yield* Effect.sync(() => {

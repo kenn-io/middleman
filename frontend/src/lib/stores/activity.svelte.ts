@@ -545,7 +545,7 @@ export function createActivityStore(opts: ActivityStoreOptions) {
       authorsError = null;
       const query: ActivityAuthorsParams = { since: computeSince(), ...(repo ? { repo } : {}) };
       return executeGeneratedApiRequest("GET /activity/authors", (client, signal) =>
-        client.GET("/activity/authors", { params: { query }, signal }),
+        client.ActivityService.listActivityAuthors(query, { signal }),
       ).pipe(
         retryIdempotentRead,
         Effect.tap((response) =>
@@ -586,7 +586,7 @@ export function createActivityStore(opts: ActivityStoreOptions) {
     return Effect.sync(() => ++activityLifecycleTick).pipe(
       Effect.flatMap((startedAt) =>
         executeGeneratedApiRequest("GET /activity", (client, signal) =>
-          client.GET("/activity", { params: { query: params }, signal }),
+          client.ActivityService.listActivity(params, { signal }),
         ).pipe(
           retryIdempotentRead,
           Effect.map((response) => ({ response, startedAt })),
@@ -923,7 +923,7 @@ export function createActivityStore(opts: ActivityStoreOptions) {
         };
         const startedAt = yield* Effect.sync(() => ++activityLifecycleTick);
         const response = yield* executeGeneratedApiRequest("GET /activity/thread-events", (client, signal) =>
-          client.GET("/activity/thread-events", { params: { query }, signal }),
+          client.ActivityService.listActivityThreadEvents(query, { signal }),
         ).pipe(retryIdempotentRead);
         if (!(yield* Effect.sync(isCurrentRequest))) return;
         pageResults.push({ response, startedAt });
@@ -1107,11 +1107,7 @@ export function createActivityStore(opts: ActivityStoreOptions) {
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest<NotificationBulkResponse>(
         "POST mark notification read",
-        (client, signal) =>
-          client.POST("/notifications/read", {
-            body: { ids: [id] },
-            signal,
-          }),
+        (client, signal) => client.ActivityService.markNotificationsRead({ ids: [id] }, { signal }),
       ).pipe(
         Effect.map((response) => {
           acknowledged = [...(response.succeeded ?? []), ...(response.queued ?? [])].includes(id);

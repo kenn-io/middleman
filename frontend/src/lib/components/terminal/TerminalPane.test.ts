@@ -15,6 +15,8 @@ const {
   imageAddonCtor,
   imageAddons,
   ligaturesAddonCtor,
+  mockItemResolvePost,
+  mockNavigate,
   mockShowFlash,
   mockWebglCtor,
   mouseDragEndPointerGesture,
@@ -40,6 +42,8 @@ const {
   imageAddonCtor: vi.fn(),
   imageAddons: [] as Array<{ dispose: ReturnType<typeof vi.fn> }>,
   ligaturesAddonCtor: vi.fn(),
+  mockItemResolvePost: vi.fn(),
+  mockNavigate: vi.fn(),
   mockShowFlash: vi.fn(),
   mockWebglCtor: vi.fn(),
   mouseDragEndPointerGesture: vi.fn(),
@@ -78,6 +82,7 @@ let configuredLetterSpacing = 0;
 let configuredCursorBlink = true;
 let configuredFontLigatures = false;
 let terminalSettingsStore: SettingsStore;
+let configuredRepos: Array<{ provider: string; platform_host: string }> = [];
 let mockSockets: MockWebSocket[] = [];
 let mockSocketsStartOpen = true;
 let initialTerminalDimensions = { cols: 80, rows: 24 };
@@ -156,9 +161,28 @@ vi.mock("../../context.js", () => ({
       getTerminalCursorBlink: () => configuredCursorBlink,
       getTerminalFontLigatures: () => configuredFontLigatures,
       getTerminalGraphics: () => terminalSettingsStore.getTerminalGraphics(),
+      getConfiguredRepos: () => configuredRepos,
     },
   }),
 }));
+
+vi.mock("../../app/runtime.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../app/runtime.js")>();
+  const { makeGeneratedClient } = await import("../../testing/generated-client.js");
+  return {
+    ...actual,
+    makeAppRuntime: () =>
+      actual.makeAppRuntime(makeGeneratedClient({ RepositoriesService: { resolveRepoItem: mockItemResolvePost } })),
+  };
+});
+
+vi.mock("../../stores/router.svelte.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../stores/router.svelte.js")>();
+  return {
+    ...actual,
+    navigate: mockNavigate,
+  };
+});
 
 vi.mock("../../stores/flash.svelte.js", () => ({
   showFlash: mockShowFlash,
@@ -324,6 +348,9 @@ describe("TerminalPane", () => {
     configuredCursorBlink = true;
     configuredFontLigatures = false;
     terminalSettingsStore = createSettingsStore();
+    configuredRepos = [];
+    mockItemResolvePost.mockReset();
+    mockNavigate.mockReset();
     initialTerminalDimensions = { cols: 80, rows: 24 };
     fitDimensions = { cols: 80, rows: 24 };
     ligaturesAddonCtor.mockReset();
@@ -536,6 +563,73 @@ describe("TerminalPane", () => {
 
     expect(open).toHaveBeenCalledTimes(1);
     expect(open).toHaveBeenCalledWith("https://example.com/docs", "_blank", "noopener,noreferrer");
+  });
+
+  it("routes tracked repository item links through the app instead of a new tab", async () => {
+    configuredRepos = [{ provider: "github", platform_host: "github.com" }];
+    mockItemResolvePost.mockResolvedValue({ repo_tracked: true, item_type: "pr" });
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(TerminalPane, { props: { workspaceId: "ws-123" } });
+    await waitFor(() => expect(xtermTerminalCtor).toHaveBeenCalled());
+    const activate = xtermTerminalCtor.mock.calls[0]![0].linkHandler.activate;
+    const modifier = /Mac/.test(navigator.platform) ? { metaKey: true } : { ctrlKey: true };
+
+    activate(new MouseEvent("click", modifier), "https://github.com/acme/widgets/pull/1028");
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/pulls/github/acme/widgets/1028"));
+    expect(mockItemResolvePost).toHaveBeenCalledWith(
+      { provider: "github", owner: "acme", name: "widgets", number: 1028 },
+      undefined,
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("opens item links for untracked repositories externally after resolving", async () => {
+    configuredRepos = [{ provider: "github", platform_host: "github.com" }];
+    mockItemResolvePost.mockResolvedValue({ repo_tracked: false });
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(TerminalPane, { props: { workspaceId: "ws-123" } });
+    await waitFor(() => expect(xtermTerminalCtor).toHaveBeenCalled());
+    const activate = xtermTerminalCtor.mock.calls[0]![0].linkHandler.activate;
+    const modifier = /Mac/.test(navigator.platform) ? { metaKey: true } : { ctrlKey: true };
+
+    activate(new MouseEvent("click", modifier), "https://github.com/other/repo/issues/7");
+
+    await waitFor(() =>
+      expect(open).toHaveBeenCalledWith("https://github.com/other/repo/issues/7", "_blank", "noopener,noreferrer"),
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps opening links on unconfigured hosts externally without resolving", async () => {
+    configuredRepos = [{ provider: "gitlab", platform_host: "gitlab.example.com" }];
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(TerminalPane, { props: { workspaceId: "ws-123" } });
+    await waitFor(() => expect(xtermTerminalCtor).toHaveBeenCalled());
+    const activate = xtermTerminalCtor.mock.calls[0]![0].linkHandler.activate;
+    const modifier = /Mac/.test(navigator.platform) ? { metaKey: true } : { ctrlKey: true };
+
+    activate(new MouseEvent("click", modifier), "https://github.com/acme/widgets/pull/1028");
+
+    expect(open).toHaveBeenCalledWith("https://github.com/acme/widgets/pull/1028", "_blank", "noopener,noreferrer");
+    expect(mockItemResolvePost).not.toHaveBeenCalled();
+  });
+
+  it("tells the user a hovered item link opens inside the app", async () => {
+    configuredRepos = [{ provider: "github", platform_host: "github.com" }];
+    const view = render(TerminalPane, { props: { workspaceId: "ws-123" } });
+    await waitFor(() => expect(xtermTerminalCtor).toHaveBeenCalled());
+    const linkHandler = xtermTerminalCtor.mock.calls[0]![0].linkHandler;
+    const modifier = /Mac/.test(navigator.platform) ? "Cmd" : "Ctrl";
+
+    linkHandler.hover(new MouseEvent("mouseover"), "https://github.com/acme/widgets/issues/3");
+    await tick();
+    expect(view.getByText(`${modifier}+Click to open in kenn-forge`)).toBeTruthy();
+
+    linkHandler.hover(new MouseEvent("mouseover"), "https://github.com/acme/widgets/commit/abc");
+    await tick();
+    expect(view.getByText(`${modifier}+Click to open link`)).toBeTruthy();
   });
 
   it("forwards accepted tmux OSC 52 text to the authorized clipboard writer", async () => {

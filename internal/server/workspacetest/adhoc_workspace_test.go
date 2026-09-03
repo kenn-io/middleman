@@ -13,6 +13,7 @@ import (
 	"go.kenn.io/forge/internal/apiclient/generated"
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/gitclone"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 )
 
 // Starting new work needs no provider item: a tracked repository plus an
@@ -41,8 +42,8 @@ func TestCreateAdHocWorkspaceMaterializesRequestedBranch(t *testing.T) {
 	assert.Equal(branch, ready.GitHeadRef)
 	assert.Nil(ready.MrTitle)
 
-	head := testGitSHA(t, ready.WorktreePath, "HEAD")
-	assert.Equal(testGitSHA(t, fixture.remote, "refs/heads/main"), head,
+	head := gitfixture.SHA(t, ready.WorktreePath, "HEAD")
+	assert.Equal(gitfixture.SHA(t, fixture.remote, "refs/heads/main"), head,
 		"ad-hoc workspaces branch from the repository default branch")
 	checkedOut, err := os.ReadFile(filepath.Join(ready.WorktreePath, "base.txt"))
 	require.NoError(err)
@@ -59,12 +60,12 @@ func TestCreateAdHocWorkspaceAfterRepositoryRouteReuse(t *testing.T) {
 	)
 	require.NoError(err)
 	require.NotEqual(fixture.bare, replacementBare)
-	runGit(t, t.TempDir(), "clone", "--bare", fixture.remote, replacementBare)
-	runGit(
+	gitfixture.Run(t, t.TempDir(), "clone", "--bare", fixture.remote, replacementBare)
+	gitfixture.Run(
 		t, replacementBare, "remote", "set-url", "origin",
 		"https://github.com/acme/widget.git",
 	)
-	runGit(
+	gitfixture.Run(
 		t, replacementBare, "config", "--add",
 		"url."+fixture.remote+".insteadOf", "https://github.com/acme/widget.git",
 	)
@@ -149,7 +150,7 @@ func TestCreateAdHocWorkspaceReusesWorkspaceForSameBranch(t *testing.T) {
 	require.NoError(err)
 	require.NotNil(listResp.JSON200)
 	adhoc := 0
-	for _, ws := range *listResp.JSON200.Workspaces {
+	for _, ws := range listResp.JSON200.Workspaces {
 		if ws.ItemType == "adhoc" {
 			adhoc++
 		}
@@ -191,8 +192,8 @@ func TestCreateAdHocWorkspaceExistingBranchIsUniquified(t *testing.T) {
 
 	fixture := setupWorkspaceServerFixture(t, nil)
 	branch := "spike/rate-limits"
-	mainSHA := testGitSHA(t, fixture.remote, "refs/heads/main")
-	runGit(t, fixture.bare, "update-ref", "refs/heads/"+branch, mainSHA)
+	mainSHA := gitfixture.SHA(t, fixture.remote, "refs/heads/main")
+	gitfixture.Run(t, fixture.bare, "update-ref", "refs/heads/"+branch, mainSHA)
 
 	resp, err := fixture.client.HTTP.CreateRepoWorkspaceWithResponse(
 		t.Context(), "gh", "acme", "widget",
@@ -216,8 +217,8 @@ func TestCreateAdHocWorkspaceReusesExistingBranchWhenAsked(t *testing.T) {
 
 	fixture := setupWorkspaceServerFixture(t, nil)
 	branch := "spike/rate-limits"
-	mainSHA := testGitSHA(t, fixture.remote, "refs/heads/main")
-	runGit(t, fixture.bare, "update-ref", "refs/heads/"+branch, mainSHA)
+	mainSHA := gitfixture.SHA(t, fixture.remote, "refs/heads/main")
+	gitfixture.Run(t, fixture.bare, "update-ref", "refs/heads/"+branch, mainSHA)
 	reuse := true
 
 	resp, err := fixture.client.HTTP.CreateRepoWorkspaceWithResponse(
@@ -269,8 +270,8 @@ func TestCreateAdHocWorkspaceReuseStartsFromDivergedBranchTip(t *testing.T) {
 	fixture := setupWorkspaceServerFixture(t, nil)
 	// The fixture's "feature" branch carries a commit that main does not.
 	branch := "feature"
-	featureSHA := testGitSHA(t, fixture.remote, "refs/heads/"+branch)
-	mainSHA := testGitSHA(t, fixture.remote, "refs/heads/main")
+	featureSHA := gitfixture.SHA(t, fixture.remote, "refs/heads/"+branch)
+	mainSHA := gitfixture.SHA(t, fixture.remote, "refs/heads/main")
 	require.NotEqual(mainSHA, featureSHA)
 	reuse := true
 
@@ -286,7 +287,7 @@ func TestCreateAdHocWorkspaceReuseStartsFromDivergedBranchTip(t *testing.T) {
 
 	ready := waitForWorkspaceReady(t, t.Context(), fixture.client, resp.JSON202.Id)
 	assert.Equal(branch, ready.GitHeadRef)
-	assert.Equal(featureSHA, testGitSHA(t, ready.WorktreePath, "HEAD"),
+	assert.Equal(featureSHA, gitfixture.SHA(t, ready.WorktreePath, "HEAD"),
 		"reuse adopts the existing branch tip, not origin/HEAD")
 	_, err = os.Stat(filepath.Join(ready.WorktreePath, "new.txt"))
 	assert.NoError(err, "the diverged commit's file should be checked out")
@@ -313,7 +314,7 @@ func TestCreateAdHocWorkspaceAfterInWorktreeBranchRename(t *testing.T) {
 	require.NotNil(created.JSON202)
 	ready := waitForWorkspaceReady(t, t.Context(), fixture.client, created.JSON202.Id)
 
-	runGit(t, ready.WorktreePath, "branch", "-m", original, renamed)
+	gitfixture.Run(t, ready.WorktreePath, "branch", "-m", original, renamed)
 
 	// Old name: still this workspace, because item_key is the creation-time
 	// branch and is never rewritten.

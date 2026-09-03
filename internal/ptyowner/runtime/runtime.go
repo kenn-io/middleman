@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,7 @@ type Owner interface {
 		cwd string,
 		command []string,
 		stripEnvVars []string,
+		extraEnv map[string]string,
 	) (PTY, error)
 	Stop(ctx context.Context, session string) error
 }
@@ -84,6 +86,7 @@ func (o owner) Start(
 	cwd string,
 	command []string,
 	stripEnvVars []string,
+	extraEnv map[string]string,
 ) (PTY, error) {
 	if o.client == nil {
 		return nil, errors.New("pty owner runtime is unavailable")
@@ -106,6 +109,9 @@ func (o owner) Start(
 	)
 	// Build a fresh per-launch client rather than copying o.client: the
 	// shared client carries a mutex guarding its reloadable strip set.
+	env := map[string]string{}
+	maps.Copy(env, extraEnv)
+	env[agentactivity.RuntimeSessionKeyEnv] = session
 	client := ptyowner.Client{
 		Root:        o.client.Root,
 		ExePath:     o.client.ExePath,
@@ -113,9 +119,7 @@ func (o owner) Start(
 		ManagerPath: o.client.ManagerPath,
 		InProcess:   o.client.InProcess,
 		Command:     resolvedCommand,
-		ExtraEnv: map[string]string{
-			agentactivity.RuntimeSessionKeyEnv: session,
-		},
+		ExtraEnv:    env,
 		StripEnvVars: append(
 			o.client.StripEnvVarsSnapshot(), stripEnvVars...,
 		),

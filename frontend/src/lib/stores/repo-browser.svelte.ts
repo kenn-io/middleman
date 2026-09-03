@@ -1,10 +1,21 @@
 import { Effect } from "effect";
-import type { QuerySerializerOptions } from "openapi-fetch";
 import type { RepoBrowserBlob, RepoBrowserCommit, RepoBrowserRef, RepoBrowserTreeEntry } from "../api/types.js";
-import { providerRepoPath, providerRouteParams, type ProviderRouteRef } from "../api/provider-routes.js";
+import {
+  providerRouteParams,
+  type ProviderRouteRef,
+  providerHostRouteParams,
+  providerUsesHostRoute,
+} from "../api/provider-routes.js";
 import { executeGeneratedApiRequest, type GeneratedApi } from "../api/generated-api.js";
 import type { ApiProblemError, TransientTransportError } from "../api/effect-errors.js";
-import type { components } from "../api/generated/schema.js";
+import type {
+  RepoBrowserBlobResponse as GeneratedRepoBrowserBlobResponse,
+  RepoBrowserCommitResponse as GeneratedRepoBrowserCommitResponse,
+  RepoBrowserHistoryResponse as GeneratedRepoBrowserHistoryResponse,
+  RepoBrowserLastChangedResponse as GeneratedRepoBrowserLastChangedResponse,
+  RepoBrowserRefsResponse as GeneratedRepoBrowserRefsResponse,
+  RepoBrowserTreeResponse as GeneratedRepoBrowserTreeResponse,
+} from "../api/generated/models/index.js";
 import { retryIdempotentRead } from "../api/retry-policy.js";
 import type { DiffFileCategoryCounts, DiffFileCategoryFilter } from "../utils/diff-categories.js";
 import { chooseRepoBrowserInitialPath } from "../utils/repo-browser-path.js";
@@ -22,12 +33,12 @@ import {
 
 export type RepoBrowserViewMode = "source" | "preview";
 
-type RepoBrowserRefsResponse = components["schemas"]["RepoBrowserRefsResponse"];
-type RepoBrowserTreeResponse = components["schemas"]["RepoBrowserTreeResponse"];
-type RepoBrowserBlobResponse = components["schemas"]["RepoBrowserBlobResponse"];
-type RepoBrowserHistoryResponse = components["schemas"]["RepoBrowserHistoryResponse"];
-type RepoBrowserLastChangedResponse = components["schemas"]["RepoBrowserLastChangedResponse"];
-type RepoBrowserCommitResponse = components["schemas"]["RepoBrowserCommitResponse"];
+type RepoBrowserRefsResponse = GeneratedRepoBrowserRefsResponse;
+type RepoBrowserTreeResponse = GeneratedRepoBrowserTreeResponse;
+type RepoBrowserBlobResponse = GeneratedRepoBrowserBlobResponse;
+type RepoBrowserHistoryResponse = GeneratedRepoBrowserHistoryResponse;
+type RepoBrowserLastChangedResponse = GeneratedRepoBrowserLastChangedResponse;
+type RepoBrowserCommitResponse = GeneratedRepoBrowserCommitResponse;
 type MissingRequestedPathBehavior = "fallback" | "retain";
 type RepoBrowserPathKind = "file" | "directory" | "missing";
 type RepoBrowserPathSnapshot = {
@@ -40,13 +51,6 @@ type RepoBrowserPathSnapshot = {
 const viewModeStorageKey = "repo-browser-view-mode";
 const lastChangedBatchSize = 250;
 const validViewModes: RepoBrowserViewMode[] = ["source", "preview"];
-const repeatedPathQuerySerializer: QuerySerializerOptions = {
-  array: {
-    style: "form",
-    explode: true,
-  },
-};
-
 let nextRepoBrowserOwner = 0;
 
 function createRepoBrowserOwner(): RepoBrowserOwner {
@@ -170,13 +174,17 @@ export function createRepoBrowserStore() {
           .pipe(
             Effect.andThen(
               executeGeneratedApiRequest("GET repository refs", (client, signal) =>
-                client.GET(providerRepoPath(nextRepo, "/browser/refs"), {
-                  params: {
-                    path: providerRouteParams(nextRepo),
-                    query: { repo_path: nextRepo.repoPath },
-                  },
-                  signal,
-                }),
+                providerUsesHostRoute(nextRepo)
+                  ? client.RepositoriesService.listRepoBrowserRefsOnHost(
+                      { ...providerHostRouteParams(nextRepo) },
+                      { repo_path: nextRepo.repoPath },
+                      { signal },
+                    )
+                  : client.RepositoriesService.listRepoBrowserRefs(
+                      { ...providerRouteParams(nextRepo) },
+                      { repo_path: nextRepo.repoPath },
+                      { signal },
+                    ),
               ).pipe(retryIdempotentRead),
             ),
             Effect.tap((response: RepoBrowserRefsResponse) =>
@@ -245,13 +253,17 @@ export function createRepoBrowserStore() {
         const requestedRef = selectedRef;
         if (!ref || !requestedRef) return Effect.void;
         return executeGeneratedApiRequest("GET repository tree", (client, signal) =>
-          client.GET(providerRepoPath(ref, "/browser/tree"), {
-            params: {
-              path: providerRouteParams(ref),
-              query: queryFor(ref, requestedRef),
-            },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.RepositoriesService.listRepoBrowserTreeOnHost(
+                { ...providerHostRouteParams(ref) },
+                queryFor(ref, requestedRef),
+                { signal },
+              )
+            : client.RepositoriesService.listRepoBrowserTree(
+                { ...providerRouteParams(ref) },
+                queryFor(ref, requestedRef),
+                { signal },
+              ),
         ).pipe(
           retryIdempotentRead,
           Effect.tap(() => active(owner)),
@@ -324,17 +336,23 @@ export function createRepoBrowserStore() {
         (index) => {
           const batch = paths.slice(index * lastChangedBatchSize, (index + 1) * lastChangedBatchSize);
           return executeGeneratedApiRequest("GET repository last-changed metadata", (client, signal) =>
-            client.GET(providerRepoPath(ref, "/browser/last-changed"), {
-              querySerializer: repeatedPathQuerySerializer,
-              params: {
-                path: providerRouteParams(ref),
-                query: {
-                  ...queryFor(ref, requestedRef),
-                  path: batch,
-                },
-              },
-              signal,
-            }),
+            providerUsesHostRoute(ref)
+              ? client.RepositoriesService.getRepoBrowserLastChangedOnHost(
+                  { ...providerHostRouteParams(ref) },
+                  {
+                    ...queryFor(ref, requestedRef),
+                    path: batch,
+                  },
+                  { signal },
+                )
+              : client.RepositoriesService.getRepoBrowserLastChanged(
+                  { ...providerRouteParams(ref) },
+                  {
+                    ...queryFor(ref, requestedRef),
+                    path: batch,
+                  },
+                  { signal },
+                ),
           ).pipe(
             retryIdempotentRead,
             Effect.tap(() => active(owner)),
@@ -449,16 +467,20 @@ export function createRepoBrowserStore() {
           return Effect.all(
             {
               blobResponse: executeGeneratedApiRequest("GET repository blob", (client, signal) =>
-                client.GET(providerRepoPath(ref, "/browser/blob"), {
-                  params: { path: providerRouteParams(ref), query },
-                  signal,
-                }),
+                providerUsesHostRoute(ref)
+                  ? client.RepositoriesService.getRepoBrowserBlobOnHost({ ...providerHostRouteParams(ref) }, query, {
+                      signal,
+                    })
+                  : client.RepositoriesService.getRepoBrowserBlob({ ...providerRouteParams(ref) }, query, { signal }),
               ).pipe(retryIdempotentRead),
               historyResponse: executeGeneratedApiRequest("GET repository file history", (client, signal) =>
-                client.GET(providerRepoPath(ref, "/browser/history"), {
-                  params: { path: providerRouteParams(ref), query },
-                  signal,
-                }),
+                providerUsesHostRoute(ref)
+                  ? client.RepositoriesService.getRepoBrowserHistoryOnHost({ ...providerHostRouteParams(ref) }, query, {
+                      signal,
+                    })
+                  : client.RepositoriesService.getRepoBrowserHistory({ ...providerRouteParams(ref) }, query, {
+                      signal,
+                    }),
               ).pipe(retryIdempotentRead),
             },
             { concurrency: "unbounded" },
@@ -517,17 +539,25 @@ export function createRepoBrowserStore() {
                 selectedCommit = null;
                 error = null;
                 return executeGeneratedApiRequest("GET repository commit", (client, signal) =>
-                  client.GET(providerRepoPath(ref, "/browser/commit"), {
-                    params: {
-                      path: providerRouteParams(ref),
-                      query: {
-                        ...queryFor(ref, requestedRef),
-                        path,
-                        sha,
-                      },
-                    },
-                    signal,
-                  }),
+                  providerUsesHostRoute(ref)
+                    ? client.RepositoriesService.getRepoBrowserCommitOnHost(
+                        { ...providerHostRouteParams(ref) },
+                        {
+                          ...queryFor(ref, requestedRef),
+                          path,
+                          sha,
+                        },
+                        { signal },
+                      )
+                    : client.RepositoriesService.getRepoBrowserCommit(
+                        { ...providerRouteParams(ref) },
+                        {
+                          ...queryFor(ref, requestedRef),
+                          path,
+                          sha,
+                        },
+                        { signal },
+                      ),
                 ).pipe(
                   retryIdempotentRead,
                   Effect.tap(() => active(owner)),

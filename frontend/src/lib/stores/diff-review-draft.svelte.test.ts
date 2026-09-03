@@ -299,22 +299,22 @@ describe("createDiffReviewDraftStore", () => {
     });
 
     store.setContext(ref, 42, true, "old-head");
-    await Promise.resolve();
+    await vi.waitFor(() => expect(client.GET).toHaveBeenCalledTimes(1));
     store.setContext(ref, 42, true, "new-head");
-    await Promise.resolve();
+    await vi.waitFor(() => expect(client.GET).toHaveBeenCalledTimes(2));
 
     newLoad.resolve(
       draftLoad({
         comments: [{ id: "new", body: "new draft" }],
       }),
     );
-    await Promise.resolve();
+    await vi.waitFor(() => expect(store.getComments()).toEqual([{ id: "new", body: "new draft" }]));
     oldLoad.resolve(
       draftLoad({
         comments: [{ id: "old", body: "old draft" }],
       }),
     );
-    await Promise.resolve();
+    await vi.waitFor(() => expect(store.isLoading()).toBe(false));
 
     expect(store.getComments()).toEqual([{ id: "new", body: "new draft" }]);
     expect(store.isLoading()).toBe(false);
@@ -361,7 +361,7 @@ describe("createDiffReviewDraftStore", () => {
     const ref = providerRef();
 
     store.setContext(ref, 42, true);
-    await Promise.resolve();
+    await vi.waitFor(() => expect(store.getComments()).toEqual([original]));
     const comment = store.getComments()[0];
     const settled = Promise.withResolvers<void>();
 
@@ -394,7 +394,7 @@ describe("createDiffReviewDraftStore", () => {
         },
       }),
     );
-    expect(store.getComments()).toEqual([updated]);
+    await vi.waitFor(() => expect(store.getComments()).toEqual([updated]));
   });
 
   it("launches draft comment creation synchronously and refreshes after acknowledgement", async () => {
@@ -497,7 +497,7 @@ describe("createDiffReviewDraftStore", () => {
     const ok = await runAcknowledged((callbacks) => store.publish("approve", "summary", callbacks));
 
     expect(ok).toBe(true);
-    expect(store.getDraft()?.comments).toEqual([]);
+    expect(store.getDraft()).toBeNull();
     expect(store.getWarning()).toBe(
       "Review was partially published. Some inline comments or the selected review action may not have been submitted.",
     );

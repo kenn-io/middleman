@@ -30,8 +30,9 @@ Recommended flow:
     and one initial message. Report the workspace and runtime identifiers even
     when a later stage fails.
 11. Use `kenn_forge_list_workspace_agent_sessions` for fresh hook-reported
-    coding session IDs. Do not infer IDs from terminal text. Follow-up messaging
-    to an existing coding session is outside this MCP surface.
+    coding session IDs. Do not infer IDs from terminal text. To continue work in
+    a live runtime, call `kenn_forge_send_agent_message` with its workspace ID,
+    runtime session key, and the follow-up message.
 
 Example guidance flow:
 
@@ -58,4 +59,7 @@ Handoff flow:
    the same target and initial message. Resume never launches another runtime.
 4. Report every returned workspace, runtime, prompt-delivery, and coding-session
    identifier or state.
+5. For later instructions, call `kenn_forge_send_agent_message` with the
+   workspace ID and runtime session key. It submits the message to that running
+   agent and does not launch or resume anything.
 ```

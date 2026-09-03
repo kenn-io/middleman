@@ -4,7 +4,7 @@ import "time"
 
 const (
 	OpenTelemetry     = 5 * time.Second
-	NotificationLoop  = 5 * time.Second
+	BackgroundLoops   = 5 * time.Second
 	MCPHTTP           = 5 * time.Second
 	PrimaryHTTP       = 10 * time.Second
 	Syncer            = 30 * time.Second
@@ -15,6 +15,6 @@ const (
 	ProcessExitMargin = 5 * time.Second
 
 	// Total covers every bounded shutdown phase plus process exit.
-	Total = OpenTelemetry + NotificationLoop + MCPHTTP + PrimaryHTTP + Syncer +
+	Total = OpenTelemetry + BackgroundLoops + MCPHTTP + PrimaryHTTP + Syncer +
 		Profiler + TelemetryReporter + MCPStore + Database + ProcessExitMargin
 )

@@ -11,13 +11,13 @@
   import { makeAnimationFrameScheduler } from "../../browser/animation-frame.js";
   import { observeResize } from "../../browser/observers.js";
   import type { MutationCallbacks } from "../../stores/ordered-mutations.js";
-  import type { ReviewThread } from "./review-thread-context.js";
+  import type { ReviewThread, ReviewThreadCardPlacement } from "./review-thread-context.js";
   import { reviewThreadLineLabel, reviewThreadProviderHiddenState } from "./review-thread-context.js";
 
   interface Props {
     runtime: AppRuntime;
     thread: ReviewThread;
-    fileLevel?: boolean;
+    placement?: ReviewThreadCardPlacement;
     canReply?: boolean;
     onreply?: ((thread: ReviewThread, body: string, callbacks: MutationCallbacks) => void) | undefined;
   }
@@ -25,7 +25,7 @@
   const {
     runtime,
     thread,
-    fileLevel = false,
+    placement = "inline",
     canReply = false,
     onreply,
   }: Props = $props();
@@ -159,7 +159,7 @@
 
 <div
   class="inline-review-thread"
-  class:inline-review-thread--file-level={fileLevel}
+  class:inline-review-thread--file-level={placement !== "inline"}
   class:inline-review-thread--idle-reply={bodyVisible && canReply && !thread.resolved && !replying}
   data-review-thread-id={thread.id}
   {@attach setupThreadLayout}
@@ -172,8 +172,12 @@
     {#if thread.resolved}
       <span class="review-thread-status">Resolved</span>
     {/if}
-    {#if fileLevel}
+    {#if placement === "file"}
       <span class="review-thread-status review-thread-status--outdated">File</span>
+    {:else if placement === "outdated"}
+      <span class="review-thread-status review-thread-status--outdated">Outdated</span>
+    {:else if placement === "unavailable"}
+      <span class="review-thread-status review-thread-status--outdated">Line unavailable</span>
     {/if}
   </div>
   {#if thread.author_login}

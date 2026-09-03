@@ -658,6 +658,6 @@ func testArchiveReportRepairsMergedMetricsAcrossRepositoryRename(
 	require.NotNil(merged.FilesChanged)
 	assert.Equal(int64(4), *merged.FilesChanged)
 	require.NotNil(reportResponse.JSON200.Repositories)
-	require.Len(*reportResponse.JSON200.Repositories, 1)
-	assert.Equal("renamed", (*reportResponse.JSON200.Repositories)[0].Repository.Name)
+	require.Len(reportResponse.JSON200.Repositories, 1)
+	assert.Equal("renamed", reportResponse.JSON200.Repositories[0].Repository.Name)
 }

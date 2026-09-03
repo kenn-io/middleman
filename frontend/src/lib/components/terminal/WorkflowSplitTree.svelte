@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { HarnessIcon, type HarnessIconId } from "@kenn-io/kit-ui";
   import type { Snippet } from "svelte";
   import XIcon from "@lucide/svelte/icons/x";
   import MoveIcon from "@lucide/svelte/icons/move";
@@ -15,6 +16,7 @@
     readWorkflowTabDrag,
     startWorkflowTabDrag,
   } from "./terminal-drag";
+  import { launchTargetHarness } from "./agentHarness";
 
   /**
    * How this tree's session tabs relate to the detail panes they can be promoted
@@ -31,6 +33,7 @@
   export interface WorkflowTabDescriptor extends TabbedPanelDescriptor {
     key: WorkflowTabKey;
     kind: "home" | "terminal" | "agent" | "plain_shell";
+    targetKey?: string | undefined;
     renamable?: boolean | undefined;
     movableToTerminal?: boolean | undefined;
     closable?: boolean | undefined;
@@ -131,6 +134,12 @@
     return (tab as WorkflowTabDescriptor).kind;
   }
 
+  function tabHarness(tab: TabbedPanelDescriptor): HarnessIconId | null {
+    const workflowTab = tab as WorkflowTabDescriptor;
+    if (workflowTab.kind !== "agent" || workflowTab.targetKey === undefined) return null;
+    return launchTargetHarness({ kind: "agent", key: workflowTab.targetKey });
+  }
+
   function isRenamable(tab: TabbedPanelDescriptor): boolean {
     return (tab as WorkflowTabDescriptor).renamable === true;
   }
@@ -190,10 +199,13 @@
   {/snippet}
 
   {#snippet tabIcon(tab)}
+    {@const harness = tabHarness(tab)}
     {#if tabKind(tab) === "home"}
       <HouseIcon size="13" strokeWidth="2" />
     {:else if tabKind(tab) === "plain_shell" || tabKind(tab) === "terminal"}
       <TerminalIcon size="13" strokeWidth="2" />
+    {:else if harness}
+      <HarnessIcon {harness} size={13} decorative />
     {:else}
       <SparklesIcon size="13" strokeWidth="2" />
     {/if}

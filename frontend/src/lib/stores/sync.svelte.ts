@@ -88,13 +88,13 @@ export function createSyncStore(opts: SyncStoreOptions) {
   }
 
   function syncStatusRead() {
-    return executeGeneratedApiRequest("GET /sync/status", (client) => client.GET("/sync/status")).pipe(
+    return executeGeneratedApiRequest("GET /sync/status", (client) => client.SyncService.getSyncStatus()).pipe(
       retryIdempotentRead,
     );
   }
 
   function rateLimitsRead() {
-    return executeGeneratedApiRequest("GET /rate-limits", (client) => client.GET("/rate-limits")).pipe(
+    return executeGeneratedApiRequest("GET /rate-limits", (client) => client.SyncService.getRateLimits()).pipe(
       retryIdempotentRead,
     );
   }
@@ -201,9 +201,10 @@ export function createSyncStore(opts: SyncStoreOptions) {
 
   function triggerSyncEffect() {
     const priorityRepos = parsePriorityRepos(getPriorityRepos());
-    const syncOptions = priorityRepos.length > 0 ? { params: { query: { priority_repo: priorityRepos } } } : {};
     return triggeredSyncProgram(
-      executeGeneratedApiRequest("POST /sync", (client) => client.POST("/sync", syncOptions)),
+      executeGeneratedApiRequest("POST /sync", (client) =>
+        client.SyncService.triggerSync(priorityRepos.length > 0 ? { priority_repo: priorityRepos } : undefined),
+      ),
     );
   }
 
@@ -217,11 +218,7 @@ export function createSyncStore(opts: SyncStoreOptions) {
 
   function triggerRepoSync(repo: string): void {
     runTriggeredSync(
-      executeGeneratedApiRequest("POST /sync", (client) =>
-        client.POST("/sync", {
-          params: { query: { only_repo: [repo] } },
-        }),
-      ),
+      executeGeneratedApiRequest("POST /sync", (client) => client.SyncService.triggerSync({ only_repo: [repo] })),
     );
   }
 

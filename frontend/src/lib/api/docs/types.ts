@@ -1,31 +1,49 @@
-import type { components } from "../generated/schema.js";
+import type {
+  BodySnippet as GeneratedBodySnippet,
+  CreateDocsFolderInputBody,
+  CrossFolderHit,
+  DocsBrowseEntry,
+  DocsBrowseOutputBody,
+  DocsFolderResponse,
+  DocsSearchAllOutputBody,
+  DocsSearchOutputBody,
+  GitChangesResponse as GeneratedGitChangesResponse,
+  GitStatusEntry as GeneratedGitStatusEntry,
+  GitStatusResponse as GeneratedGitStatusResponse,
+  Hit,
+  Node,
+  PublishChange,
+  PublishResponse,
+  PullResponse,
+  SnippetRange as GeneratedSnippetRange,
+} from "../generated/models/index.js";
 
 // Generated OpenAPI schemas remain the wire authority. These aliases are
 // exact when the UI consumes the wire shape directly and narrow only the
 // nullable collections or string enums that the Docs API adapter validates.
 
-export type Folder = components["schemas"]["DocsFolderResponse"];
+export type Folder = DocsFolderResponse;
 
-export type AddFolderInput = Omit<components["schemas"]["CreateDocsFolderInputBody"], "path"> & {
+export type AddFolderInput = Omit<CreateDocsFolderInputBody, "path"> & {
   path: string;
 };
 
-export type BrowseEntry = components["schemas"]["DocsBrowseEntry"];
+export type BrowseEntry = DocsBrowseEntry;
 
-export type BrowseResponse = Omit<components["schemas"]["DocsBrowseOutputBody"], "entries" | "parent"> & {
+export type BrowseResponse = Omit<DocsBrowseOutputBody, "entries" | "parent"> & {
   parent: string;
   entries: BrowseEntry[];
 };
 
-type TreeNodeWire = components["schemas"]["Node"];
+type TreeNodeWire = Node;
 
 export type TreeNode = Omit<TreeNodeWire, "children"> & {
   children?: TreeNode[];
 };
 
-export type SearchHit = components["schemas"]["Hit"];
+export type SearchHit = Hit;
 
-export type SearchResponse = Omit<components["schemas"]["DocsSearchOutputBody"], "hits"> & {
+export type SearchResponse = Omit<DocsSearchOutputBody, "hits"> & {
   hits: SearchHit[];
 };
 
@@ -39,42 +57,42 @@ export interface DocsAPIError extends Error {
 // reaches the component tree.
 export type GitFileStatus = "added" | "deleted" | "ignored" | "modified" | "renamed" | "untracked";
 
-export type GitStatusEntry = Omit<components["schemas"]["GitStatusEntry"], "status"> & {
+export type GitStatusEntry = Omit<GeneratedGitStatusEntry, "status"> & {
   status: GitFileStatus;
 };
 
-export type GitStatusResponse = Omit<components["schemas"]["GitStatusResponse"], "entries"> & {
+export type GitStatusResponse = Omit<GeneratedGitStatusResponse, "entries"> & {
   entries: GitStatusEntry[];
 };
 
-export type SnippetRange = components["schemas"]["SnippetRange"];
+export type SnippetRange = GeneratedSnippetRange;
 
-export type BodySnippet = Omit<components["schemas"]["BodySnippet"], "matches"> & {
+export type BodySnippet = Omit<GeneratedBodySnippet, "matches"> & {
   matches: SnippetRange[];
 };
 
-export type CrossFolderSearchHit = Omit<components["schemas"]["CrossFolderHit"], "hit_type" | "snippet"> & {
+export type CrossFolderSearchHit = Omit<CrossFolderHit, "hit_type" | "snippet"> & {
   hit_type: "filename" | "body";
   snippet?: BodySnippet;
 };
 
-export type CrossFolderSearchResponse = Omit<components["schemas"]["DocsSearchAllOutputBody"], "hits" | "warnings"> & {
+export type CrossFolderSearchResponse = Omit<DocsSearchAllOutputBody, "hits" | "warnings"> & {
   hits: CrossFolderSearchHit[];
   warnings?: string[];
 };
 
 export type GitPublishChangeStatus = "added" | "deleted" | "modified" | "renamed" | "untracked";
 
-export type GitPublishChange = Omit<components["schemas"]["PublishChange"], "status"> & {
+export type GitPublishChange = Omit<PublishChange, "status"> & {
   status: GitPublishChangeStatus;
 };
 
-export type GitChangesResponse = Omit<components["schemas"]["GitChangesResponse"], "changes"> & {
+export type GitChangesResponse = Omit<GeneratedGitChangesResponse, "changes"> & {
   changes: GitPublishChange[];
 };
 
-export type GitPublishResponse = Omit<components["schemas"]["PublishResponse"], "files"> & {
+export type GitPublishResponse = Omit<PublishResponse, "files"> & {
   files: GitPublishChange[];
 };
 
-export type GitPullResponse = components["schemas"]["PullResponse"];
+export type GitPullResponse = PullResponse;

@@ -82,7 +82,7 @@ func (missingTokenRuntimePtyOwner) Attach(context.Context, string) (ptyownerrunt
 }
 
 func (missingTokenRuntimePtyOwner) Start(
-	context.Context, string, string, []string, []string,
+	context.Context, string, string, []string, []string, map[string]string,
 ) (ptyownerruntime.PTY, error) {
 	return nil, fmt.Errorf("resolve runtime token: %w", tokenauth.ErrMissingToken)
 }

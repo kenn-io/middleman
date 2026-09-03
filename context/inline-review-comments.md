@@ -20,6 +20,7 @@ published review-thread ingestion, or review controls in shared diff UI.
 - Bind drafts to the full provider reference, pull request number, and diff head
   SHA. Reject publish when the saved diff head is stale
   (`internal/server/pullapi/diff_review_handlers.go::Handler.publishDiffReviewDraft`).
+- Known-stale published line threads stay visible after the rendered file and never attach by numeric coincidence; current or head-unknown representable threads stay inline, while true file-level comments remain at the file header (`frontend/src/lib/components/diff/review-thread-context.ts::reviewThreadSnapshotState`, `frontend/src/lib/components/diff/DiffFile.svelte`, `frontend/src/lib/components/diff/DiffRichPreview.svelte`).
 - Review ranges stay within one file and one diff side and are contiguous in
   rendered order. Full pull-request head diffs are reviewable; single-commit and
   arbitrary range diffs remain disabled until their coordinate mapping is

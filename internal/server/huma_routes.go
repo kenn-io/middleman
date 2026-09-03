@@ -106,6 +106,10 @@ type commentAutocompleteInput struct {
 	Trigger      string `query:"trigger"`
 	Q            string `query:"q"`
 	Limit        int    `query:"limit"`
+	// ItemType and ItemNumber identify the item the comment is written on so
+	// users already participating in it rank first among @ suggestions.
+	ItemType   string `query:"item_type" enum:"pr,issue" doc:"Optional item the comment targets; requires item_number."`
+	ItemNumber int64  `query:"item_number" doc:"Optional item number the comment targets; requires item_type."`
 }
 
 type commentAutocompleteOutput = httpapi.BodyOutput[commentAutocompleteResponse]
@@ -673,6 +677,21 @@ func (s *Server) getCommentAutocomplete(
 		limit = 25
 	}
 
+	var currentItem *db.CommentAutocompleteItem
+	switch {
+	case input.ItemType != "" && input.ItemNumber > 0:
+		kind := "issue"
+		if input.ItemType == "pr" {
+			kind = "pull"
+		}
+		currentItem = &db.CommentAutocompleteItem{Kind: kind, Number: input.ItemNumber}
+	case input.ItemType != "" || input.ItemNumber != 0:
+		return nil, httpapi.Validation(
+			"query.item_number",
+			"item_type and item_number must be provided together",
+		)
+	}
+
 	switch input.Trigger {
 	case "@":
 		users, err := s.db.ListCommentAutocompleteUsers(
@@ -682,6 +701,7 @@ func (s *Server) getCommentAutocomplete(
 			input.Owner,
 			input.Name,
 			input.Q,
+			currentItem,
 			limit,
 		)
 		if err != nil {

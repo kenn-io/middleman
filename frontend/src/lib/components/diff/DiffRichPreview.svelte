@@ -12,9 +12,11 @@
   } from "../../utils/markdown-rich-preview.js";
   import DiffReviewThreadInlineComment from "./DiffReviewThreadInlineComment.svelte";
   import {
+    reviewThreadSnapshotState,
     reviewThreadTargetLine,
     reviewThreadTargetSide,
     type ReviewThread,
+    type ReviewThreadCardPlacement,
   } from "./review-thread-context.js";
 
   interface Props {
@@ -54,7 +56,7 @@
 
   type ReviewThreadPlacement = {
     thread: ReviewThread;
-    fileLevel: boolean;
+    placement: ReviewThreadCardPlacement;
   };
   type DiffHunk = DiffFile["hunks"][number];
   type DiffHunkLine = DiffHunk["lines"][number];
@@ -87,7 +89,15 @@
   const displayText = $derived(formatText(file.path, text));
   const fallbackReviewThreads = $derived<ReviewThreadPlacement[]>(
     markdownPreview?.fallbackReviewThreads ??
-      reviewThreads.map((thread) => ({ thread, fileLevel: threadLineIsFileLevelCard(thread) })),
+      (isMarkdownFile
+        ? []
+        : reviewThreads.map((thread) => ({ thread, placement: reviewThreadFallbackPlacement(thread) }))),
+  );
+  const fileHeaderReviewThreads = $derived(
+    fallbackReviewThreads.filter(({ placement }) => placement === "file"),
+  );
+  const detachedReviewThreads = $derived(
+    fallbackReviewThreads.filter(({ placement }) => placement === "outdated" || placement === "unavailable"),
   );
 
   $effect(() => {
@@ -183,17 +193,21 @@
     }));
     const fallbackReviewThreads: ReviewThreadPlacement[] = [];
     for (const thread of threads) {
-      const fileLevel = threadLineIsFileLevelCard(thread);
-      if (fileLevel) {
-        fallbackReviewThreads.push({ thread, fileLevel });
+      const snapshotState = reviewThreadSnapshotState(thread, diffHeadSHA);
+      if (thread.line_type === "file") {
+        fallbackReviewThreads.push({ thread, placement: "file" });
+        continue;
+      }
+      if (snapshotState === "stale") {
+        fallbackReviewThreads.push({ thread, placement: "outdated" });
         continue;
       }
       const block = blocks.find((candidate) => blockContainsReviewThread(candidate, thread));
       if (!block) {
-        fallbackReviewThreads.push({ thread, fileLevel: true });
+        fallbackReviewThreads.push({ thread, placement: "unavailable" });
         continue;
       }
-      const placement = { thread, fileLevel };
+      const placement = { thread, placement: "inline" as const };
       block.reviewThreads.push(placement);
       if (reviewThreadTargetSide(thread) === "left") {
         block.leftReviewThreads.push(placement);
@@ -217,7 +231,7 @@
     const splitOldLines: number[] = [];
     const splitNewLines: number[] = [];
     for (const thread of threads) {
-      if (threadLineIsFileLevelCard(thread)) continue;
+      if (thread.line_type === "file" || reviewThreadSnapshotState(thread, diffHeadSHA) === "stale") continue;
       const side = reviewThreadTargetSide(thread);
       const targetLine = reviewThreadTargetLine(thread);
       const match = findReviewThreadDiffLine(source, side, targetLine);
@@ -500,7 +514,7 @@
   }
 
   function blockContainsReviewThread(block: MarkdownRichPreviewBlock, thread: ReviewThread): boolean {
-    if (threadLineIsFileLevelCard(thread)) return false;
+    if (thread.line_type === "file" || reviewThreadSnapshotState(thread, diffHeadSHA) === "stale") return false;
     const line = reviewThreadTargetLine(thread);
     if (reviewThreadTargetSide(thread) === "left") {
       return lineInMappedBlock(line, block.oldLines, block.oldStart, block.oldEnd);
@@ -526,27 +540,24 @@
     return start != null && end != null && line >= start && line <= end;
   }
 
-  function threadLineIsFileLevelCard(thread: ReviewThread): boolean {
-    return thread.line_type === "file" || !threadMatchesCurrentDiff(thread);
-  }
-
-  function threadMatchesCurrentDiff(thread: ReviewThread): boolean {
-    return !thread.diff_head_sha || !diffHeadSHA || thread.diff_head_sha === diffHeadSHA;
+  function reviewThreadFallbackPlacement(thread: ReviewThread): ReviewThreadCardPlacement {
+    if (thread.line_type === "file") return "file";
+    return reviewThreadSnapshotState(thread, diffHeadSHA) === "stale" ? "outdated" : "unavailable";
   }
 </script>
 
 <div class="preview-shell">
   {#if isMarkdownFile}
+    {#each fileHeaderReviewThreads as placement (placement.thread.id)}
+      <DiffReviewThreadInlineComment
+        {runtime}
+        thread={placement.thread}
+        placement={placement.placement}
+        canReply={canReplyToThreads}
+        {onreply}
+      />
+    {/each}
     {#if markdownPreview}
-      {#each fallbackReviewThreads as placement (placement.thread.id)}
-        <DiffReviewThreadInlineComment
-          {runtime}
-          thread={placement.thread}
-          fileLevel={placement.fileLevel}
-          canReply={canReplyToThreads}
-          {onreply}
-        />
-      {/each}
       {#if viewMode === "split"}
         <div class="diff-rich-preview markdown-rich-diff markdown-rich-diff--split">
           <div class="markdown-rich-diff__split-header" aria-hidden="true">
@@ -572,7 +583,7 @@
                     <DiffReviewThreadInlineComment
                       {runtime}
                       thread={placement.thread}
-                      fileLevel={placement.fileLevel}
+                      placement={placement.placement}
                       canReply={canReplyToThreads}
                       {onreply}
                     />
@@ -590,7 +601,7 @@
                     <DiffReviewThreadInlineComment
                       {runtime}
                       thread={placement.thread}
-                      fileLevel={placement.fileLevel}
+                      placement={placement.placement}
                       canReply={canReplyToThreads}
                       {onreply}
                     />
@@ -610,7 +621,7 @@
               <DiffReviewThreadInlineComment
                 {runtime}
                 thread={placement.thread}
-                fileLevel={placement.fileLevel}
+                placement={placement.placement}
                 canReply={canReplyToThreads}
                 {onreply}
               />
@@ -618,15 +629,33 @@
           {/each}
         </div>
       {/if}
+      {#each detachedReviewThreads as placement (placement.thread.id)}
+        <DiffReviewThreadInlineComment
+          {runtime}
+          thread={placement.thread}
+          placement={placement.placement}
+          canReply={canReplyToThreads}
+          {onreply}
+        />
+      {/each}
     {:else}
       <div class="preview-state">Loading preview</div>
+      {#each detachedReviewThreads as placement (placement.thread.id)}
+        <DiffReviewThreadInlineComment
+          {runtime}
+          thread={placement.thread}
+          placement={placement.placement}
+          canReply={canReplyToThreads}
+          {onreply}
+        />
+      {/each}
     {/if}
   {:else}
-    {#each fallbackReviewThreads as placement (placement.thread.id)}
+    {#each fileHeaderReviewThreads as placement (placement.thread.id)}
       <DiffReviewThreadInlineComment
         {runtime}
         thread={placement.thread}
-        fileLevel={placement.fileLevel}
+        placement={placement.placement}
         canReply={canReplyToThreads}
         {onreply}
       />
@@ -659,6 +688,15 @@
     {:else}
       <div class="preview-state">Loading preview</div>
     {/if}
+    {#each detachedReviewThreads as placement (placement.thread.id)}
+      <DiffReviewThreadInlineComment
+        {runtime}
+        thread={placement.thread}
+        placement={placement.placement}
+        canReply={canReplyToThreads}
+        {onreply}
+      />
+    {/each}
   {/if}
 </div>
 

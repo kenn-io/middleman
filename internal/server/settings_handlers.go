@@ -1559,14 +1559,14 @@ func (s *Server) updateConfiguredRepoWorktreeBasePath(
 		allowInsecureHTTP := s.clones != nil && s.clones.AllowsInsecureHTTP(
 			provider, targetRef.PlatformHostOrDefault(),
 		)
-		abs, err := workspace.ValidateWorktreeBasePath(
+		base, err := workspace.ValidateWorktreeBasePath(
 			ctx, worktreeBasePath, targetRef.PlatformHostOrDefault(),
 			targetRef.Owner, targetRef.Name, allowInsecureHTTP,
 		)
 		if err != nil {
 			return nil, httpapi.Validation("body.worktree_base_path", err.Error())
 		}
-		worktreeBasePath = abs
+		worktreeBasePath = base.Path
 	}
 
 	s.configReloadMu.Lock()

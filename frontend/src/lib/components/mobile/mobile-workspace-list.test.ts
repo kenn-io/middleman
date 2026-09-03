@@ -51,6 +51,34 @@ describe("mobile workspace list model", () => {
     expect(sortMobileWorkspaces(items, "activity").map((item) => item.id)).toEqual(["active", "new"]);
   });
 
+  it("groups hook states by attention priority", () => {
+    const hookStates: WorkspaceListItem[] = [
+      { ...items[0]!, id: "idle", agent_state: "idle" },
+      { ...items[0]!, id: "done", agent_state: "done" },
+      { ...items[0]!, id: "working", agent_state: "working" },
+      {
+        ...items[0]!,
+        id: "done-newer-hook",
+        agent_state: "done",
+        created_at: "2026-08-01T12:00:00Z",
+        agent_state_updated_at: "2026-08-13T12:00:00Z",
+      },
+      { ...items[0]!, id: "input", agent_state: "input" },
+      { ...items[0]!, id: "approval", agent_state: "approval" },
+      { ...items[0]!, id: "unreported", agent_state: null },
+    ];
+
+    expect(sortMobileWorkspaces(hookStates, "agent-status").map((item) => item.id)).toEqual([
+      "approval",
+      "input",
+      "working",
+      "done-newer-hook",
+      "done",
+      "idle",
+      "unreported",
+    ]);
+  });
+
   it("groups by stable repository identity", () => {
     const groups = groupMobileWorkspaces(items, true);
     expect(groups).toHaveLength(1);

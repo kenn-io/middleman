@@ -1272,6 +1272,44 @@ func TestManagerLaunchPassesStripEnvVarsToPtyOwner(t *testing.T) {
 	assert.Equal([]string{"WORKSPACE_TOKEN"}, backend.startedStripEnvVars)
 }
 
+func TestManagerPtyOwnerShellCharacterLocale(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS shell locale default")
+	}
+	requirePTYAvailable(t)
+	for _, tt := range []struct {
+		name   string
+		kind   LaunchTargetKind
+		locale string
+		want   string
+	}{
+		{name: "shell default", kind: LaunchTargetPlainShell, want: "UTF-8"},
+		{name: "explicit shell locale", kind: LaunchTargetPlainShell, locale: "C", want: "C"},
+		{name: "agent unchanged", kind: LaunchTargetAgent, want: ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("LANG", "")
+			t.Setenv("LC_ALL", "")
+			t.Setenv("LC_CTYPE", tt.locale)
+			cwd := t.TempDir()
+			mgr := NewManager(withTestPtyOwnerRuntime(t, Options{
+				Targets: []LaunchTarget{{
+					Key: "test-shell", Kind: tt.kind, Available: true,
+					Command: []string{"/bin/sh", "-c", `printf '%s' "$LC_CTYPE" > locale; read line`},
+				}},
+			}))
+			t.Cleanup(mgr.Shutdown)
+			info, err := mgr.Launch(t.Context(), "ws-locale", cwd, "test-shell")
+			require.NoError(t, err)
+			assert.Empty(t, info.TmuxSession)
+			require.Eventually(t, func() bool {
+				data, err := os.ReadFile(filepath.Join(cwd, "locale"))
+				return err == nil && string(data) == tt.want
+			}, 2*time.Second, 10*time.Millisecond)
+		})
+	}
+}
+
 func TestManagerUpdateStripEnvVarsPreservesPreviousNamesForFutureLaunches(t *testing.T) {
 	require := require.New(t)
 	assert := assert.New(t)
@@ -2614,6 +2652,7 @@ func (f *fakeRuntimePtyOwner) Start(
 	cwd string,
 	command []string,
 	stripEnvVars []string,
+	_ map[string]string,
 ) (ptyownerruntime.PTY, error) {
 	f.starts++
 	f.startedSession = session

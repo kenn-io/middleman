@@ -1,6 +1,7 @@
 package github
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -49,6 +50,141 @@ func TestNormalizeReviewCommentEventPreservesHTMLURL(t *testing.T) {
 	event := NormalizeReviewCommentEvent(platform.RepoRef{Owner: "acme", Name: "widget"}, 7, comment)
 
 	assert.Equal(t, commentURL, event.DirectURL)
+}
+
+func TestNormalizeCommitEventUsesCommitterForRebasedCommit(t *testing.T) {
+	const payload = `{
+  "sha": "abcdef1234567890",
+  "author": {"login": "original-author"},
+  "committer": {"login": "rebase-committer"},
+  "commit": {
+    "message": "feat: rewrite commit",
+    "author": {"name": "original-author", "date": "2026-09-03T02:21:43Z"},
+    "committer": {"name": "rebase-committer", "date": "2026-09-03T04:52:04Z"}
+  }
+}`
+	var commit gh.RepositoryCommit
+	require.NoError(t, json.Unmarshal([]byte(payload), &commit))
+
+	event := NormalizeCommitEvent(platform.RepoRef{Owner: "acme", Name: "widget"}, 7, &commit)
+	assert := assert.New(t)
+	assert.Equal("rebase-committer", event.Author)
+	assert.Equal(time.Date(2026, 9, 3, 4, 52, 4, 0, time.UTC), event.CreatedAt)
+	assert.JSONEq(`{"commit_author":"original-author"}`, event.MetadataJSON)
+	assert.Equal("feat: rewrite commit", event.Body)
+	assert.Equal("abcdef1234567890", event.Summary)
+	assert.Equal("commit-abcdef123456", event.DedupeKey)
+}
+
+func TestNormalizeCommitEventFallbacks(t *testing.T) {
+	authoredAt := time.Date(2026, 9, 3, 2, 21, 43, 0, time.UTC)
+	committedAt := time.Date(2026, 9, 3, 4, 52, 4, 0, time.UTC)
+	user := func(login string) *gh.User { return &gh.User{Login: new(login)} }
+	signature := func(name string, date time.Time) *gh.CommitAuthor {
+		return &gh.CommitAuthor{Name: new(name), Date: &gh.Timestamp{Time: date}}
+	}
+
+	cases := []struct {
+		name            string
+		author          *gh.User
+		committer       *gh.User
+		commitAuthor    *gh.CommitAuthor
+		commitCommitter *gh.CommitAuthor
+		wantAuthor      string
+		wantCreatedAt   time.Time
+		wantMetadata    string
+	}{
+		{
+			name:            "associated committer login is preferred",
+			author:          user("original-author"),
+			committer:       user("rebase-committer"),
+			commitAuthor:    signature("original-name", authoredAt),
+			commitCommitter: signature("rebase-name", committedAt),
+			wantAuthor:      "rebase-committer",
+			wantCreatedAt:   committedAt,
+			wantMetadata:    `{"commit_author":"original-author"}`,
+		},
+		{
+			name:            "web-flow committer is displayed as reported",
+			author:          user("original-author"),
+			committer:       user("web-flow"),
+			commitAuthor:    signature("original-name", authoredAt),
+			commitCommitter: signature("web-flow", committedAt),
+			wantAuthor:      "web-flow",
+			wantCreatedAt:   committedAt,
+			wantMetadata:    `{"commit_author":"original-author"}`,
+		},
+		{
+			name:            "nested committer name is used without associated user",
+			author:          user("original-author"),
+			commitAuthor:    signature("original-name", authoredAt),
+			commitCommitter: signature("rebase-committer", committedAt),
+			wantAuthor:      "rebase-committer",
+			wantCreatedAt:   committedAt,
+			wantMetadata:    `{"commit_author":"original-author"}`,
+		},
+		{
+			name:          "author login is used when committer identity is absent",
+			author:        user("original-author"),
+			commitAuthor:  signature("original-name", authoredAt),
+			wantAuthor:    "original-author",
+			wantCreatedAt: authoredAt,
+		},
+		{
+			name:          "nested author name is used without associated users",
+			commitAuthor:  signature("original-author", authoredAt),
+			wantAuthor:    "original-author",
+			wantCreatedAt: authoredAt,
+		},
+		{
+			name:            "author date is used when committer date is absent",
+			author:          user("original-author"),
+			committer:       user("rebase-committer"),
+			commitAuthor:    signature("original-name", authoredAt),
+			commitCommitter: &gh.CommitAuthor{Name: new("rebase-name")},
+			wantAuthor:      "rebase-committer",
+			wantCreatedAt:   authoredAt,
+			wantMetadata:    `{"commit_author":"original-author"}`,
+		},
+		{
+			name:            "committer date is used without committer identity",
+			author:          user("original-author"),
+			commitAuthor:    signature("original-name", authoredAt),
+			commitCommitter: &gh.CommitAuthor{Date: &gh.Timestamp{Time: committedAt}},
+			wantAuthor:      "original-author",
+			wantCreatedAt:   committedAt,
+		},
+		{
+			name:            "same normalized identity omits redundant metadata",
+			author:          user("same-user"),
+			committer:       user("same-user"),
+			commitAuthor:    signature("original-name", authoredAt),
+			commitCommitter: signature("committer-name", committedAt),
+			wantAuthor:      "same-user",
+			wantCreatedAt:   committedAt,
+		},
+		{
+			name: "all identity and date fields absent remain empty",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			commit := &gh.RepositoryCommit{
+				Author:    tc.author,
+				Committer: tc.committer,
+				Commit: &gh.Commit{
+					Author:    tc.commitAuthor,
+					Committer: tc.commitCommitter,
+				},
+			}
+			event := NormalizeCommitEvent(platform.RepoRef{}, 1, commit)
+			assert := assert.New(t)
+			assert.Equal(tc.wantAuthor, event.Author)
+			assert.Equal(tc.wantCreatedAt, event.CreatedAt)
+			assert.Equal(tc.wantMetadata, event.MetadataJSON)
+		})
+	}
 }
 
 func TestNormalizePullRequestPreservesOptionalMergeMetrics(t *testing.T) {

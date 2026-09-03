@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { GeneratedProblemResponse } from "../../api/runtime.js";
 
 import WorkspaceProjectCard from "./WorkspaceProjectCardRuntimeHarness.svelte";
 
@@ -13,30 +14,18 @@ vi.mock("../../stores/flash.svelte.js", () => ({
   showFlash: mocks.showFlash,
 }));
 
-const projectGet = vi.fn();
-const worktreesGet = vi.fn();
+const { projectGet, worktreesGet } = vi.hoisted(() => ({ projectGet: vi.fn(), worktreesGet: vi.fn() }));
 
-vi.mock("../../api/runtime.ts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../api/runtime.ts")>();
+vi.mock("../../app/runtime.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../app/runtime.ts")>();
+  const { makeGeneratedClient } = await import("../../testing/generated-client.js");
+  const client = makeGeneratedClient({
+    ProjectsService: { getProject: projectGet, listWorktrees: worktreesGet },
+    FleetService: { getFleetProject: projectGet, listFleetProjectWorktrees: worktreesGet },
+  });
   return {
     ...actual,
-    createRuntimeClient: () => ({
-      GET: vi.fn((path: string, options) => {
-        if (path === "/projects/{project_id}") {
-          return projectGet(options);
-        }
-        if (path === "/fleet/hosts/{host_key}/projects/{project_id}") {
-          return projectGet(options);
-        }
-        if (path === "/projects/{project_id}/worktrees") {
-          return worktreesGet(options);
-        }
-        if (path === "/fleet/hosts/{host_key}/projects/{project_id}/worktrees") {
-          return worktreesGet(options);
-        }
-        throw new Error(`unexpected GET path ${path}`);
-      }),
-    }),
+    makeAppRuntime: () => actual.makeAppRuntime(client),
   };
 });
 
@@ -56,19 +45,14 @@ interface ProjectFixture {
 function setProjectResponse(project: ProjectFixture | { error: string }): void {
   projectGet.mockReset();
   if ("error" in project) {
-    projectGet.mockResolvedValue({
-      error: { detail: project.error },
-      response: new Response(null, { status: 404 }),
-    });
+    const problem = { type: "about:blank", title: "Project not found", status: 404, detail: project.error } as const;
+    projectGet.mockRejectedValue(new GeneratedProblemResponse(problem, new Response(null, { status: 404 })));
     return;
   }
   projectGet.mockResolvedValue({
-    data: {
-      created_at: "2026-08-04T00:00:00Z",
-      updated_at: "2026-08-04T00:00:00Z",
-      ...project,
-    },
-    response: new Response(),
+    created_at: "2026-08-04T00:00:00Z",
+    updated_at: "2026-08-04T00:00:00Z",
+    ...project,
   });
 }
 
@@ -81,10 +65,7 @@ function setWorktreesResponse(
   }>,
 ): void {
   worktreesGet.mockReset();
-  worktreesGet.mockResolvedValue({
-    data: { worktrees },
-    response: new Response(),
-  });
+  worktreesGet.mockResolvedValue({ worktrees });
 }
 
 describe("WorkspaceProjectCard", () => {
@@ -123,7 +104,7 @@ describe("WorkspaceProjectCard", () => {
 
   it("aborts a pending project read when the card unmounts", async () => {
     let requestSignal: AbortSignal | undefined;
-    projectGet.mockImplementation((options: { signal?: AbortSignal }) => {
+    projectGet.mockImplementation((_path: unknown, options: { signal?: AbortSignal }) => {
       requestSignal = options.signal;
       return new Promise(() => {});
     });
@@ -223,14 +204,14 @@ describe("WorkspaceProjectCard", () => {
     });
 
     expect(await screen.findByText("myrepo")).toBeTruthy();
-    expect(projectGet).toHaveBeenCalledWith({
-      params: { path: { host_key: "epyc", project_id: "prj_1" } },
-      signal: expect.any(AbortSignal),
-    });
-    expect(worktreesGet).toHaveBeenCalledWith({
-      params: { path: { host_key: "epyc", project_id: "prj_1" } },
-      signal: expect.any(AbortSignal),
-    });
+    expect(projectGet).toHaveBeenCalledWith(
+      { hostKey: "epyc", projectId: "prj_1" },
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(worktreesGet).toHaveBeenCalledWith(
+      { hostKey: "epyc", projectId: "prj_1" },
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   it("renders an error and a retry button when the project fetch fails", async () => {
@@ -394,12 +375,9 @@ describe("WorkspaceProjectCard", () => {
     };
     win.__kenn_forge_notify_config_changed?.();
 
-    const refreshResolvers: Array<
-      (response: { data: ProjectFixture & { created_at: string; updated_at: string }; response: Response }) => void
-    > = [];
+    const refreshResolvers: Array<(response: ProjectFixture & { created_at: string; updated_at: string }) => void> = [];
     let firstProjectLoads = 0;
-    projectGet.mockImplementation((options: { params: { path: { project_id: string } } }) => {
-      const projectId = options.params.path.project_id;
+    projectGet.mockImplementation(({ projectId }: { projectId: string }) => {
       const project = {
         id: projectId,
         display_name: projectId === "prj_1" ? "Retained Project" : "Navigation Target",
@@ -415,7 +393,7 @@ describe("WorkspaceProjectCard", () => {
           });
         }
       }
-      return Promise.resolve({ data: project, response: new Response() });
+      return Promise.resolve(project);
     });
     setWorktreesResponse([]);
 
@@ -433,14 +411,11 @@ describe("WorkspaceProjectCard", () => {
     completeAction({ ok: true });
     await waitFor(() => expect(refreshResolvers).toHaveLength(2));
     refreshResolvers[0]?.({
-      data: {
-        id: "prj_1",
-        display_name: "Retained Project",
-        local_path: "/tmp/prj_1",
-        created_at: "2026-08-04T00:00:00Z",
-        updated_at: "2026-08-04T00:00:00Z",
-      },
-      response: new Response(),
+      id: "prj_1",
+      display_name: "Retained Project",
+      local_path: "/tmp/prj_1",
+      created_at: "2026-08-04T00:00:00Z",
+      updated_at: "2026-08-04T00:00:00Z",
     });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -449,14 +424,11 @@ describe("WorkspaceProjectCard", () => {
 
     for (const resolve of refreshResolvers.slice(1)) {
       resolve({
-        data: {
-          id: "prj_1",
-          display_name: "Retained Project",
-          local_path: "/tmp/prj_1",
-          created_at: "2026-08-04T00:00:00Z",
-          updated_at: "2026-08-04T00:00:00Z",
-        },
-        response: new Response(),
+        id: "prj_1",
+        display_name: "Retained Project",
+        local_path: "/tmp/prj_1",
+        created_at: "2026-08-04T00:00:00Z",
+        updated_at: "2026-08-04T00:00:00Z",
       });
     }
   });

@@ -12,7 +12,7 @@
     type TypeaheadOption,
   } from "@kenn-io/kit-ui";
   import GitBranchIcon from "@lucide/svelte/icons/git-branch";
-  import { canonicalProvider, providerRepoPath, providerRouteParams } from "../../api/provider-routes.js";
+  import { canonicalProvider, providerHostRouteParams, providerRouteParams, providerUsesHostRoute } from "../../api/provider-routes.js";
   import type { Repo } from "../../api/types.js";
   import {
     ApiProblemError,
@@ -264,7 +264,7 @@
     }
     loadWorkspaceHosts(session);
     const execution = runtime.runCommand(
-      executeGeneratedApiRequest("load repositories", (client, signal) => client.GET("/repos", { signal })).pipe(
+      executeGeneratedApiRequest("load repositories", (client, signal) => client.RepositoriesService.listRepos({ signal })).pipe(
         Effect.flatMap((loaded) =>
           Effect.sync(() => {
             if (activeSession !== session) return;
@@ -325,7 +325,7 @@
     loadWorkspaceHosts(session);
     reposLoading = true;
     const execution = runtime.runCommand(
-      executeGeneratedApiRequest("load repositories", (client, signal) => client.GET("/repos", { signal })).pipe(
+      executeGeneratedApiRequest("load repositories", (client, signal) => client.RepositoriesService.listRepos({ signal })).pipe(
         Effect.tap((loaded) => Effect.sync(() => {
           if (activeSession !== session) return;
           reposLoading = false;
@@ -522,26 +522,27 @@
             name: repo.name,
             repoPath: `${repo.owner}/${repo.name}`,
           };
-          const repoPath = providerRepoPath(ref, "/workspaces");
           const routeParams = providerRouteParams(ref);
+          const body = requested ? { branch: requested } : {};
           if (remoteWorkspaceHostKey) {
-            const fleetPath = repoPath.startsWith("/host/")
-              ? "/fleet/hosts/{host_key}/host/{platform_host}/repo/{provider}/{owner}/{name}/workspaces" as const
-              : "/fleet/hosts/{host_key}/repo/{provider}/{owner}/{name}/workspaces" as const;
             return executeOpaqueGeneratedApiRequest("create fleet workspace", (client, signal) =>
-              client.POST(fleetPath, {
-                params: { path: { host_key: remoteWorkspaceHostKey, ...routeParams } },
-                body: requested ? { branch: requested } : {},
-                signal,
-              }),
+              providerUsesHostRoute(ref)
+                ? client.FleetService.createFleetRepoWorkspaceOnPlatformHost(
+                    { hostKey: remoteWorkspaceHostKey, ...providerHostRouteParams(ref) },
+                    body,
+                    { signal },
+                  )
+                : client.FleetService.createFleetRepoWorkspace(
+                    { hostKey: remoteWorkspaceHostKey, ...routeParams },
+                    body,
+                    { signal },
+                  ),
             ).pipe(Effect.map(normalizeCreatedWorkspace));
           }
           return executeGeneratedApiRequest("create workspace", (client, signal) =>
-            client.POST(repoPath, {
-              params: { path: routeParams },
-              body: requested ? { branch: requested } : {},
-              signal,
-            }),
+            providerUsesHostRoute(ref)
+              ? client.WorkspacesService.createRepoWorkspaceOnHost(providerHostRouteParams(ref), body, { signal })
+              : client.WorkspacesService.createRepoWorkspace(routeParams, body, { signal }),
           ).pipe(Effect.map(normalizeCreatedWorkspace));
         })()
       : Effect.tryPromise({

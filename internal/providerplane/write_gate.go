@@ -31,11 +31,14 @@ type ProviderWriteGate struct {
 	loadErr        error
 }
 
-func NewProviderWriteGate(database *db.DB) *ProviderWriteGate {
+func NewProviderWriteGate(database *db.DB, restoreDurableState bool) *ProviderWriteGate {
 	gate := &ProviderWriteGate{database: database, phase: db.SpokePreparationOpen}
 	if database == nil {
 		gate.phase = db.SpokePreparationQuiescing
 		gate.loadErr = errors.New("provider write gate database is unavailable")
+		return gate
+	}
+	if !restoreDurableState {
 		return gate
 	}
 	state, err := database.GetSpokePreparation(context.Background())

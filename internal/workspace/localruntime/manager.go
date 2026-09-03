@@ -1431,6 +1431,18 @@ func (m *Manager) SubmitInitialMessage(
 	sessionKey string,
 	message string,
 ) error {
+	return m.SubmitAgentMessage(ctx, workspaceID, sessionKey, message)
+}
+
+// SubmitAgentMessage writes one bounded, already-normalized prompt through a
+// live agent runtime. It requires observed bracketed-paste mode and sends the
+// complete paste frame and Enter in one serialized terminal operation.
+func (m *Manager) SubmitAgentMessage(
+	ctx context.Context,
+	workspaceID string,
+	sessionKey string,
+	message string,
+) error {
 	if err := context.Cause(ctx); err != nil {
 		return fmt.Errorf("%w: %w", ErrInitialMessageNotWritten, err)
 	}

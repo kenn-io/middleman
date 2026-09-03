@@ -17,10 +17,11 @@ import { retryIdempotentRead } from "../api/retry-policy.js";
 import {
   canonicalProvider,
   providerDefaultHost,
-  providerItemPath,
   providerRouteParams,
   resolvedPlatformHost,
   type ProviderRouteRef,
+  providerHostRouteParams,
+  providerUsesHostRoute,
 } from "../api/provider-routes.js";
 import { showFlash } from "./flash.svelte.js";
 import { IssuesWorkflow, type IssueDetailSyncMode } from "./issues-workflow.js";
@@ -411,7 +412,7 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       ...params,
     };
     const read = executeGeneratedApiRequest("GET /issues", (client, signal) =>
-      client.GET("/issues", { params: { query }, signal }),
+      client.IssuesService.listIssues(query, { signal }),
     ).pipe(
       retryIdempotentRead,
       Effect.map((result) => result ?? []),
@@ -456,7 +457,7 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
         ...params,
       };
       const read = executeGeneratedApiRequest("GET /issues after provider event", (client, signal) =>
-        client.GET("/issues", { params: { query }, signal }),
+        client.IssuesService.listIssues(query, { signal }),
       ).pipe(
         retryIdempotentRead,
         Effect.map((result) => result ?? []),
@@ -772,10 +773,9 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
 
   function readIssueDetail(ref: IssueDetailRequestRef, operation: string) {
     return executeGeneratedApiRequest(operation, (client, signal) =>
-      client.GET(providerItemPath("issues", ref, ""), {
-        params: { path: { ...providerRouteParams(ref), number: ref.number } },
-        signal,
-      }),
+      providerUsesHostRoute(ref)
+        ? client.IssuesService.getIssueOnHost({ ...providerHostRouteParams(ref), number: ref.number }, { signal })
+        : client.IssuesService.getIssue({ ...providerRouteParams(ref), number: ref.number }, { signal }),
     ).pipe(Effect.map((data): IssueDetail => ({ ...data, events: data.events ?? [] })));
   }
 
@@ -817,10 +817,9 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
   function synchronizeIssueDetailEffect(ref: IssueDetailRequestRef, expectedGeneration: number) {
     const envelopeTick = nextWorkspaceLifecycleTick();
     const sync = executeGeneratedApiRequest("POST issue detail sync", (client, signal) =>
-      client.POST(providerItemPath("issues", ref, "/sync"), {
-        params: { path: { ...providerRouteParams(ref), number: ref.number } },
-        signal,
-      }),
+      providerUsesHostRoute(ref)
+        ? client.IssuesService.syncIssueOnHost({ ...providerHostRouteParams(ref), number: ref.number }, { signal })
+        : client.IssuesService.syncIssue({ ...providerRouteParams(ref), number: ref.number }, { signal }),
     ).pipe(
       Effect.map((data): IssueDetail => ({ ...data, events: data.events ?? [] })),
       Effect.tap(() => Effect.sync(reconcileListsAfterDetailSync)),
@@ -898,10 +897,12 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       }
     });
     const sync = executeGeneratedApiRequest("POST async issue detail sync", (client, signal) =>
-      client.POST(providerItemPath("issues", ref, "/sync/async"), {
-        params: { path: { ...providerRouteParams(ref), number: ref.number } },
-        signal,
-      }),
+      providerUsesHostRoute(ref)
+        ? client.IssuesService.enqueueIssueSyncOnHost(
+            { ...providerHostRouteParams(ref), number: ref.number },
+            { signal },
+          )
+        : client.IssuesService.enqueueIssueSync({ ...providerRouteParams(ref), number: ref.number }, { signal }),
     ).pipe(
       Effect.andThen(refreshUntilFresh),
       Effect.catch(() => Effect.void),
@@ -1034,10 +1035,9 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
           cause: new Error("a foreground issue detail read replaced event reconciliation"),
         });
       const read = executeGeneratedApiRequest("GET issue detail after provider event", (client, signal) =>
-        client.GET(providerItemPath("issues", ref, ""), {
-          params: { path: { ...providerRouteParams(ref), number: ref.number } },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.IssuesService.getIssueOnHost({ ...providerHostRouteParams(ref), number: ref.number }, { signal })
+          : client.IssuesService.getIssue({ ...providerRouteParams(ref), number: ref.number }, { signal }),
       );
       return read.pipe(
         Effect.matchEffect({
@@ -1102,17 +1102,22 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       const previousLabels = issueDetail?.issue.labels ?? [];
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("PUT issue labels", (client, signal) =>
-        client.PUT(providerItemPath("issues", ref, "/labels"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          body: { labels: labels.map((label) => label.name) },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.IssuesService.setIssueLabelsOnHost(
+              { ...providerHostRouteParams(ref), number: number },
+              { labels: labels.map((label) => label.name) },
+              { signal },
+            )
+          : client.IssuesService.setIssueLabels(
+              { ...providerRouteParams(ref), number: number },
+              { labels: labels.map((label) => label.name) },
+              { signal },
+            ),
       ).pipe(Effect.map((response) => response.labels ?? []));
       const refreshOnStale = executeGeneratedApiRequest("sync issue after stale label mutation", (client, signal) =>
-        client.POST(providerItemPath("issues", ref, "/sync"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.IssuesService.syncIssueOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+          : client.IssuesService.syncIssue({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => response.issue.labels ?? []));
       const apply = (nextLabels: Label[]) =>
         Effect.sync(() => {
@@ -1165,17 +1170,22 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       const previousAssignees = issueDetail?.issue.assignees ?? [];
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("PUT issue assignees", (client, signal) =>
-        client.PUT(providerItemPath("issues", ref, "/assignees"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          body: { assignees },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.IssuesService.setIssueAssigneesOnHost(
+              { ...providerHostRouteParams(ref), number: number },
+              { assignees },
+              { signal },
+            )
+          : client.IssuesService.setIssueAssignees(
+              { ...providerRouteParams(ref), number: number },
+              { assignees },
+              { signal },
+            ),
       ).pipe(Effect.map((response) => response.assignees ?? []));
       const refreshOnStale = executeGeneratedApiRequest("sync issue after stale assignee mutation", (client, signal) =>
-        client.POST(providerItemPath("issues", ref, "/sync"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.IssuesService.syncIssueOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+          : client.IssuesService.syncIssue({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => response.issue.assignees ?? []));
       const apply = (nextAssignees: string[]) =>
         Effect.sync(() => {
@@ -1225,11 +1235,17 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       const key = issueMutationKey(ref, "comment-posts");
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("POST issue comment", (client, signal) =>
-        client.POST(providerItemPath("issues", ref, "/comments"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          body: { body },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.IssuesService.postIssueCommentOnHost(
+              { ...providerHostRouteParams(ref), number: number },
+              { body },
+              { signal },
+            )
+          : client.IssuesService.postIssueComment(
+              { ...providerRouteParams(ref), number: number },
+              { body },
+              { signal },
+            ),
       ).pipe(Effect.asVoid);
       yield* mutations.submit({
         key,
@@ -1238,10 +1254,9 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
         apply: () => Effect.void,
         commit,
         refreshOnStale: executeGeneratedApiRequest("sync issue after stale comment submission", (client, signal) =>
-          client.POST(providerItemPath("issues", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.IssuesService.syncIssueOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.IssuesService.syncIssue({ ...providerRouteParams(ref), number: number }, { signal }),
         ).pipe(Effect.asVoid),
       });
       const gen = yield* Effect.sync(() => {
@@ -1312,17 +1327,22 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       const optimistic: IssueCommentMutationState = { ...baseline, event: { ...previousEvent, Body: body } };
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("PATCH issue comment", (client, signal) =>
-        client.PATCH(providerItemPath("issues", ref, "/comments/{comment_id}"), {
-          params: { path: { ...providerRouteParams(ref), number, comment_id: commentID } },
-          body: { body },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.IssuesService.editIssueCommentOnHost(
+              { ...providerHostRouteParams(ref), number: number, commentId: commentID },
+              { body },
+              { signal },
+            )
+          : client.IssuesService.editIssueComment(
+              { ...providerRouteParams(ref), number: number, commentId: commentID },
+              { body },
+              { signal },
+            ),
       ).pipe(Effect.as(optimistic));
       const refreshOnStale = executeGeneratedApiRequest("sync issue after stale comment edit", (client, signal) =>
-        client.POST(providerItemPath("issues", ref, "/sync"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.IssuesService.syncIssueOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+          : client.IssuesService.syncIssue({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => issueCommentState(response.events ?? [], commentID, baseline)));
       const apply = (state: IssueCommentMutationState) => applyIssueCommentState(ref, commentID, state);
       yield* Effect.sync(() => trackIssueCommentMutation(commentID, baseline));
@@ -1399,17 +1419,20 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       const optimistic: IssueCommentMutationState = { ...baseline, present: false };
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("DELETE issue comment", (client, signal) =>
-        client.DELETE(providerItemPath("issues", ref, "/comments/{comment_id}"), {
-          headers: { "Content-Type": "application/json" },
-          params: { path: { ...providerRouteParams(ref), number, comment_id: commentID } },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.IssuesService.deleteIssueCommentOnHost(
+              { ...providerHostRouteParams(ref), number: number, commentId: commentID },
+              { headers: { "Content-Type": "application/json" }, signal },
+            )
+          : client.IssuesService.deleteIssueComment(
+              { ...providerRouteParams(ref), number: number, commentId: commentID },
+              { headers: { "Content-Type": "application/json" }, signal },
+            ),
       ).pipe(Effect.as(optimistic));
       const refreshOnStale = executeGeneratedApiRequest("sync issue after stale comment deletion", (client, signal) =>
-        client.POST(providerItemPath("issues", ref, "/sync"), {
-          params: { path: { ...providerRouteParams(ref), number } },
-          signal,
-        }),
+        providerUsesHostRoute(ref)
+          ? client.IssuesService.syncIssueOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+          : client.IssuesService.syncIssue({ ...providerRouteParams(ref), number: number }, { signal }),
       ).pipe(Effect.map((response) => issueCommentState(response.events ?? [], commentID, baseline)));
       const apply = (state: IssueCommentMutationState) => applyIssueCommentState(ref, commentID, state);
       yield* Effect.sync(() => {
@@ -1519,11 +1542,17 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       const commit = Effect.suspend(() => {
         const envelopeTick = nextWorkspaceLifecycleTick();
         return executeGeneratedApiRequest("PATCH issue body", (client, signal) =>
-          client.PATCH(providerItemPath("issues", ref, ""), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            body: { body },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.IssuesService.editIssueContentOnHost(
+                { ...providerHostRouteParams(ref), number: number },
+                { body },
+                { signal },
+              )
+            : client.IssuesService.editIssueContent(
+                { ...providerRouteParams(ref), number: number },
+                { body },
+                { signal },
+              ),
         ).pipe(
           Effect.map((detail): IssueDetail => ({ ...detail, events: detail.events ?? [] })),
           Effect.tap((detail) =>
@@ -1552,10 +1581,9 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       const refreshOnStale = Effect.suspend(() => {
         const envelopeTick = nextWorkspaceLifecycleTick();
         return executeGeneratedApiRequest("sync issue after stale body mutation", (client, signal) =>
-          client.POST(providerItemPath("issues", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.IssuesService.syncIssueOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.IssuesService.syncIssue({ ...providerRouteParams(ref), number: number }, { signal }),
         ).pipe(
           Effect.map((detail): IssueDetail => ({ ...detail, events: detail.events ?? [] })),
           Effect.tap((detail) =>
@@ -1670,10 +1698,10 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       const commit = (
         currentlyStarred
           ? executeGeneratedApiRequest<void>("DELETE issue star", (client, signal) =>
-              client.DELETE("/starred", { params: { query: starredItem }, signal }),
+              client.SettingsService.unsetStarred(starredItem, { signal }),
             )
           : executeGeneratedApiRequest<void>("PUT issue star", (client, signal) =>
-              client.PUT("/starred", { body: starredItem, signal }),
+              client.SettingsService.setStarred(starredItem, { signal }),
             )
       ).pipe(Effect.as(nextStarred));
       const refreshOnStale = readIssueDetail(detailRef, "GET issue after stale star mutation").pipe(
@@ -1735,10 +1763,9 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
       const refreshOnStale = Effect.suspend(() => {
         const envelopeTick = nextWorkspaceLifecycleTick();
         return executeGeneratedApiRequest("sync issue after stale state mutation", (client, signal) =>
-          client.POST(providerItemPath("issues", ref, "/sync"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.IssuesService.syncIssueOnHost({ ...providerHostRouteParams(ref), number: number }, { signal })
+            : client.IssuesService.syncIssue({ ...providerRouteParams(ref), number: number }, { signal }),
         ).pipe(
           Effect.map((detail): IssueDetail => ({ ...detail, events: detail.events ?? [] })),
           Effect.tap((detail) =>
@@ -1762,11 +1789,17 @@ export function createIssuesStore(opts: IssuesStoreOptions) {
         optimistic: state,
         apply: (nextState) => applyIssueState(ref, nextState),
         commit: executeGeneratedApiRequest("POST issue state", (client, signal) =>
-          client.POST(providerItemPath("issues", ref, "/github-state"), {
-            params: { path: { ...providerRouteParams(ref), number } },
-            body: { state },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? client.IssuesService.setIssueGithubStateOnHost(
+                { ...providerHostRouteParams(ref), number: number },
+                { state },
+                { signal },
+              )
+            : client.IssuesService.setIssueGithubState(
+                { ...providerRouteParams(ref), number: number },
+                { state },
+                { signal },
+              ),
         ).pipe(Effect.as(state)),
         refreshOnStale,
       });

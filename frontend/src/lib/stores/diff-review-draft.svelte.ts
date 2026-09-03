@@ -2,12 +2,17 @@ import { Effect } from "effect";
 import type { AppExecution, AppRuntime } from "../app/runtime.js";
 import { ApiProblemError, TransientTransportError } from "../api/effect-errors.js";
 import { executeGeneratedApiRequest, type GeneratedApi } from "../api/generated-api.js";
-import type { components } from "../api/generated/schema.js";
+import type {
+  DiffReviewDraftComment as GeneratedDiffReviewDraftComment,
+  DiffReviewDraftResponse,
+  DiffReviewLineRange as GeneratedDiffReviewLineRange,
+} from "../api/generated/models/index.js";
 import {
-  providerItemPath,
   providerRouteParams,
   resolvedPlatformHost,
   type ProviderRouteRef,
+  providerHostRouteParams,
+  providerUsesHostRoute,
 } from "../api/provider-routes.js";
 import { showFlash } from "./flash.svelte.js";
 import {
@@ -20,9 +25,9 @@ import {
 } from "./ordered-mutations.js";
 import { providerItemKey } from "./provider-key.js";
 
-export type DiffReviewDraft = components["schemas"]["DiffReviewDraftResponse"];
-export type DiffReviewDraftComment = components["schemas"]["DiffReviewDraftComment"];
-export type DiffReviewLineRange = components["schemas"]["DiffReviewLineRange"];
+export type DiffReviewDraft = DiffReviewDraftResponse;
+export type DiffReviewDraftComment = GeneratedDiffReviewDraftComment;
+export type DiffReviewLineRange = GeneratedDiffReviewLineRange;
 
 export interface DiffReviewDraftCommentEditState {
   active: boolean;
@@ -269,10 +274,15 @@ export function createDiffReviewDraftStore(opts: DiffReviewDraftStoreOptions) {
     selectedNumber: number,
   ): Effect.Effect<DiffReviewDraft, ApiProblemError | TransientTransportError, GeneratedApi> {
     return executeGeneratedApiRequest("GET pull request review draft", (client, signal) =>
-      client.GET(providerItemPath("pulls", selectedRef, "/review-draft"), {
-        params: { path: { ...providerRouteParams(selectedRef), number: selectedNumber } },
-        signal,
-      }),
+      providerUsesHostRoute(selectedRef)
+        ? client.PullRequestsService.getPrReviewDraftOnHost(
+            { ...providerHostRouteParams(selectedRef), number: selectedNumber },
+            { signal },
+          )
+        : client.PullRequestsService.getPrReviewDraft(
+            { ...providerRouteParams(selectedRef), number: selectedNumber },
+            { signal },
+          ),
     ).pipe(Effect.map(normalizeDraft));
   }
 
@@ -409,11 +419,17 @@ export function createDiffReviewDraftStore(opts: DiffReviewDraftStoreOptions) {
       operation: "create pull request review draft comment",
       fallback: "failed to create review draft comment",
       commit: executeGeneratedApiRequest("POST pull request review draft comment", (client, signal) =>
-        client.POST(providerItemPath("pulls", selectedRef, "/review-draft/comments"), {
-          params: { path: { ...providerRouteParams(selectedRef), number: selectedNumber } },
-          body: { body, range },
-          signal,
-        }),
+        providerUsesHostRoute(selectedRef)
+          ? client.PullRequestsService.createPrReviewDraftCommentOnHost(
+              { ...providerHostRouteParams(selectedRef), number: selectedNumber },
+              { body, range },
+              { signal },
+            )
+          : client.PullRequestsService.createPrReviewDraftComment(
+              { ...providerRouteParams(selectedRef), number: selectedNumber },
+              { body, range },
+              { signal },
+            ),
       ).pipe(Effect.asVoid),
       reconciliation: "refresh",
       callbacks,
@@ -433,16 +449,15 @@ export function createDiffReviewDraftStore(opts: DiffReviewDraftStoreOptions) {
       operation: "delete pull request review draft comment",
       fallback: "failed to delete review draft comment",
       commit: executeGeneratedApiRequest("DELETE pull request review draft comment", (client, signal) =>
-        client.DELETE(providerItemPath("pulls", selectedRef, "/review-draft/comments/{draft_comment_id}"), {
-          params: {
-            path: {
-              ...providerRouteParams(selectedRef),
-              number: selectedNumber,
-              draft_comment_id: commentID,
-            },
-          },
-          signal,
-        }),
+        providerUsesHostRoute(selectedRef)
+          ? client.PullRequestsService.deletePrReviewDraftCommentOnHost(
+              { ...providerHostRouteParams(selectedRef), number: selectedNumber, draftCommentId: commentID },
+              { signal },
+            )
+          : client.PullRequestsService.deletePrReviewDraftComment(
+              { ...providerRouteParams(selectedRef), number: selectedNumber, draftCommentId: commentID },
+              { signal },
+            ),
       ).pipe(Effect.asVoid),
       reconciliation: "refresh",
       callbacks,
@@ -462,17 +477,17 @@ export function createDiffReviewDraftStore(opts: DiffReviewDraftStoreOptions) {
       operation: "edit pull request review draft comment",
       fallback: "failed to edit review draft comment",
       commit: executeGeneratedApiRequest("PATCH pull request review draft comment", (client, signal) =>
-        client.PATCH(providerItemPath("pulls", selectedRef, "/review-draft/comments/{draft_comment_id}"), {
-          params: {
-            path: {
-              ...providerRouteParams(selectedRef),
-              number: selectedNumber,
-              draft_comment_id: comment.id,
-            },
-          },
-          body: { body, range: draftCommentRange(comment) },
-          signal,
-        }),
+        providerUsesHostRoute(selectedRef)
+          ? client.PullRequestsService.editPrReviewDraftCommentOnHost(
+              { ...providerHostRouteParams(selectedRef), number: selectedNumber, draftCommentId: comment.id },
+              { body, range: draftCommentRange(comment) },
+              { signal },
+            )
+          : client.PullRequestsService.editPrReviewDraftComment(
+              { ...providerRouteParams(selectedRef), number: selectedNumber, draftCommentId: comment.id },
+              { body, range: draftCommentRange(comment) },
+              { signal },
+            ),
       ).pipe(Effect.asVoid),
       reconciliation: "refresh",
       callbacks,
@@ -498,11 +513,17 @@ export function createDiffReviewDraftStore(opts: DiffReviewDraftStoreOptions) {
     const program = Effect.gen(function* () {
       const mutations = yield* ProviderMutations;
       const commit = executeGeneratedApiRequest("POST publish pull request review draft", (client, signal) =>
-        client.POST(providerItemPath("pulls", publishedRef, "/review-draft/publish"), {
-          params: { path: { ...providerRouteParams(publishedRef), number: publishedNumber } },
-          body: { action, body },
-          signal,
-        }),
+        providerUsesHostRoute(publishedRef)
+          ? client.PullRequestsService.publishPrReviewDraftOnHost(
+              { ...providerHostRouteParams(publishedRef), number: publishedNumber },
+              { action, body },
+              { signal },
+            )
+          : client.PullRequestsService.publishPrReviewDraft(
+              { ...providerRouteParams(publishedRef), number: publishedNumber },
+              { action, body },
+              { signal },
+            ),
       ).pipe(
         Effect.tap((response) =>
           Effect.sync(() => {
@@ -599,10 +620,15 @@ export function createDiffReviewDraftStore(opts: DiffReviewDraftStoreOptions) {
       operation: "discard pull request review draft",
       fallback: "failed to discard review draft",
       commit: executeGeneratedApiRequest("DELETE pull request review draft", (client, signal) =>
-        client.DELETE(providerItemPath("pulls", selectedRef, "/review-draft"), {
-          params: { path: { ...providerRouteParams(selectedRef), number: selectedNumber } },
-          signal,
-        }),
+        providerUsesHostRoute(selectedRef)
+          ? client.PullRequestsService.discardPrReviewDraftOnHost(
+              { ...providerHostRouteParams(selectedRef), number: selectedNumber },
+              { signal },
+            )
+          : client.PullRequestsService.discardPrReviewDraft(
+              { ...providerRouteParams(selectedRef), number: selectedNumber },
+              { signal },
+            ),
       ).pipe(Effect.asVoid),
       reconciliation: "clear",
       callbacks,
@@ -616,7 +642,6 @@ export function createDiffReviewDraftStore(opts: DiffReviewDraftStoreOptions) {
     }
     const selectedRef = ref;
     const selectedNumber = number;
-    const path = resolved ? "/review-threads/{thread_id}/resolve" : "/review-threads/{thread_id}/unresolve";
     launchDraftMutation({
       selectedRef,
       selectedNumber,
@@ -624,17 +649,19 @@ export function createDiffReviewDraftStore(opts: DiffReviewDraftStoreOptions) {
       fallback: resolved ? "failed to resolve review thread" : "failed to unresolve review thread",
       commit: executeGeneratedApiRequest(
         resolved ? "POST resolve pull request review thread" : "POST unresolve pull request review thread",
-        (client, signal) =>
-          client.POST(providerItemPath("pulls", selectedRef, path), {
-            params: {
-              path: {
-                ...providerRouteParams(selectedRef),
-                number: selectedNumber,
-                thread_id: threadID,
-              },
-            },
-            signal,
-          }),
+        (client, signal) => {
+          const route = { number: selectedNumber, threadId: threadID };
+          if (providerUsesHostRoute(selectedRef)) {
+            const params = { ...providerHostRouteParams(selectedRef), ...route };
+            return resolved
+              ? client.PullRequestsService.resolvePrReviewThreadOnHost(params, { signal })
+              : client.PullRequestsService.unresolvePrReviewThreadOnHost(params, { signal });
+          }
+          const params = { ...providerRouteParams(selectedRef), ...route };
+          return resolved
+            ? client.PullRequestsService.resolvePrReviewThread(params, { signal })
+            : client.PullRequestsService.unresolvePrReviewThread(params, { signal });
+        },
       ).pipe(Effect.asVoid),
       reconciliation: "none",
       callbacks,

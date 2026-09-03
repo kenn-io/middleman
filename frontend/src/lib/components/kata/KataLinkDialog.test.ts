@@ -2,22 +2,24 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/sv
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { GeneratedClient } from "../../api/generated-api.js";
+import { makeGeneratedClient } from "../../testing/generated-client.js";
 import type { KataLinksSubject } from "../../stores/kata-links.svelte.js";
 import KataLinkDialog from "./KataLinkDialog.svelte";
 
 const subject: KataLinksSubject = { kind: "workspace", workspaceID: "workspace-1" };
 
-function clientWith(get: ReturnType<typeof vi.fn>, post = vi.fn()): GeneratedClient {
-  return {
-    GET: get,
-    POST: post,
-    PUT: vi.fn(),
-    PATCH: vi.fn(),
-    DELETE: vi.fn(),
-    OPTIONS: vi.fn(),
-    HEAD: vi.fn(),
-    TRACE: vi.fn(),
-  } as unknown as GeneratedClient;
+function clientWith(
+  listDaemons: ReturnType<typeof vi.fn>,
+  listReferences = vi.fn(),
+  createLink = vi.fn(),
+): GeneratedClient {
+  return makeGeneratedClient({
+    KataService: {
+      listKataDaemons: listDaemons,
+      listKataReferences: listReferences,
+      createWorkspaceKataLink: createLink,
+    },
+  });
 }
 
 function renderDialog(client: GeneratedClient, onlinked = vi.fn(), onclose = vi.fn()) {
@@ -39,26 +41,24 @@ describe("KataLinkDialog", () => {
 
   it("uses the configured default initially and disables unhealthy daemons", async () => {
     const get = vi.fn().mockResolvedValue({
-      data: {
-        daemons: [
-          {
-            id: "healthy",
-            url: "http://healthy",
-            health: "connected",
-            auth: "none",
-            default: true,
-            api_schema_version: "0.13.0",
-          },
-          {
-            id: "down",
-            url: "http://down",
-            health: "unreachable",
-            auth: "none",
-            default: false,
-            api_schema_version: "0.13.0",
-          },
-        ],
-      },
+      daemons: [
+        {
+          id: "healthy",
+          url: "http://healthy",
+          health: "connected",
+          auth: "none",
+          default: true,
+          api_schema_version: "0.13.0",
+        },
+        {
+          id: "down",
+          url: "http://down",
+          health: "unreachable",
+          auth: "none",
+          default: false,
+          api_schema_version: "0.13.0",
+        },
+      ],
     });
     renderDialog(clientWith(get));
 
@@ -71,44 +71,40 @@ describe("KataLinkDialog", () => {
   });
 
   it("debounces reference search and submits the selected canonical identity", async () => {
-    const get = vi.fn().mockImplementation((path: string) => {
-      if (path === "/kata/daemons") {
-        return Promise.resolve({
-          data: {
-            daemons: [
-              {
-                id: "healthy",
-                url: "http://healthy",
-                health: "connected",
-                auth: "none",
-                default: true,
-                api_schema_version: "0.10.0",
-              },
-            ],
+    const get = vi.fn();
+    const listDaemons = vi.fn(() => {
+      get("listKataDaemons");
+      return Promise.resolve({
+        daemons: [
+          {
+            id: "healthy",
+            url: "http://healthy",
+            health: "connected",
+            auth: "none",
+            default: true,
+            api_schema_version: "0.10.0",
           },
-        });
-      }
-      if (path === "/kata/daemons/{daemon_id}/references") {
-        return Promise.resolve({
-          data: {
-            issues: [
-              {
-                uid: "issue-1",
-                project_uid: "project-1",
-                project_name: "Kata",
-                qualified_id: "KATA-1",
-                short_id: "KT-1",
-                status: "open",
-                title: "Keep one UI",
-              },
-            ],
-          },
-        });
-      }
-      throw new Error(`unexpected GET ${path}`);
+        ],
+      });
     });
-    const post = vi.fn().mockResolvedValue({ data: { state: "complete", diagnostics: [], links: [] } });
-    const rendered = renderDialog(clientWith(get, post));
+    const listReferences = vi.fn(() => {
+      get("listKataReferences");
+      return Promise.resolve({
+        issues: [
+          {
+            uid: "issue-1",
+            project_uid: "project-1",
+            project_name: "Kata",
+            qualified_id: "KATA-1",
+            short_id: "KT-1",
+            status: "open",
+            title: "Keep one UI",
+          },
+        ],
+      });
+    });
+    const post = vi.fn().mockResolvedValue({ state: "complete", diagnostics: [], links: [] });
+    const rendered = renderDialog(clientWith(listDaemons, listReferences, post));
     await screen.findByRole("combobox", { name: /Kata daemon: healthy/ });
     vi.useFakeTimers();
 
@@ -124,10 +120,10 @@ describe("KataLinkDialog", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Link issue" }));
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
-    expect(post).toHaveBeenCalledWith("/workspaces/{id}/kata-links", {
-      params: { path: { id: "workspace-1" } },
-      body: { daemon_id: "healthy", issue_uid: "issue-1", project_uid: "project-1" },
-    });
+    expect(post).toHaveBeenCalledWith(
+      { id: "workspace-1" },
+      { daemon_id: "healthy", issue_uid: "issue-1", project_uid: "project-1" },
+    );
     expect(rendered.onlinked).toHaveBeenCalledTimes(1);
     expect(rendered.onclose).toHaveBeenCalledTimes(1);
   });

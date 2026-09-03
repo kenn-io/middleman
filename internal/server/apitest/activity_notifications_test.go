@@ -166,7 +166,7 @@ func TestActivityNotificationsFullStack(t *testing.T) {
 	require.NotNil(notifResp.JSON200.Items)
 
 	notifByKey := map[string]generated.ActivityItemResponse{}
-	for _, it := range *notifResp.JSON200.Items {
+	for _, it := range notifResp.JSON200.Items {
 		// A notifications-only filter must not reintroduce new_pr/new_issue
 		// "Opened" anchor rows.
 		assert.Equal("notification", it.ActivityType,
@@ -204,9 +204,9 @@ func TestActivityNotificationsFullStack(t *testing.T) {
 	require.Equal(200, collapsedResp.StatusCode())
 	require.NotNil(collapsedResp.JSON200)
 	require.NotNil(collapsedResp.JSON200.Items)
-	require.Len(*collapsedResp.JSON200.Items, 1)
-	assert.Equal("notification", (*collapsedResp.JSON200.Items)[0].ActivityType)
-	assert.Equal("pr:4", activityItemKey((*collapsedResp.JSON200.Items)[0]))
+	require.Len(collapsedResp.JSON200.Items, 1)
+	assert.Equal("notification", collapsedResp.JSON200.Items[0].ActivityType)
+	assert.Equal("pr:4", activityItemKey(collapsedResp.JSON200.Items[0]))
 
 	// --- hide closed/merged notifications ---
 	hideClosedMerged := true
@@ -218,8 +218,8 @@ func TestActivityNotificationsFullStack(t *testing.T) {
 	require.Equal(200, visibleResp.StatusCode())
 	require.NotNil(visibleResp.JSON200)
 	require.NotNil(visibleResp.JSON200.Items)
-	visibleKeys := make([]string, 0, len(*visibleResp.JSON200.Items))
-	for _, it := range *visibleResp.JSON200.Items {
+	visibleKeys := make([]string, 0, len(visibleResp.JSON200.Items))
+	for _, it := range visibleResp.JSON200.Items {
 		visibleKeys = append(visibleKeys, activityItemKey(it))
 	}
 	assert.ElementsMatch([]string{"pr:1", "pr:4"}, visibleKeys)
@@ -233,7 +233,7 @@ func TestActivityNotificationsFullStack(t *testing.T) {
 	require.NotNil(allResp.JSON200.Items)
 
 	var notifRows, newPRRows int
-	for _, it := range *allResp.JSON200.Items {
+	for _, it := range allResp.JSON200.Items {
 		switch it.ActivityType {
 		case "notification":
 			notifRows++

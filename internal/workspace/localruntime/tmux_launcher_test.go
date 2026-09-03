@@ -422,6 +422,73 @@ func TestTmuxLauncherShellPolicyPreservesCustomEnvByKey(t *testing.T) {
 	assert.NotContains(paneCommand, "custom-visible-value")
 }
 
+func TestTmuxLauncherShellPolicyDefaultsMacOSCharacterLocale(t *testing.T) {
+	tests := []struct {
+		name    string
+		goos    string
+		env     []string
+		want    string
+		wantSet bool
+	}{
+		{
+			name:    "macOS without a locale",
+			goos:    "darwin",
+			env:     []string{"PATH=/usr/bin"},
+			want:    "LC_CTYPE=UTF-8",
+			wantSet: true,
+		},
+		{
+			name: "macOS with empty locale variables",
+			goos: "darwin",
+			env: []string{
+				"PATH=/usr/bin", "LANG=", "LC_ALL=", "LC_CTYPE=",
+			},
+			want:    "LC_CTYPE=UTF-8",
+			wantSet: true,
+		},
+		{
+			name:    "macOS with LANG",
+			goos:    "darwin",
+			env:     []string{"PATH=/usr/bin", "LANG=en_US.UTF-8"},
+			want:    "LC_CTYPE=UTF-8",
+			wantSet: false,
+		},
+		{
+			name:    "macOS with LC_ALL",
+			goos:    "darwin",
+			env:     []string{"PATH=/usr/bin", "LC_ALL=C"},
+			want:    "LC_CTYPE=UTF-8",
+			wantSet: false,
+		},
+		{
+			name:    "macOS with LC_CTYPE",
+			goos:    "darwin",
+			env:     []string{"PATH=/usr/bin", "LC_CTYPE=C"},
+			want:    "LC_CTYPE=UTF-8",
+			wantSet: false,
+		},
+		{
+			name:    "Linux without a locale",
+			goos:    "linux",
+			env:     []string{"PATH=/usr/bin"},
+			want:    "LC_CTYPE=UTF-8",
+			wantSet: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := tmuxShellEnvPolicy.environmentForOS(tt.env, nil, tt.goos)
+
+			if tt.wantSet {
+				assert.Contains(t, env, tt.want)
+				return
+			}
+			assert.NotContains(t, env, tt.want)
+		})
+	}
+}
+
 func TestTmuxLauncherRejectsUnownedExistingSession(t *testing.T) {
 	require := require.New(t)
 	assert := assert.New(t)

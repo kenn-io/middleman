@@ -13,10 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/db"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 )
 
 func TestW1SliceAGate(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -191,7 +192,7 @@ func TestW1SliceAGate(t *testing.T) {
 }
 
 func TestRegisterProject_RejectsMissingPath(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := require.New(t)
 	assert := assert.New(t)
 
@@ -209,7 +210,7 @@ func TestRegisterProject_RejectsMissingPath(t *testing.T) {
 }
 
 func TestRegisterProject_PreservesExplicitProviderIdentity(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -261,7 +262,7 @@ func TestRegisterProject_PreservesExplicitProviderIdentity(t *testing.T) {
 }
 
 func TestRegisterProject_UsesConfiguredProviderForRemoteIdentity(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -282,8 +283,8 @@ host = "code.example.com"
 	defer ts.Close()
 
 	repoDir := t.TempDir()
-	runGit(t, repoDir, "init", "-q")
-	runGit(t, repoDir, "remote", "add", "origin", "git@code.example.com:group/subgroup/project.git")
+	gitfixture.Run(t, repoDir, "init", "-q")
+	gitfixture.Run(t, repoDir, "remote", "add", "origin", "git@code.example.com:group/subgroup/project.git")
 
 	body := mustMarshal(t, map[string]any{"local_path": repoDir})
 	resp := httpDo(t, ts, http.MethodPost, "/api/v1/projects", body)
@@ -301,7 +302,7 @@ host = "code.example.com"
 }
 
 func TestRegisterProject_UsesDefaultPlatformHostForRemoteIdentity(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -319,8 +320,8 @@ port = 8091
 	defer ts.Close()
 
 	repoDir := t.TempDir()
-	runGit(t, repoDir, "init", "-q")
-	runGit(t, repoDir, "remote", "add", "origin", "git@ghe.example.com:acme/widget.git")
+	gitfixture.Run(t, repoDir, "init", "-q")
+	gitfixture.Run(t, repoDir, "remote", "add", "origin", "git@ghe.example.com:acme/widget.git")
 
 	body := mustMarshal(t, map[string]any{"local_path": repoDir})
 	resp := httpDo(t, ts, http.MethodPost, "/api/v1/projects", body)
@@ -338,7 +339,7 @@ port = 8091
 }
 
 func TestRegisterProject_RejectsNonexistentPath(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := require.New(t)
 
 	srv, _ := setupProjectServer(t)
@@ -354,7 +355,7 @@ func TestRegisterProject_RejectsNonexistentPath(t *testing.T) {
 }
 
 func TestRegisterProject_DuplicatePathReturns409(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -378,7 +379,7 @@ func TestRegisterProject_DuplicatePathReturns409(t *testing.T) {
 }
 
 func TestRegisterProject_AcceptsCallerProvidedIdentity(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -452,7 +453,7 @@ func TestRegisterProject_AcceptsCallerProvidedIdentity(t *testing.T) {
 // to the sync set just by registering a project.
 
 func TestGetProject_NotFoundReturns404(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := require.New(t)
 
 	srv, _ := setupProjectServer(t)
@@ -469,7 +470,7 @@ func TestGetProject_NotFoundReturns404(t *testing.T) {
 // conflict: the row keeps its id and refreshes its branch. This lets explicit
 // registration converge with a row the background discovery pass created.
 func TestRegisterWorktree_SamePathSameProjectConverges(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -503,7 +504,7 @@ func TestRegisterWorktree_SamePathSameProjectConverges(t *testing.T) {
 // PUT .../session-backend persists the override, the worktree list reflects it,
 // and a worktree id under the valid project that does not exist is a 404.
 func TestSetWorktreeSessionBackendRoute(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -588,7 +589,7 @@ func TestSetWorktreeSessionBackendRoute(t *testing.T) {
 }
 
 func TestDeleteWorktreeRoute(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -644,7 +645,7 @@ func TestDeleteWorktreeRoute(t *testing.T) {
 // cross-project path collision a conflict; convergence only applies within the
 // owning project.
 func TestRegisterWorktree_SamePathDifferentProjectReturns409(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -708,7 +709,7 @@ func registerWorktreeForTest(
 }
 
 func TestListLaunchTargets_NotFoundReturns404(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	require := require.New(t)
 
 	srv, _ := setupProjectServer(t)
@@ -722,7 +723,7 @@ func TestListLaunchTargets_NotFoundReturns404(t *testing.T) {
 	resp.Body.Close()
 }
 func TestDeleteProjectRouteRemovesProject(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}

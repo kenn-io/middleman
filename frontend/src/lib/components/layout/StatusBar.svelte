@@ -22,7 +22,7 @@
 
   $effect(() => {
     const loadVersion = executeGeneratedApiRequest("GET /version", (client, signal) =>
-      client.GET("/version", { signal })
+      client.SystemService.getVersion({ signal })
     ).pipe(
       Effect.tap((version) => Effect.sync(() => {
         appVersion = version.version;

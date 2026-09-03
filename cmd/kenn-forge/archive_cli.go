@@ -366,8 +366,8 @@ func archiveReportFromAPI(input generated.ArchiveReportResponse) (report.Model, 
 		End:    input.End.UTC(),
 	}
 	if input.Repositories != nil {
-		model.Repositories = make([]report.Repository, len(*input.Repositories))
-		for i, item := range *input.Repositories {
+		model.Repositories = make([]report.Repository, len(input.Repositories))
+		for i, item := range input.Repositories {
 			model.Repositories[i] = report.Repository{
 				Repository: archiveReportRepositoryRefFromAPI(item.Repository),
 				Coverage:   archiveReportCoverageFromAPI(item.Coverage),
@@ -379,8 +379,8 @@ func archiveReportFromAPI(input generated.ArchiveReportResponse) (report.Model, 
 	}
 	model.Totals = archiveReportCountsFromAPI(input.Totals)
 	if input.Contributors != nil {
-		model.Contributors = make([]report.Contributor, len(*input.Contributors))
-		for i, item := range *input.Contributors {
+		model.Contributors = make([]report.Contributor, len(input.Contributors))
+		for i, item := range input.Contributors {
 			model.Contributors[i] = report.Contributor{
 				Provider: item.Provider, PlatformHost: item.PlatformHost,
 				Login: item.Login, Counts: archiveReportCountsFromAPI(item.Counts),
@@ -455,7 +455,7 @@ func archiveReportCountsFromAPI(input generated.ArchiveReportCountsResponse) rep
 func archiveReportCoverageFromAPI(input generated.ArchiveReportCoverageResponse) report.Coverage {
 	phases := []string{}
 	if input.ActivePhases != nil {
-		phases = append(phases, (*input.ActivePhases)...)
+		phases = append(phases, input.ActivePhases...)
 	}
 	return report.Coverage{
 		Status: string(input.Status), ActivePhases: phases,

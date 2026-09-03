@@ -582,8 +582,14 @@ test.describe("detail load-error banner", () => {
       if (route.request().method() === "GET") {
         await route.fulfill({
           status: 500,
-          contentType: "application/json",
-          body: JSON.stringify({ detail: "upstream offline" }),
+          contentType: "application/problem+json",
+          body: JSON.stringify({
+            type: "about:blank",
+            title: "Internal Server Error",
+            status: 500,
+            detail: "upstream offline",
+            code: "internalError",
+          }),
         });
         return;
       }
@@ -626,8 +632,14 @@ test.describe("detail load-error banner", () => {
       if (route.request().method() === "GET") {
         await route.fulfill({
           status: 500,
-          contentType: "application/json",
-          body: JSON.stringify({ detail: "upstream offline" }),
+          contentType: "application/problem+json",
+          body: JSON.stringify({
+            type: "about:blank",
+            title: "Internal Server Error",
+            status: 500,
+            detail: "upstream offline",
+            code: "internalError",
+          }),
         });
         return;
       }

@@ -3,8 +3,8 @@ import { Cause, Effect } from "effect";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { mountApplication } from "./lib/app/mount.js";
 import type { AppExecution, OwnedAppRuntime } from "./lib/app/runtime.js";
-import { createRuntimeClient } from "./lib/api/runtime.js";
 import { makeTestAppRuntime } from "./lib/testing/effect-layers.js";
+import { makeGeneratedClient } from "./lib/testing/generated-client.js";
 // Compile the root component during collection so Vite transform work is not
 // charged against the first lazy-feature test's behavioral timeout.
 import "./App.svelte";
@@ -213,7 +213,7 @@ function testAppRuntime(onDispose: () => void): OwnedAppRuntime {
   };
 }
 
-const appRuntime = makeTestAppRuntime(createRuntimeClient(() => Promise.resolve(Response.json({}))));
+const appRuntime = makeTestAppRuntime(makeGeneratedClient());
 
 describe("App feature routes", () => {
   beforeEach(async () => {

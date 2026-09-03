@@ -4061,10 +4061,20 @@ func (d *DB) ListIssueEvents(ctx context.Context, issueID int64) ([]IssueEvent, 
 	return events, rows.Err()
 }
 
+// CommentAutocompleteItem identifies the item a comment is being written on.
+// Its author, assignees, requested reviewers, and event authors rank ahead of
+// other repository users in mention suggestions.
+type CommentAutocompleteItem struct {
+	Kind   string // "pull" or "issue"
+	Number int64
+}
+
 // ListCommentAutocompleteUsers returns repo-scoped username suggestions for comment mentions.
+// When item is non-nil, users already participating in that item sort first.
 func (d *DB) ListCommentAutocompleteUsers(
 	ctx context.Context,
 	platform, platformHost, owner, name, query string,
+	item *CommentAutocompleteItem,
 	limit int,
 ) ([]string, error) {
 	platform = canonicalRepoPlatform(platform)
@@ -4075,6 +4085,12 @@ func (d *DB) ListCommentAutocompleteUsers(
 	query = strings.TrimSpace(query)
 	containsQuery := "%" + strings.ToLower(query) + "%"
 	prefixQuery := strings.ToLower(query) + "%"
+	itemKind := ""
+	var itemNumber int64
+	if item != nil {
+		itemKind = item.Kind
+		itemNumber = item.Number
+	}
 
 	rows, err := d.roQueryContext(ctx, `
 		WITH repo AS (
@@ -4082,7 +4098,39 @@ func (d *DB) ListCommentAutocompleteUsers(
 			FROM forge_repos
 			WHERE platform = ? AND platform_host = ? AND owner_key = ? AND name_key = ?
 			  AND lifecycle_state = 'active'
+		), current_mr AS (
+			SELECT mr.id, mr.author, mr.assignees_json, mr.reviewers_json, mr.last_activity_at
+			FROM forge_merge_requests mr
+			WHERE ? = 'pull' AND mr.repo_id = (SELECT id FROM repo) AND mr.number = ?
+		), current_issue AS (
+			SELECT i.id, i.author, i.assignees_json, i.last_activity_at
+			FROM forge_issues i
+			WHERE ? = 'issue' AND i.repo_id = (SELECT id FROM repo) AND i.number = ?
+		), participants AS (
+			SELECT author AS login, last_activity_at AS last_seen FROM current_mr
+			UNION
+			SELECT json_each.value, current_mr.last_activity_at FROM current_mr, json_each(
+				CASE WHEN json_valid(current_mr.assignees_json) THEN current_mr.assignees_json ELSE '[]' END
+			)
+			UNION
+			SELECT json_each.value, current_mr.last_activity_at FROM current_mr, json_each(
+				CASE WHEN json_valid(current_mr.reviewers_json) THEN current_mr.reviewers_json ELSE '[]' END
+			)
+			UNION
+			SELECT e.author, e.created_at FROM forge_mr_events e
+			WHERE e.merge_request_id = (SELECT id FROM current_mr)
+			UNION
+			SELECT author AS login, last_activity_at AS last_seen FROM current_issue
+			UNION
+			SELECT json_each.value, current_issue.last_activity_at FROM current_issue, json_each(
+				CASE WHEN json_valid(current_issue.assignees_json) THEN current_issue.assignees_json ELSE '[]' END
+			)
+			UNION
+			SELECT e.author, e.created_at FROM forge_issue_events e
+			WHERE e.issue_id = (SELECT id FROM current_issue)
 		), candidates AS (
+			SELECT login, last_seen FROM participants
+			UNION ALL
 			SELECT mr.author AS login, mr.last_activity_at AS last_seen
 			FROM forge_merge_requests mr
 			WHERE mr.repo_id = (SELECT id FROM repo)
@@ -4129,7 +4177,8 @@ func (d *DB) ListCommentAutocompleteUsers(
 				  AND a.lifecycle_state = 'removed_upstream'
 			  )
 		), ranked AS (
-			SELECT login, MAX(last_seen) AS last_seen
+			SELECT login, MAX(last_seen) AS last_seen,
+			  EXISTS (SELECT 1 FROM participants p WHERE p.login = candidates.login) AS participant
 			FROM candidates
 			WHERE login <> ''
 			  AND (? = '' OR LOWER(login) LIKE ?)
@@ -4138,11 +4187,14 @@ func (d *DB) ListCommentAutocompleteUsers(
 		SELECT login
 		FROM ranked
 		ORDER BY
+			participant DESC,
 			CASE WHEN ? <> '' AND LOWER(login) LIKE ? THEN 0 ELSE 1 END,
 			last_seen DESC,
 			login ASC
 		LIMIT ?`,
 		platform, platformHost, owner, name,
+		itemKind, itemNumber,
+		itemKind, itemNumber,
 		query, containsQuery,
 		query, prefixQuery,
 		limit,

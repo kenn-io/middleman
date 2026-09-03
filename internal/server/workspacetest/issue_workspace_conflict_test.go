@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/apiclient/generated"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 )
 
 // TestIssueWorkspaceConflictExposesTyped409ThroughGeneratedClient is a
@@ -38,8 +39,8 @@ func TestIssueWorkspaceConflictExposesTyped409ThroughGeneratedClient(t *testing.
 
 	// Pre-create the requested branch so the next workspace request hits
 	// the typed conflict path regardless of the default branch style.
-	mainSHA := testGitSHA(t, fixture.remote, "refs/heads/main")
-	runGit(
+	mainSHA := gitfixture.SHA(t, fixture.remote, "refs/heads/main")
+	gitfixture.Run(
 		t,
 		fixture.bare,
 		"update-ref", "refs/heads/"+branch, mainSHA,
@@ -88,8 +89,8 @@ func TestIssueWorkspaceReuseExistingBranchDoesNotReportCreated(t *testing.T) {
 	seedIssue(t, fixture.database, "acme", "widget", 7, "open")
 
 	branch := "kenn-forge/issue-7"
-	mainSHA := testGitSHA(t, fixture.remote, "refs/heads/main")
-	runGit(
+	mainSHA := gitfixture.SHA(t, fixture.remote, "refs/heads/main")
+	gitfixture.Run(
 		t,
 		fixture.bare,
 		"update-ref", "refs/heads/"+branch, mainSHA,

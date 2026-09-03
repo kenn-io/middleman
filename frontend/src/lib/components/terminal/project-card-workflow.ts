@@ -1,12 +1,12 @@
 import { Effect, Schema } from "effect";
-import type { components } from "../../api/generated/schema.js";
+import type { ProjectResponse, WorktreeResponse } from "../../api/generated/models/index.js";
 
 import { InvalidExternalPayload, type ApiProblemError, type TransientTransportError } from "../../api/effect-errors.js";
 import { executeGeneratedApiRequest, executeOpaqueGeneratedApiRequest } from "../../api/generated-api.js";
 import { decodeProjectResponse } from "../../api/project-intake.js";
 
-export type WorkspaceProject = components["schemas"]["ProjectResponse"];
-export type WorkspaceProjectWorktree = components["schemas"]["WorktreeResponse"];
+export type WorkspaceProject = ProjectResponse;
+export type WorkspaceProjectWorktree = WorktreeResponse;
 
 export interface ProjectCardSnapshot {
   readonly project: WorkspaceProject;
@@ -51,7 +51,7 @@ const decodeWorktreeList = Effect.fn("ProjectCard.decodeWorktreeList")(function*
   );
   const worktrees: readonly WorkspaceProjectWorktree[] = (decoded.worktrees ?? []).map((worktree) => ({
     ...worktree,
-    linked_issue_numbers: worktree.linked_issue_numbers === null ? null : [...worktree.linked_issue_numbers],
+    linked_issue_numbers: [...(worktree.linked_issue_numbers ?? [])],
   }));
   return worktrees;
 });
@@ -62,30 +62,18 @@ export const loadProjectCardSnapshot = Effect.fn("ProjectCard.loadSnapshot")(fun
 ) {
   const project = hostKey
     ? yield* executeOpaqueGeneratedApiRequest("load fleet project", (client, signal) =>
-        client.GET("/fleet/hosts/{host_key}/projects/{project_id}", {
-          params: { path: { host_key: hostKey, project_id: projectId } },
-          signal,
-        }),
+        client.FleetService.getFleetProject({ hostKey: hostKey, projectId: projectId }, { signal }),
       ).pipe(Effect.flatMap(decodeProjectResponse))
     : yield* executeGeneratedApiRequest("load project", (client, signal) =>
-        client.GET("/projects/{project_id}", {
-          params: { path: { project_id: projectId } },
-          signal,
-        }),
+        client.ProjectsService.getProject({ projectId: projectId }, { signal }),
       );
 
   const worktrees = hostKey
     ? yield* executeOpaqueGeneratedApiRequest("load fleet project worktrees", (client, signal) =>
-        client.GET("/fleet/hosts/{host_key}/projects/{project_id}/worktrees", {
-          params: { path: { host_key: hostKey, project_id: projectId } },
-          signal,
-        }),
+        client.FleetService.listFleetProjectWorktrees({ hostKey: hostKey, projectId: projectId }, { signal }),
       ).pipe(Effect.flatMap(decodeWorktreeList))
     : yield* executeGeneratedApiRequest("load project worktrees", (client, signal) =>
-        client.GET("/projects/{project_id}/worktrees", {
-          params: { path: { project_id: projectId } },
-          signal,
-        }),
+        client.ProjectsService.listWorktrees({ projectId: projectId }, { signal }),
       ).pipe(Effect.map((data) => data.worktrees ?? []));
 
   return { project, worktrees } satisfies ProjectCardSnapshot;

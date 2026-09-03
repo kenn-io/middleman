@@ -6,9 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/coder/websocket"
 	shellquote "github.com/kballard/go-shellquote"
@@ -65,27 +63,4 @@ func dialWebSocketForTest(
 	}
 	require.NoError(t, err)
 	return conn
-}
-
-func readWebSocketBinaryUntil(
-	t *testing.T,
-	ctx context.Context,
-	conn *websocket.Conn,
-	timeout time.Duration,
-	needle string,
-) string {
-	t.Helper()
-	readCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	var got strings.Builder
-	for {
-		typ, data, err := conn.Read(readCtx)
-		require.NoError(t, err)
-		if typ == websocket.MessageBinary {
-			got.WriteString(string(data))
-		}
-		if strings.Contains(got.String(), needle) {
-			return got.String()
-		}
-	}
 }

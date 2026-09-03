@@ -1,11 +1,16 @@
 import { Effect } from "effect";
-import { canonicalProvider, providerRepoPath, providerRouteParams } from "../api/provider-routes.js";
-import { client } from "../api/runtime.js";
+import { GeneratedApi } from "../api/generated-api.js";
+import {
+  canonicalProvider,
+  providerRouteParams,
+  providerHostRouteParams,
+  providerUsesHostRoute,
+} from "../api/provider-routes.js";
+import { GeneratedProblemResponse } from "../api/runtime.js";
 import type { AppExecution, AppRuntime } from "../app/runtime.js";
 import { navigate, buildItemRoute } from "../stores/router.svelte.js";
 import { showFlash } from "../stores/flash.svelte.js";
-
-type ItemRefType = "pr" | "issue";
+import type { ResolvableItemReference } from "./item-reference.js";
 
 function safeExternalURL(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -31,65 +36,88 @@ function findItemRef(target: EventTarget | null): HTMLAnchorElement | null {
   return null;
 }
 
-function resolveAndNavigate(
-  provider: string,
-  platformHost: string | undefined,
-  owner: string,
-  name: string,
-  repoPath: string,
-  number: number,
-  itemType: ItemRefType | undefined,
-  externalUrl: string | undefined,
-): Effect.Effect<void, unknown> {
-  return Effect.tryPromise({
-    try: (signal) => {
-      const ref = { provider, platformHost, owner, name, repoPath };
-      const itemTypeHint = canonicalProvider(provider) === "gitlab" ? itemType : undefined;
-      return client.POST(providerRepoPath(ref, "/resolve/{number}"), {
-        signal,
-        params: {
-          path: { ...providerRouteParams(ref), number },
-          ...(itemTypeHint && { query: { item_type: itemTypeHint } }),
-        },
+function resolveAndNavigate(ref: ResolvableItemReference): Effect.Effect<void, unknown, GeneratedApi> {
+  const { provider, platformHost, owner, name, repoPath, number, itemType, externalUrl } = ref;
+  return Effect.gen(function* () {
+    const api = yield* GeneratedApi;
+    const result = yield* Effect.tryPromise({
+      try: (signal) => {
+        const routeRef = { provider, platformHost, owner, name, repoPath };
+        const itemTypeHint = canonicalProvider(provider) === "gitlab" ? itemType : undefined;
+        const query = itemTypeHint === undefined ? undefined : { item_type: itemTypeHint };
+        const request = providerUsesHostRoute(routeRef)
+          ? api.client.RepositoriesService.resolveRepoItemOnHost(
+              { ...providerHostRouteParams(routeRef), number },
+              query,
+              {
+                signal,
+              },
+            )
+          : api.client.RepositoriesService.resolveRepoItem({ ...providerRouteParams(routeRef), number }, query, {
+              signal,
+            });
+        return request.then(
+          (data) => ({ data }) as const,
+          (cause: unknown) => {
+            if (cause instanceof GeneratedProblemResponse) return { problem: cause.problem } as const;
+            throw cause;
+          },
+        );
+      },
+      catch: (cause) => cause,
+    });
+    yield* Effect.sync(() => {
+      if ("problem" in result) {
+        if (result.problem.status === 404) {
+          showFlash(`Item ${owner}/${name}#${number} not found.`, { tone: "danger" });
+        } else {
+          showFlash(`Failed to resolve ${owner}/${name}#${number}. Try again later.`, { tone: "danger" });
+        }
+        return;
+      }
+
+      if (!result.data.repo_tracked) {
+        const safeExternalUrl = safeExternalURL(externalUrl);
+        if (safeExternalUrl) {
+          window.open(safeExternalUrl, "_blank", "noopener,noreferrer");
+          return;
+        }
+        showFlash(`${owner}/${name} is not tracked. Add it in Settings to navigate here.`, { tone: "danger" });
+        return;
+      }
+
+      const path = buildItemRoute({
+        itemType: result.data.item_type === "pr" ? "pr" : "issue",
+        provider,
+        platformHost,
+        owner,
+        name,
+        repoPath,
+        number,
       });
+      navigate(path);
+    });
+  });
+}
+
+// Resolves an item reference through the repo resolve endpoint and either
+// navigates to the internal item route (tracked repo) or opens the provider
+// URL externally (untracked repo). Shared by rendered item-ref anchors and
+// the terminal link handler.
+export function resolveItemReference(runtime: AppRuntime, ref: ResolvableItemReference): AppExecution<void, unknown> {
+  return runtime.runCommand(resolveAndNavigate(ref), {
+    operation: "resolve item reference",
+    safeContext: {
+      provider: ref.provider,
+      platformHost: ref.platformHost ?? "",
+      owner: ref.owner,
+      name: ref.name,
+      number: ref.number.toString(),
     },
-    catch: (cause) => cause,
-  }).pipe(
-    Effect.andThen(({ data, error, response }) =>
-      Effect.sync(() => {
-        const ref = { provider, platformHost, owner, name, repoPath };
-        if (error) {
-          if (response.status === 404) {
-            showFlash(`Item ${owner}/${name}#${number} not found.`, { tone: "danger" });
-          } else {
-            showFlash(`Failed to resolve ${owner}/${name}#${number}. Try again later.`, { tone: "danger" });
-          }
-          return;
-        }
-
-        if (!data.repo_tracked) {
-          const safeExternalUrl = safeExternalURL(externalUrl);
-          if (safeExternalUrl) {
-            window.open(safeExternalUrl, "_blank", "noopener,noreferrer");
-            return;
-          }
-          showFlash(`${owner}/${name} is not tracked. Add it in Settings to navigate here.`, { tone: "danger" });
-          return;
-        }
-
-        const path = buildItemRoute({
-          itemType: data.item_type === "pr" ? "pr" : "issue",
-          provider: ref.provider,
-          platformHost: ref.platformHost,
-          owner,
-          name,
-          repoPath,
-          number,
-        });
-        navigate(path);
-      }),
-    ),
-  );
+    onFailure: () => {
+      showFlash("Failed to resolve item reference. Check your connection.", { tone: "danger" });
+    },
+  });
 }
 
 export function initItemRefHandler(runtime: AppRuntime): () => void {
@@ -114,16 +142,16 @@ export function initItemRefHandler(runtime: AppRuntime): () => void {
 
     e.preventDefault();
     execution?.interrupt();
-    execution = runtime.runCommand(
-      resolveAndNavigate(provider, platformHost, owner, name, repoPath, parseInt(numberStr, 10), itemType, externalUrl),
-      {
-        operation: "resolve item reference",
-        safeContext: { provider, platformHost: platformHost ?? "", owner, name, number: numberStr },
-        onFailure: () => {
-          showFlash("Failed to resolve item reference. Check your connection.", { tone: "danger" });
-        },
-      },
-    );
+    execution = resolveItemReference(runtime, {
+      provider,
+      platformHost,
+      owner,
+      name,
+      repoPath,
+      number: parseInt(numberStr, 10),
+      itemType,
+      externalUrl,
+    });
   }
 
   document.addEventListener("click", handleClick);

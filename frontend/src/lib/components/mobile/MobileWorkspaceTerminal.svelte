@@ -1,11 +1,17 @@
 <script lang="ts">
   import { Modal, SelectDropdown, Spinner, type SelectDropdownOption } from "@kenn-io/kit-ui";
+  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
   import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
+  import ArrowRightIcon from "@lucide/svelte/icons/arrow-right";
+  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import ChevronUpIcon from "@lucide/svelte/icons/chevron-up";
+  import CornerDownLeftIcon from "@lucide/svelte/icons/corner-down-left";
+  import KeyboardIcon from "@lucide/svelte/icons/keyboard";
   import MoreHorizontalIcon from "@lucide/svelte/icons/ellipsis";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
+  import SpaceIcon from "@lucide/svelte/icons/space";
   import SquareIcon from "@lucide/svelte/icons/square";
   import { Effect, Option } from "effect";
   import { tick, untrack } from "svelte";
@@ -37,12 +43,14 @@
     noteSessionReleased,
     onSessionExited,
     requestSessionFocus,
+    sendSessionKey,
     sendSessionPastedInput,
     sessionHostKey,
     type SessionHostKey,
   } from "../../stores/session-host.svelte.js";
   import LaunchTargetName from "../terminal/LaunchTargetName.svelte";
   import SessionTerminalSlot from "../terminal/SessionTerminalSlot.svelte";
+  import type { TerminalKey } from "../terminal/terminal-key.js";
   import TerminalSettings from "../settings/TerminalSettings.svelte";
   import ConfirmDialog from "../shared/ConfirmDialog.svelte";
   import type { WorkspaceDetail } from "../terminal/workspace-detail.js";
@@ -109,6 +117,7 @@
   let inputError = $state<string | null>(null);
   let composerInput = $state<HTMLTextAreaElement | null>(null);
   let composerOpen = $state(false);
+  let specialKeysOpen = $state(false);
   let composerDragStartY: number | null = null;
 
   const sessions = $derived(mobileTerminalSessions(runtime, workspace));
@@ -224,6 +233,7 @@
       composedInput = "";
       inputError = null;
       composerOpen = false;
+      specialKeysOpen = false;
     }
     selectedSessionKey = nextSelectedSessionKey;
     if (persist) saveMobileWorkspaceSession(workspaceId, hostKey, selectedSessionKey);
@@ -449,6 +459,7 @@
     composedInput = "";
     inputError = null;
     composerOpen = false;
+    specialKeysOpen = false;
     terminalOptionsOpen = false;
     saveMobileWorkspaceSession(workspaceId, hostKey, selectedSessionKey);
     requestSessionFocusForSelection();
@@ -464,6 +475,22 @@
     composedInput = "";
     inputError = null;
     void tick().then(resizeComposer);
+  }
+
+  function sendSpecialKey(keyName: TerminalKey): void {
+    const key = selectedHostKey;
+    if (!key) return;
+    if (!sendSessionKey(key, keyName)) {
+      inputError = "Terminal is reconnecting. Try again in a moment.";
+    } else {
+      inputError = null;
+    }
+    composerInput?.focus({ preventScroll: true });
+  }
+
+  function toggleSpecialKeys(): void {
+    specialKeysOpen = !specialKeysOpen;
+    composerInput?.focus({ preventScroll: true });
   }
 
   function resizeComposer(): void {
@@ -489,6 +516,7 @@
   function closeComposer(): void {
     composerInput?.blur();
     composerOpen = false;
+    specialKeysOpen = false;
     inputError = null;
   }
 
@@ -657,6 +685,7 @@
     composedInput = "";
     inputError = null;
     composerOpen = false;
+    specialKeysOpen = false;
     launchSheetOpen = false;
     terminalOptionsOpen = false;
     terminalOptionsSaving = false;
@@ -827,6 +856,30 @@
             <span aria-hidden="true"></span>
             <ChevronDownIcon size="16" aria-hidden="true" />
           </button>
+          {#if specialKeysOpen}
+            <div class="mobile-workspace-terminal__special-keys" role="group" aria-label="Special terminal keys">
+              <button type="button" aria-label="Escape" onclick={() => sendSpecialKey("Escape")}>Esc</button>
+              <button type="button" onclick={() => sendSpecialKey("Tab")}>Tab</button>
+              <button type="button" aria-label="Arrow left" onclick={() => sendSpecialKey("ArrowLeft")}>
+                <ArrowLeftIcon size="18" aria-hidden="true" />
+              </button>
+              <button type="button" aria-label="Arrow up" onclick={() => sendSpecialKey("ArrowUp")}>
+                <ArrowUpIcon size="18" aria-hidden="true" />
+              </button>
+              <button type="button" aria-label="Arrow down" onclick={() => sendSpecialKey("ArrowDown")}>
+                <ArrowDownIcon size="18" aria-hidden="true" />
+              </button>
+              <button type="button" aria-label="Arrow right" onclick={() => sendSpecialKey("ArrowRight")}>
+                <ArrowRightIcon size="18" aria-hidden="true" />
+              </button>
+              <button type="button" aria-label="Space" onclick={() => sendSpecialKey("Space")}>
+                <SpaceIcon size="18" aria-hidden="true" />
+              </button>
+              <button type="button" aria-label="Return" onclick={() => sendSpecialKey("Enter")}>
+                <CornerDownLeftIcon size="18" aria-hidden="true" />
+              </button>
+            </div>
+          {/if}
           <textarea
             bind:this={composerInput}
             aria-label="Terminal command"
@@ -838,6 +891,15 @@
             spellcheck="false"
             placeholder="Type terminal input"
           ></textarea>
+          <button
+            type="button"
+            class="mobile-workspace-terminal__special-keys-toggle"
+            aria-label={specialKeysOpen ? "Hide special terminal keys" : "Show special terminal keys"}
+            aria-expanded={specialKeysOpen}
+            onclick={toggleSpecialKeys}
+          >
+            <KeyboardIcon size="20" aria-hidden="true" />
+          </button>
           <button type="submit" class="mobile-workspace-terminal__send" aria-label="Send terminal input">Send</button>
           {#if inputError}<small role="status">{inputError}</small>{/if}
         </form>
@@ -987,10 +1049,16 @@
   .mobile-workspace-terminal__runtime-error small { overflow: hidden; color: var(--accent-red); text-overflow: ellipsis; white-space: nowrap; }
   .mobile-workspace-terminal__runtime-error button { min-height: 2.75rem; display: inline-flex; align-items: center; gap: 0.375rem; padding: 0 0.75rem; color: var(--text-primary); border: thin solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-surface); font: inherit; font-weight: 650; }
   .mobile-workspace-terminal__viewport { flex: 1; min-height: 0; display: flex; }
-  .mobile-workspace-terminal__composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 0.5rem; padding: 0.5rem 0.5rem max(0.5rem, env(safe-area-inset-bottom)); border-top: thin solid var(--border-default); background: var(--bg-surface); }
-  .mobile-workspace-terminal__composer textarea, .mobile-workspace-terminal__send { min-height: 2.75rem; border: thin solid var(--border-default); border-radius: var(--radius-md); font: inherit; }
+  .mobile-workspace-terminal__composer { display: grid; grid-template-columns: minmax(0, 1fr) 2.75rem auto; align-items: end; gap: 0.5rem; padding: 0.5rem 0.5rem max(0.5rem, env(safe-area-inset-bottom)); border-top: thin solid var(--border-default); background: var(--bg-surface); }
+  .mobile-workspace-terminal__composer textarea, .mobile-workspace-terminal__send, .mobile-workspace-terminal__special-keys-toggle { min-height: 2.75rem; border: thin solid var(--border-default); border-radius: var(--radius-md); font: inherit; }
   .mobile-workspace-terminal__composer textarea { width: 100%; min-width: 0; max-height: 8rem; overflow-y: auto; resize: none; padding: 0.625rem 0.75rem; color: var(--text-primary); background: var(--bg-inset); font-family: var(--font-mono); font-size: var(--font-size-md); line-height: 1.4; }
+  .mobile-workspace-terminal__special-keys-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--text-secondary); background: var(--bg-inset); }
+  .mobile-workspace-terminal__special-keys-toggle[aria-expanded="true"] { color: var(--accent-blue); border-color: var(--accent-blue); background: color-mix(in srgb, var(--accent-blue) 12%, var(--bg-inset)); }
   .mobile-workspace-terminal__send { padding: 0 1rem; color: var(--text-on-accent); border-color: var(--accent-blue); background: var(--accent-blue); font-weight: 700; }
+  .mobile-workspace-terminal__special-keys { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(8, minmax(2.75rem, 1fr)); gap: 0.125rem; overflow-x: auto; scrollbar-width: none; }
+  .mobile-workspace-terminal__special-keys::-webkit-scrollbar { display: none; }
+  .mobile-workspace-terminal__special-keys button { min-width: 2.75rem; min-height: 2.75rem; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--text-primary); border: thin solid var(--border-default); border-radius: var(--radius-sm); background: var(--bg-inset); font: inherit; font-family: var(--font-mono); font-size: var(--font-size-sm); font-weight: 650; }
+  .mobile-workspace-terminal__special-keys button:active { border-color: var(--accent-blue); background: color-mix(in srgb, var(--accent-blue) 16%, var(--bg-inset)); }
   .mobile-workspace-terminal__composer-handle { grid-column: 1 / -1; width: 100%; min-height: 1.5rem; display: flex; align-items: center; justify-content: center; gap: 0.375rem; padding: 0; color: var(--text-muted); border: 0; background: transparent; touch-action: none; }
   .mobile-workspace-terminal__composer-handle > span, .mobile-workspace-terminal__composer-toggle > span { width: 2.25rem; height: 0.25rem; border-radius: 999px; background: var(--border-strong); }
   .mobile-workspace-terminal__composer-toggle { position: absolute; z-index: 4; left: 50%; bottom: max(0.5rem, env(safe-area-inset-bottom)); min-height: 2.75rem; display: grid; grid-template-columns: 2.25rem auto 2.25rem; align-items: center; justify-content: center; gap: 0.5rem; padding: 0 0.75rem; color: var(--text-secondary); border: thin solid var(--border-default); border-radius: 999px; background: color-mix(in srgb, var(--bg-surface) 92%, transparent); box-shadow: var(--shadow-md); font: inherit; font-size: var(--font-size-sm); font-weight: 650; touch-action: none; transform: translateX(-50%); }

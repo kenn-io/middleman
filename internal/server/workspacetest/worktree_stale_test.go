@@ -20,7 +20,7 @@ import (
 // vanished from `git worktree list`) is removed by fleet scoped key; removing a
 // missing or already-removed key is a 404.
 func TestRemoveStaleWorktreeRoute(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -86,7 +86,7 @@ func TestRemoveStaleWorktreeRoute(t *testing.T) {
 }
 
 func TestRemoveStaleWorktreeRoute_RefusesNonStaleAndReappeared(t *testing.T) {
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}

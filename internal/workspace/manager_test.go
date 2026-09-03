@@ -2010,6 +2010,40 @@ func TestSetupUsesConfiguredWorktreeBasePath(t *testing.T) {
 	assert.Empty(status)
 }
 
+func TestSetupCreatesPRWorktreeFromForkStyleWorktreeBase(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	d := openTestDB(t)
+	localRepo, _, platformHost := setupForkStyleHTTPWorktreeBaseForWorkspaceGitTest(
+		t, "feature/thing",
+	)
+	repoID := seedRepo(t, d, platformHost, "acme", "widget")
+	seedMR(t, d, repoID, 42, "feature/thing")
+	tmuxScript, _ := writeRecorderScript(t)
+	mgr := newTestManager(t, d, t.TempDir())
+	mgr.SetTmuxCommand([]string{tmuxScript})
+	mgr.SetWorktreeBasePathResolver(staticBaseResolver(localRepo))
+
+	ws, err := mgr.Create(t.Context(), "github", platformHost, "acme", "widget", 42)
+	require.NoError(err)
+	require.NoError(mgr.Setup(t.Context(), ws))
+
+	got, err := d.GetWorkspace(t.Context(), ws.ID)
+	require.NoError(err)
+	require.NotNil(got)
+	assert.Equal("ready", got.Status)
+	assert.Equal("feature/thing", got.WorkspaceBranch)
+	trackingRef := remoteTrackingRef("upstream", "feature/thing")
+	_, exists, err := gitRefSHA(t.Context(), localRepo, trackingRef)
+	require.NoError(err)
+	assert.True(exists)
+	remote, err := gitConfigValue(
+		t.Context(), ws.WorktreePath, "branch.feature/thing.remote",
+	)
+	require.NoError(err)
+	assert.Equal(originRemoteName, remote)
+}
+
 func TestSetupWithOptionsConfirmsRoborevBeforeTerminal(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -2686,11 +2720,155 @@ func TestValidateWorktreeBasePathRejectsLocalRemotes(t *testing.T) {
 			got, err := ValidateWorktreeBasePath(
 				t.Context(), localRepo, "github.com", "acme", "widget", false)
 
-			require.Empty(got)
+			require.Empty(got.Path)
 			require.Error(err)
-			assert.Contains(err.Error(), "origin remote must include a forge host")
+			assert.Contains(err.Error(), "no git remote matches configured repository")
 		})
 	}
+}
+
+func TestValidateWorktreeBasePathResolvesCanonicalRemoteByIdentity(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	localRepo, _, platformHost := setupForkStyleHTTPWorktreeBaseForWorkspaceGitTest(
+		t, "feature/thing",
+	)
+
+	base, err := ValidateWorktreeBasePath(
+		t.Context(), localRepo, platformHost, "acme", "widget", false,
+	)
+
+	require.NoError(err)
+	canonicalLocalRepo, err := filepath.EvalSymlinks(localRepo)
+	require.NoError(err)
+	assert.Equal(canonicalLocalRepo, base.Path)
+	assert.Equal("upstream", base.Remote)
+}
+
+func TestValidateWorktreeBasePathRejectsAmbiguousCanonicalRemotes(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	localRepo, _, platformHost := setupForkStyleHTTPWorktreeBaseForWorkspaceGitTest(
+		t, "feature/thing",
+	)
+	canonicalURL := strings.TrimSpace(string(runWorkspaceTestGit(
+		t, localRepo, "remote", "get-url", "upstream",
+	)))
+	runWorkspaceTestGit(t, localRepo, "remote", "add", "mirror", canonicalURL)
+
+	base, err := ValidateWorktreeBasePath(
+		t.Context(), localRepo, platformHost, "acme", "widget", false,
+	)
+
+	require.Empty(base.Path)
+	require.Error(err)
+	assert.Contains(err.Error(), `git remotes "mirror" and "upstream" both match`)
+	assert.NotContains(err.Error(), canonicalURL)
+}
+
+func TestValidateWorktreeBasePathRejectsMissingCanonicalRemote(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	localRepo, _, platformHost := setupForkStyleHTTPWorktreeBaseForWorkspaceGitTest(
+		t, "feature/thing",
+	)
+	runWorkspaceTestGit(t, localRepo, "remote", "remove", "upstream")
+
+	base, err := ValidateWorktreeBasePath(
+		t.Context(), localRepo, platformHost, "acme", "widget", false,
+	)
+
+	require.Empty(base.Path)
+	require.Error(err)
+	assert.Contains(err.Error(), "no git remote matches configured repository")
+	assert.Contains(err.Error(), "origin")
+}
+
+func TestValidateWorktreeBasePathRejectsForeignRemoteWritingBaseNamespace(t *testing.T) {
+	for _, refspec := range []string{
+		"+refs/heads/*:refs/remotes/upstream/*",
+		"+refs/tags/*:refs/remotes/upstream/tags/*",
+		"+refs/heads/*:refs/remotes/*",
+		"+refs/heads/*:refs/*",
+		"+refs/heads/main:refs/remotes/upstream",
+		"+refs/heads/*:refs/remotes/upstr*",
+	} {
+		t.Run(refspec, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+			localRepo, _, platformHost := setupForkStyleHTTPWorktreeBaseForWorkspaceGitTest(
+				t, "feature/thing",
+			)
+			runWorkspaceTestGit(
+				t, localRepo, "config", "--add", "remote.origin.fetch", refspec,
+			)
+
+			base, err := ValidateWorktreeBasePath(
+				t.Context(), localRepo, platformHost, "acme", "widget", false,
+			)
+
+			require.Empty(base.Path)
+			require.Error(err)
+			assert.Contains(err.Error(), `remote "origin" fetch refspec`)
+			assert.Contains(err.Error(), `"upstream" tracking namespace`)
+		})
+	}
+}
+
+func TestValidateWorktreeBasePathAllowsForeignRemoteWithSimilarNamespace(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	localRepo, _, platformHost := setupForkStyleHTTPWorktreeBaseForWorkspaceGitTest(
+		t, "feature/thing",
+	)
+	runWorkspaceTestGit(
+		t, localRepo, "config", "--add", "remote.origin.fetch",
+		"+refs/heads/*:refs/remotes/upstreamish/*",
+	)
+
+	base, err := ValidateWorktreeBasePath(
+		t.Context(), localRepo, platformHost, "acme", "widget", false,
+	)
+
+	require.NoError(err)
+	assert.Equal("upstream", base.Remote)
+}
+
+func TestValidateWorktreeBasePathRejectsUnsafeCanonicalRemoteName(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	localRepo, _, platformHost := setupForkStyleHTTPWorktreeBaseForWorkspaceGitTest(
+		t, "feature/thing",
+	)
+	runWorkspaceTestGit(
+		t, localRepo, "config", "--add", "remote.-bad.url",
+		"https://"+platformHost+"/acme/widget.git",
+	)
+
+	base, err := ValidateWorktreeBasePath(
+		t.Context(), localRepo, platformHost, "acme", "widget", false,
+	)
+
+	require.Empty(base.Path)
+	require.Error(err)
+	assert.Contains(err.Error(), `git remote name "-bad" is unsafe`)
+}
+
+func TestValidateWorktreeBasePathAllowsUnsafeUnrelatedRemoteName(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	localRepo := setupLocalWorktreeBaseForWorkspaceGitTest(t, "feature/thing")
+	runWorkspaceTestGit(
+		t, localRepo, "config", "--add", "remote.-bad.url",
+		"https://github.com/other/widget.git",
+	)
+
+	base, err := ValidateWorktreeBasePath(
+		t.Context(), localRepo, "github.com", "acme", "widget", false,
+	)
+
+	require.NoError(err)
+	assert.Equal("origin", base.Remote)
 }
 
 func TestValidateWorktreeBasePathRejectsExecutableLocalConfig(t *testing.T) {
@@ -2735,7 +2913,7 @@ func TestValidateWorktreeBasePathRejectsExecutableLocalConfig(t *testing.T) {
 			got, err := ValidateWorktreeBasePath(
 				t.Context(), localRepo, "github.com", "acme", "widget", false)
 
-			require.Empty(got)
+			require.Empty(got.Path)
 			require.Error(err)
 			assert.Contains(
 				strings.ToLower(err.Error()), strings.ToLower(tt.key),
@@ -2764,10 +2942,10 @@ func TestValidateWorktreeBasePathAcceptsConfiguredHooksPath(t *testing.T) {
 	require.NoError(err)
 	canonicalLocalRepo, err := filepath.EvalSymlinks(localRepo)
 	require.NoError(err)
-	assert.Equal(canonicalLocalRepo, got)
+	assert.Equal(canonicalLocalRepo, got.Path)
 }
 
-func TestValidateWorktreeBasePathRejectsUnsafeOriginSchemes(t *testing.T) {
+func TestValidateWorktreeBasePathRejectsUnsafeBaseRemoteSchemes(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
@@ -2802,12 +2980,12 @@ func TestValidateWorktreeBasePathRejectsUnsafeOriginSchemes(t *testing.T) {
 			got, err := ValidateWorktreeBasePath(
 				t.Context(), localRepo, "github.com", "acme", "widget", false)
 
-			require.Empty(got)
+			require.Empty(got.Path)
 			require.Error(err)
 			assert.Contains(
 				err.Error(),
 				fmt.Sprintf(
-					"origin remote scheme %q is not allowed (host %q)",
+					"\"origin\" remote scheme %q is not allowed (host %q)",
 					tt.wantScheme, "github.com",
 				),
 			)
@@ -2834,7 +3012,7 @@ func TestValidateWorktreeBasePathAcceptsLoopbackHTTPOrigin(t *testing.T) {
 	require.NoError(err)
 	canonicalLocalRepo, err := filepath.EvalSymlinks(localRepo)
 	require.NoError(err)
-	require.Equal(canonicalLocalRepo, got)
+	require.Equal(canonicalLocalRepo, got.Path)
 }
 
 func TestValidateWorktreeBasePathAcceptsExplicitlyAllowedHTTPOrigin(t *testing.T) {
@@ -2853,7 +3031,7 @@ func TestValidateWorktreeBasePathAcceptsExplicitlyAllowedHTTPOrigin(t *testing.T
 	require.NoError(err)
 	canonicalLocalRepo, err := filepath.EvalSymlinks(localRepo)
 	require.NoError(err)
-	require.Equal(canonicalLocalRepo, got)
+	require.Equal(canonicalLocalRepo, got.Path)
 }
 
 func TestValidateWorktreeBasePathAcceptsSCPStyleSSHOrigin(t *testing.T) {
@@ -2871,7 +3049,7 @@ func TestValidateWorktreeBasePathAcceptsSCPStyleSSHOrigin(t *testing.T) {
 	require.NoError(err)
 	canonicalLocalRepo, err := filepath.EvalSymlinks(localRepo)
 	require.NoError(err)
-	require.Equal(canonicalLocalRepo, got)
+	require.Equal(canonicalLocalRepo, got.Path)
 }
 
 func TestValidateWorktreeBasePathCanonicalizesSymlinkPath(t *testing.T) {
@@ -2906,12 +3084,12 @@ func TestValidateWorktreeBasePathCanonicalizesSymlinkPath(t *testing.T) {
 				t.Context(), tt.path, "github.com", "acme", "widget", false)
 
 			require.NoError(err)
-			assert.Equal(canonicalLocalRepo, got)
+			assert.Equal(canonicalLocalRepo, got.Path)
 		})
 	}
 }
 
-func TestValidateWorktreeBasePathRejectsAdditionalOriginURLs(t *testing.T) {
+func TestValidateWorktreeBasePathRejectsAdditionalBaseRemoteURLs(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
@@ -2924,12 +3102,12 @@ func TestValidateWorktreeBasePathRejectsAdditionalOriginURLs(t *testing.T) {
 	got, err := ValidateWorktreeBasePath(
 		t.Context(), localRepo, "github.com", "acme", "widget", false)
 
-	require.Empty(got)
+	require.Empty(got.Path)
 	require.Error(err)
-	assert.Contains(err.Error(), "origin remote does not match repository")
+	assert.Contains(err.Error(), `"origin" remote does not match repository`)
 }
 
-func TestValidateWorktreeBasePathRejectsUnsafeOriginFetchRefspec(t *testing.T) {
+func TestValidateWorktreeBasePathRejectsUnsafeBaseFetchRefspec(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
@@ -2947,13 +3125,13 @@ func TestValidateWorktreeBasePathRejectsUnsafeOriginFetchRefspec(t *testing.T) {
 	got, err := ValidateWorktreeBasePath(
 		t.Context(), localRepo, "github.com", "acme", "widget", false)
 
-	require.Empty(got)
+	require.Empty(got.Path)
 	require.Error(err)
-	assert.Contains(err.Error(), "origin fetch refspec")
+	assert.Contains(err.Error(), "\"origin\" fetch refspec")
 	assert.Contains(err.Error(), "may update unsafe refs")
 }
 
-func TestValidateWorktreeBasePathAcceptsSingleBranchOriginFetchRefspec(t *testing.T) {
+func TestValidateWorktreeBasePathAcceptsSingleBranchBaseFetchRefspec(t *testing.T) {
 	require := require.New(t)
 
 	localRepo := setupLocalWorktreeBaseForWorkspaceGitTest(t, "feature/thing")
@@ -2973,7 +3151,7 @@ func TestValidateWorktreeBasePathAcceptsSingleBranchOriginFetchRefspec(t *testin
 	require.NoError(err)
 	canonicalLocalRepo, err := filepath.EvalSymlinks(localRepo)
 	require.NoError(err)
-	require.Equal(canonicalLocalRepo, got)
+	require.Equal(canonicalLocalRepo, got.Path)
 }
 
 func TestValidateWorktreeBasePathRejectsBareRepositories(t *testing.T) {
@@ -2991,7 +3169,7 @@ func TestValidateWorktreeBasePathRejectsBareRepositories(t *testing.T) {
 	got, err := ValidateWorktreeBasePath(
 		t.Context(), bareRepo, "github.com", "acme", "widget", false)
 
-	require.Empty(got)
+	require.Empty(got.Path)
 	require.Error(err)
 	assert.Contains(err.Error(), "path is not a git worktree")
 }
@@ -3010,7 +3188,7 @@ func TestValidateWorktreeBasePathRejectsExecutableWorktreeConfig(t *testing.T) {
 	got, err := ValidateWorktreeBasePath(
 		t.Context(), localRepo, "github.com", "acme", "widget", false)
 
-	require.Empty(got)
+	require.Empty(got.Path)
 	require.Error(err)
 	assert.Contains(err.Error(), "filter.demo.clean")
 	assert.Contains(err.Error(), "may execute or rewrite git commands")
@@ -3206,7 +3384,7 @@ func TestWorkspaceSetupGitDirRemovesCloneWhenRouteChangesDuringClone(t *testing.
 	routeChanged := errors.New("repository route changed")
 	validations := 0
 
-	_, _, err := manager.workspaceSetupGitDir(
+	_, err := manager.workspaceSetupGitDir(
 		t.Context(), workspace, "", nil,
 		func(context.Context) error {
 			validations++
@@ -3468,8 +3646,8 @@ func TestFetchWorkspaceBaseRequiresOriginHeadOnlyForIssueWorkspaces(t *testing.T
 		"update-ref", "--no-deref", "-d", "refs/remotes/origin/HEAD",
 	)
 
-	require.NoError(fetchWorkspaceBaseWithGit(t.Context(), runGitWithoutHooks, localRepo, false))
-	require.Error(fetchWorkspaceBaseWithGit(t.Context(), runGitWithoutHooks, localRepo, true))
+	require.NoError(fetchWorkspaceBaseWithGit(t.Context(), runGitWithoutHooks, localRepo, "origin", false))
+	require.Error(fetchWorkspaceBaseWithGit(t.Context(), runGitWithoutHooks, localRepo, "origin", true))
 }
 
 func TestAddAndRefreshPRWorktreeFastForwardLocalBaseBranch(t *testing.T) {
@@ -3501,7 +3679,9 @@ func TestAddAndRefreshPRWorktreeFastForwardLocalBaseBranch(t *testing.T) {
 	launchSpec, err := mgr.RequireWorkspaceLaunchSpec(t.Context(), ws)
 	require.NoError(err)
 
-	_, err = mgr.addWorktree(t.Context(), localRepo, true, ws, workspaceGitFetchOptions{
+	_, err = mgr.addWorktree(t.Context(), workspaceGitDir{
+		path: localRepo, remote: originRemoteName, localBase: true,
+	}, ws, workspaceGitFetchOptions{
 		launchSpec: launchSpec,
 	})
 	require.NoError(err)
@@ -3518,7 +3698,7 @@ func TestAddAndRefreshPRWorktreeFastForwardLocalBaseBranch(t *testing.T) {
 	runWorkspaceTestGit(t, remote, "update-server-info")
 
 	_, err = mgr.refreshExistingWorkspaceWorktree(
-		t.Context(), localRepo, ws, launchSpec, nil,
+		t.Context(), localRepo, originRemoteName, ws, launchSpec, nil,
 	)
 	require.NoError(err)
 	localBaseSHA = strings.TrimSpace(string(runWorkspaceTestGit(
@@ -3563,7 +3743,9 @@ func TestAddWorktreeRestoresBaseRefsWhenRouteChangesDuringFetch(t *testing.T) {
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
 	_, err = mgr.addWorktree(
-		t.Context(), localRepo, true, ws, workspaceGitFetchOptions{
+		t.Context(), workspaceGitDir{
+			path: localRepo, remote: originRemoteName, localBase: true,
+		}, ws, workspaceGitFetchOptions{
 			validateRoute: validateRoute,
 		},
 	)
@@ -3612,7 +3794,9 @@ func TestAddWorktreeRestoresPullRefWhenRouteChangesDuringFetch(t *testing.T) {
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
 	_, err = mgr.addWorktreeLocked(
-		t.Context(), localRepo, true, ws, workspaceGitFetchOptions{
+		t.Context(), workspaceGitDir{
+			path: localRepo, remote: originRemoteName, localBase: true,
+		}, ws, workspaceGitFetchOptions{
 			launchSpec:    pullLaunchSpecForWorkspace(ws, "same_repo", ""),
 			validateRoute: validateRoute,
 		},
@@ -3645,7 +3829,7 @@ func TestSyncLocalBaseBranchSkipsCheckedOutAndDivergedBranches(t *testing.T) {
 	runWorkspaceTestGit(t, localRepo, "checkout", "--detach")
 
 	require.NoError(syncLocalBaseBranch(
-		t.Context(), localRepo, "ws-base-sync-safety", branch,
+		t.Context(), localRepo, "origin", "ws-base-sync-safety", branch,
 	))
 	assert.Equal(firstRemoteSHA, strings.TrimSpace(string(runWorkspaceTestGit(
 		t, localRepo, "rev-parse", "refs/heads/main",
@@ -3660,7 +3844,7 @@ func TestSyncLocalBaseBranchSkipsCheckedOutAndDivergedBranches(t *testing.T) {
 	)
 	runWorkspaceTestGit(t, localRepo, "checkout", branch)
 	require.NoError(syncLocalBaseBranch(
-		t.Context(), localRepo, "ws-base-sync-safety", branch,
+		t.Context(), localRepo, "origin", "ws-base-sync-safety", branch,
 	))
 	assert.Equal(firstRemoteSHA, strings.TrimSpace(string(runWorkspaceTestGit(
 		t, localRepo, "rev-parse", "refs/heads/main",
@@ -3682,7 +3866,7 @@ func TestSyncLocalBaseBranchSkipsCheckedOutAndDivergedBranches(t *testing.T) {
 		t, localRepo, "update-ref", "refs/remotes/origin/main", thirdRemoteSHA,
 	)
 	require.NoError(syncLocalBaseBranch(
-		t.Context(), localRepo, "ws-base-sync-safety", branch,
+		t.Context(), localRepo, "origin", "ws-base-sync-safety", branch,
 	))
 	assert.Equal(divergentSHA, strings.TrimSpace(string(runWorkspaceTestGit(
 		t, localRepo, "rev-parse", "refs/heads/main",
@@ -3702,7 +3886,7 @@ func TestSyncLocalBaseBranchSkipsOccupiedRefNamespace(t *testing.T) {
 	runWorkspaceTestGit(t, localRepo, "branch", "main/topic", mainSHA)
 
 	require.NoError(syncLocalBaseBranch(
-		t.Context(), localRepo, "ws-base-sync-namespace", "main",
+		t.Context(), localRepo, "origin", "ws-base-sync-namespace", "main",
 	))
 	_, mainExists, err := gitRefSHA(t.Context(), localRepo, "refs/heads/main")
 	require.NoError(err)
@@ -3754,7 +3938,7 @@ func TestSyncWorkspaceBaseBranchRejectsReplacedRepositoryRoute(t *testing.T) {
 		ItemNumber:   968,
 	}
 
-	err = mgr.syncWorkspaceBaseBranch(t.Context(), localRepo, ws)
+	err = mgr.syncWorkspaceBaseBranch(t.Context(), localRepo, originRemoteName, ws)
 	require.ErrorContains(err, "historical occupants")
 	assert.Equal(localMainSHA, strings.TrimSpace(string(runWorkspaceTestGit(
 		t, localRepo, "rev-parse", "refs/heads/main",
@@ -3772,7 +3956,7 @@ func TestFetchWorkspaceBaseConstrainsNegotiationTips(t *testing.T) {
 	}
 
 	require.NoError(fetchWorkspaceBaseWithGit(
-		t.Context(), run, t.TempDir(), false,
+		t.Context(), run, t.TempDir(), originRemoteName, false,
 	))
 	require.NotEmpty(calls)
 	fetchArgs := calls[0]
@@ -3792,7 +3976,7 @@ func TestFetchWorkspaceBaseDisablesGitHooks(t *testing.T) {
 	}
 
 	require.NoError(fetchWorkspaceBaseWithGit(
-		t.Context(), run, t.TempDir(), false,
+		t.Context(), run, t.TempDir(), originRemoteName, false,
 	))
 	require.Len(calls, 2)
 	for _, args := range calls {
@@ -3803,6 +3987,25 @@ func TestFetchWorkspaceBaseDisablesGitHooks(t *testing.T) {
 	assert.Contains(calls[0], "fetch")
 	assert.Contains(calls[1], "remote")
 	assert.Contains(calls[1], "set-head")
+}
+
+func TestFetchWorkspaceBaseUsesResolvedRemoteNamespace(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	var calls [][]string
+	run := func(_ context.Context, _ string, args ...string) error {
+		calls = append(calls, slices.Clone(args))
+		return nil
+	}
+
+	require.NoError(fetchWorkspaceBaseWithGit(
+		t.Context(), run, t.TempDir(), "upstream", true,
+	))
+	require.Len(calls, 2)
+	assert.Contains(calls[0], "--negotiation-tip=refs/remotes/upstream/*")
+	assert.Contains(calls[0], "upstream")
+	assert.Contains(calls[0], "+refs/heads/*:refs/remotes/upstream/*")
+	assert.Equal([]string{"remote", "set-head", "upstream", "-a"}, calls[1][2:])
 }
 
 func TestCleanupPreservesExistingWorktreeWhenConfiguredBaseChanges(t *testing.T) {
@@ -4508,7 +4711,7 @@ func TestAddPreferredWorktreeRejectsUnsafeBranchName(t *testing.T) {
 	}
 
 	_, err := mgr.addPreferredWorktree(
-		t.Context(), cloneDir, false, ws,
+		t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws,
 	)
 	require.Error(err)
 	require.Contains(err.Error(), "invalid branch name")
@@ -4565,7 +4768,7 @@ func TestAddWorktreeUsesFallbackWhenLocalBasePreferredBranchCheckedOut(t *testin
 	}
 
 	gotBranch, err := mgr.addWorktreeLocked(
-		t.Context(), localRepo, true, ws, workspaceGitFetchOptions{},
+		t.Context(), workspaceGitDir{path: localRepo, remote: originRemoteName, localBase: true}, ws, workspaceGitFetchOptions{},
 	)
 
 	require.NoError(err)
@@ -4627,7 +4830,7 @@ func TestAddWorktreeFallbackBranchTracksPRHeadBranch(t *testing.T) {
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
 	branch, err := mgr.addWorktreeLocked(
-		t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{},
+		t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{},
 	)
 
 	require.NoError(err)
@@ -4672,7 +4875,7 @@ func TestAddWorktreeLockedRecordsOwnershipBeforeReturning(t *testing.T) {
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
 	_, err := mgr.addWorktreeLocked(
-		t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{},
+		t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{},
 	)
 	require.NoError(err)
 	owned, err := workspaceRegistrationMatches(
@@ -4773,7 +4976,7 @@ func TestAddWorktreeUniquifiesFallbackBranchWhenSyntheticNameTaken(t *testing.T)
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
 	branch, err := mgr.addWorktreeLocked(
-		t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{},
+		t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{},
 	)
 
 	require.NoError(err)
@@ -4850,7 +5053,7 @@ func TestAddWorktreeFallsBackToDetachedWorktreeWhenBranchNamesExhausted(
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
 	branch, err := mgr.addWorktreeLocked(
-		t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{},
+		t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{},
 	)
 
 	require.NoError(err)
@@ -4897,7 +5100,7 @@ func TestAddWorktreeUnknownHeadRepoDoesNotTrackMatchingOriginBranch(t *testing.T
 	require.NoError(err)
 
 	_, err = mgr.addWorktreeLocked(
-		t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{
+		t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{
 			launchSpec: pullLaunchSpecForWorkspace(ws, "unknown", ""),
 		},
 	)
@@ -4948,7 +5151,7 @@ func TestAddWorktreeLocalBaseFetchesPullRefWhenHeadBranchDeleted(t *testing.T) {
 	}
 
 	gotBranch, err := mgr.addWorktree(
-		t.Context(), localRepo, true, ws, workspaceGitFetchOptions{
+		t.Context(), workspaceGitDir{path: localRepo, remote: originRemoteName, localBase: true}, ws, workspaceGitFetchOptions{
 			launchSpec: pullLaunchSpecForWorkspace(ws, "same_repo", ""),
 		},
 	)
@@ -5001,7 +5204,7 @@ func TestAddWorktreeLocalBaseIgnoresStalePullRefWhenFetchFails(t *testing.T) {
 	}
 
 	gotBranch, err := mgr.addWorktree(
-		t.Context(), localRepo, true, ws, workspaceGitFetchOptions{
+		t.Context(), workspaceGitDir{path: localRepo, remote: originRemoteName, localBase: true}, ws, workspaceGitFetchOptions{
 			launchSpec: pullLaunchSpecForWorkspace(ws, "same_repo", ""),
 		},
 	)
@@ -5037,7 +5240,7 @@ func TestLocalBaseExistingPRBranchIsNotDeletedOnCleanup(t *testing.T) {
 	}
 
 	managedBranch, err := mgr.addWorktreeLocked(
-		t.Context(), localRepo, true, ws, workspaceGitFetchOptions{},
+		t.Context(), workspaceGitDir{path: localRepo, remote: originRemoteName, localBase: true}, ws, workspaceGitFetchOptions{},
 	)
 	require.NoError(err)
 	require.Empty(managedBranch)
@@ -5076,7 +5279,7 @@ func TestLocalBaseExistingPRBranchPreservesUpstream(t *testing.T) {
 	}
 
 	managedBranch, err := mgr.addWorktreeLocked(
-		t.Context(), localRepo, true, ws, workspaceGitFetchOptions{},
+		t.Context(), workspaceGitDir{path: localRepo, remote: originRemoteName, localBase: true}, ws, workspaceGitFetchOptions{},
 	)
 
 	require.NoError(err)
@@ -5171,7 +5374,7 @@ func TestAddPreferredWorktreeHeadRepoRouting(t *testing.T) {
 			)
 			require.NoError(err)
 
-			branch, err := mgr.addPreferredWorktree(t.Context(), cloneDir, false, ws)
+			branch, err := mgr.addPreferredWorktree(t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws)
 			require.NoError(err)
 			assert.Equal(tt.headBranch, branch)
 
@@ -5241,7 +5444,7 @@ func TestAddWorktreeGitLabForkMRFetchesHeadBeforePreferredBranch(t *testing.T) {
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
 	branch, err := mgr.addWorktreeLocked(
-		t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{
+		t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{
 			launchSpec: pullLaunchSpecForWorkspace(ws, "fork", forkRemote),
 		},
 	)
@@ -5289,7 +5492,7 @@ func TestAddWorktreeMergedSameRepoPRUsesPullRefWhenHeadBranchDeleted(
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
 	branch, err := mgr.addWorktreeLocked(
-		t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{
+		t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{
 			launchSpec: pullLaunchSpecForWorkspace(ws, "same_repo", ""),
 		},
 	)
@@ -5343,7 +5546,7 @@ func TestAddWorktreeGitLabMRUsesMergeRequestRefWhenHeadBranchDeleted(
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
 	branch, err := mgr.addWorktreeLocked(
-		t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{
+		t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{
 			launchSpec: pullLaunchSpecForWorkspace(ws, "same_repo", ""),
 		},
 	)
@@ -5391,7 +5594,7 @@ func TestAddWorktreeGitLabMRFetchesSpecificMergeRequestRef(t *testing.T) {
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
 	branch, err := mgr.addWorktreeLocked(
-		t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{
+		t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{
 			launchSpec: pullLaunchSpecForWorkspace(ws, "same_repo", ""),
 		},
 	)
@@ -5676,6 +5879,19 @@ func setupHTTPWorktreeBaseForWorkspaceGitTest(
 	runWorkspaceTestGit(
 		t, repo, "symbolic-ref",
 		"refs/remotes/origin/HEAD", "refs/remotes/origin/main",
+	)
+	return repo, remote, platformHost
+}
+
+func setupForkStyleHTTPWorktreeBaseForWorkspaceGitTest(
+	t *testing.T, branch string,
+) (repo, remote, platformHost string) {
+	t.Helper()
+	repo, remote, platformHost = setupHTTPWorktreeBaseForWorkspaceGitTest(t, branch)
+	runWorkspaceTestGit(t, repo, "remote", "rename", "origin", "upstream")
+	runWorkspaceTestGit(
+		t, repo, "remote", "add", "origin",
+		"https://"+platformHost+"/forker/widget.git",
 	)
 	return repo, remote, platformHost
 }
@@ -7517,7 +7733,7 @@ func TestIssueRetryCleansLeakedUnknownBranchAndUsesIssueBranch(t *testing.T) {
 	require.NoError(err)
 	assert.False(exists)
 
-	branch, err := mgr.addIssueWorktree(t.Context(), cloneDir, ws)
+	branch, err := mgr.addIssueWorktree(t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws)
 	require.NoError(err)
 	assert.Equal(ws.GitHeadRef, branch)
 
@@ -8242,7 +8458,7 @@ func TestManagerAddWorktreeAcquiresRepoLock(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		_, err := mgr.addWorktree(
-			t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{},
+			t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{},
 		)
 		done <- err
 	}()
@@ -8285,7 +8501,7 @@ func TestManagerAddWorktreeRechecksOccupiedPathAfterWaitingForLock(t *testing.T)
 	done := make(chan error, 1)
 	go func() {
 		_, err := mgr.addWorktree(
-			t.Context(), cloneDir, false, ws, workspaceGitFetchOptions{},
+			t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws, workspaceGitFetchOptions{},
 		)
 		done <- err
 	}()
@@ -8344,7 +8560,7 @@ func TestAddPreferredWorktreeRemovesBranchCreatedByFailedAdd(t *testing.T) {
 	))
 	mgr := newTestManager(t, openTestDB(t), t.TempDir())
 
-	_, err := mgr.addPreferredWorktree(t.Context(), cloneDir, false, ws)
+	_, err := mgr.addPreferredWorktree(t.Context(), workspaceGitDir{path: cloneDir, remote: originRemoteName}, ws)
 
 	require.Error(err)
 	contents, err := os.ReadFile(filepath.Join(ws.WorktreePath, "keep.txt"))
@@ -8800,7 +9016,7 @@ func TestSyncWorkspaceBaseBranchSurvivesQueuedReconciliationWriter(t *testing.T)
 	mgr := NewManager(d, t.TempDir())
 	go func() {
 		syncDone <- mgr.syncWorkspaceBaseBranch(
-			context.Background(), ws.WorktreePath, ws,
+			context.Background(), ws.WorktreePath, originRemoteName, ws,
 		)
 	}()
 	deadline := time.Now().Add(5 * time.Second)

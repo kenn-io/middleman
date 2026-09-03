@@ -1,9 +1,9 @@
 import { hydrateTerminalSettings, type TerminalSettingsHydration } from "./terminal-settings-persistence.js";
 import { hydrateWorkspaceSettings, type WorkspaceSettingsHydration } from "./workspace-settings-persistence.js";
 import { hydrateRoborevSettings, type RoborevSettingsHydration } from "./roborev-settings-persistence.js";
-import type { components } from "../api/generated/schema.js";
+import type { SettingsResponse as GeneratedSettingsResponse } from "../api/generated/models/index.js";
 
-type SettingsResponse = components["schemas"]["SettingsResponse"];
+type SettingsResponse = GeneratedSettingsResponse;
 
 // Minimal structural shapes rather than the full store types: this module
 // only needs the setters it calls, and narrowing here keeps it testable

@@ -1,11 +1,14 @@
 import { Effect, Schema } from "effect";
-import type { components } from "./generated/schema.js";
+import type {
+  ProjectResponse as GeneratedProjectResponse,
+  UserRepository as GeneratedUserRepository,
+} from "./generated/models/index.js";
 
 import { InvalidExternalPayload, type ApiProblemError, type TransientTransportError } from "./effect-errors.js";
 import { executeGeneratedApiRequest, executeOpaqueGeneratedApiRequest, GeneratedApi } from "./generated-api.js";
 
-export type ProjectResponse = components["schemas"]["ProjectResponse"];
-export type UserRepository = components["schemas"]["UserRepository"];
+export type ProjectResponse = GeneratedProjectResponse;
+export type UserRepository = GeneratedUserRepository;
 export interface DiscoveredUserRepository extends UserRepository {
   provider: "github";
   platform_host: string;
@@ -93,16 +96,10 @@ export const registerExistingProject = Effect.fn("ProjectIntake.registerExisting
   const hostKey = normalizedHostKey(options);
   const validation = hostKey
     ? yield* executeOpaqueGeneratedApiRequest("validate fleet repository path", (client, signal) =>
-        client.GET("/fleet/hosts/{host_key}/filesystem/validate-repo", {
-          params: { path: { host_key: hostKey }, query: { path: trimmed } },
-          signal,
-        }),
+        client.FleetService.validateFleetFilesystemRepo({ hostKey: hostKey }, { path: trimmed }, { signal }),
       ).pipe(Effect.flatMap(decodeRepoValidation))
     : yield* executeGeneratedApiRequest("validate repository path", (client, signal) =>
-        client.GET("/filesystem/validate-repo", {
-          params: { query: { path: trimmed } },
-          signal,
-        }),
+        client.SystemService.validateFilesystemRepo({ path: trimmed }, { signal }),
       );
   if (!validation.is_valid) {
     return yield* Effect.fail(InvalidProjectIntake.make({ message: validation.message ?? "Not a git repository." }));
@@ -111,14 +108,10 @@ export const registerExistingProject = Effect.fn("ProjectIntake.registerExisting
   const body = { local_path: validation.root_path ?? trimmed };
   return hostKey
     ? yield* executeOpaqueGeneratedApiRequest("register fleet project", (client, signal) =>
-        client.POST("/fleet/hosts/{host_key}/projects", {
-          params: { path: { host_key: hostKey } },
-          body,
-          signal,
-        }),
+        client.FleetService.registerFleetProject({ hostKey: hostKey }, body, { signal }),
       ).pipe(Effect.flatMap(decodeProjectResponse))
     : yield* executeGeneratedApiRequest("register project", (client, signal) =>
-        client.POST("/projects", { body, signal }),
+        client.ProjectsService.registerProject(body, { signal }),
       );
 });
 
@@ -146,14 +139,10 @@ export const cloneProject = Effect.fn("ProjectIntake.clone")(function* (
   };
   return hostKey
     ? yield* executeOpaqueGeneratedApiRequest("clone fleet project", (client, signal) =>
-        client.POST("/fleet/hosts/{host_key}/projects/clone", {
-          params: { path: { host_key: hostKey } },
-          body,
-          signal,
-        }),
+        client.FleetService.cloneFleetProject({ hostKey: hostKey }, body, { signal }),
       ).pipe(Effect.flatMap(decodeProjectResponse))
     : yield* executeGeneratedApiRequest("clone project", (client, signal) =>
-        client.POST("/projects/clone", { body, signal }),
+        client.ProjectsService.cloneProject(body, { signal }),
       );
 });
 
@@ -173,20 +162,18 @@ export function listUserRepositories(
 ): UserRepositoryListEffect<UserRepository[] | DiscoveredUserRepository[]> {
   return Effect.gen(function* () {
     const data = yield* executeGeneratedApiRequest("list user repositories", (client, signal) =>
-      client.GET("/platform/user-repositories", {
-        params: {
-          query: {
-            ...(options
-              ? {
-                  provider: options.provider,
-                  platform_host: options.platformHost,
-                }
-              : {}),
-            limit: 1000,
-          },
+      client.SystemService.listUserRepositories(
+        {
+          ...(options
+            ? {
+                provider: options.provider,
+                platform_host: options.platformHost,
+              }
+            : {}),
+          limit: 1000,
         },
-        signal,
-      }),
+        { signal },
+      ),
     );
     const repositories = data.repositories ?? [];
     if (!options) return repositories;

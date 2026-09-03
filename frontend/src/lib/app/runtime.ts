@@ -4,7 +4,8 @@ import type { Exit as ExitType } from "effect/Exit";
 import type { Error as LayerError, Success as LayerSuccess } from "effect/Layer";
 import type { ManagedRuntime as ManagedRuntimeType } from "effect/ManagedRuntime";
 import { nextMicrotask } from "../browser/microtask.js";
-import { AppLiveLayer } from "./layer.js";
+import { makeGeneratedApiLayer, type GeneratedClient } from "../api/generated-api.js";
+import { AppLiveLayer, makeAppLiveLayer } from "./layer.js";
 
 export type AppServices = LayerSuccess<typeof AppLiveLayer>;
 export type AppLayerError = LayerError<typeof AppLiveLayer>;
@@ -78,4 +79,7 @@ export function makeAppRuntimeBoundary(managed: ManagedRuntimeType<AppServices, 
   };
 }
 
-export const makeAppRuntime = (): OwnedAppRuntime => makeAppRuntimeBoundary(ManagedRuntime.make(AppLiveLayer));
+export const makeAppRuntime = (client?: GeneratedClient): OwnedAppRuntime =>
+  makeAppRuntimeBoundary(
+    ManagedRuntime.make(client === undefined ? AppLiveLayer : makeAppLiveLayer(makeGeneratedApiLayer(client))),
+  );

@@ -769,14 +769,15 @@ test.describe("detail action buttons", () => {
         type: "urn:kenn-forge:error:issue-workspace-branch-conflict",
         title: "Issue workspace branch conflict",
         status: 409,
+        code: "branchConflict",
         detail: "A local branch with the requested name already exists.",
-        details: { existingDirectory: scenario.existingDirectory },
+        details: {
+          existingDirectory: scenario.existingDirectory,
+          branch: scenario.branch,
+          suggestedBranch: `${scenario.branch}-2`,
+        },
         errors: [
-          {
-            message: "Requested branch already exists",
-            location: "body.git_head_ref",
-            value: scenario.branch,
-          },
+          { message: "Requested branch already exists", location: "body.git_head_ref", value: scenario.branch },
           {
             message: "Suggested alternative branch name",
             location: "body.suggested_git_head_ref",
@@ -913,13 +914,15 @@ test.describe("detail action buttons", () => {
       type: "urn:kenn-forge:error:issue-workspace-branch-conflict",
       title: "Issue workspace branch conflict",
       status: 409,
+      code: "branchConflict",
       detail: "A local branch with the requested name already exists.",
+      details: {
+        branch: "kenn-forge/issue-10",
+        suggestedBranch: "kenn-forge/issue-10-2",
+        existingDirectory: false,
+      },
       errors: [
-        {
-          message: "Requested branch already exists",
-          location: "body.git_head_ref",
-          value: "kenn-forge/issue-10",
-        },
+        { message: "Requested branch already exists", location: "body.git_head_ref", value: "kenn-forge/issue-10" },
         {
           message: "Suggested alternative branch name",
           location: "body.suggested_git_head_ref",
@@ -1513,7 +1516,7 @@ test.describe("detail action buttons", () => {
       await route.fulfill({
         status: 500,
         contentType: "application/json",
-        body: JSON.stringify({ detail: "backend down" }),
+        body: JSON.stringify({ status: 500, code: "internalError", detail: "backend down" }),
       });
     });
 

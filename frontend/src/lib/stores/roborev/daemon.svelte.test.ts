@@ -5,6 +5,7 @@ import type { RoborevClient } from "../../api/roborev/client.js";
 import { makeGeneratedApiLayer, type GeneratedClient } from "../../api/generated-api.js";
 import type { OwnedAppRuntime } from "../../app/runtime.js";
 import { makeTestAppRuntime } from "../../testing/effect-layers.js";
+import { makeGeneratedClient } from "../../testing/generated-client.js";
 import { RoborevDaemonWorkflowLive } from "./daemon-workflow.js";
 import { createDaemonStore } from "./daemon.svelte.js";
 
@@ -13,6 +14,14 @@ let runtime: OwnedAppRuntime | undefined;
 function daemonStore(forgeClient: GeneratedClient, client: RoborevClient) {
   runtime = makeTestAppRuntime(forgeClient);
   return createDaemonStore({ client, runtime });
+}
+
+function forgeClient(get: ReturnType<typeof vi.fn>): GeneratedClient {
+  return makeGeneratedClient({
+    RoborevService: {
+      getRoborevStatus: async (options) => (await get("/roborev/status", options)).data,
+    },
+  });
 }
 
 function startPolling(store: ReturnType<typeof daemonStore>) {
@@ -68,10 +77,7 @@ describe("createDaemonStore", () => {
         version: "test",
       },
     });
-    const store = daemonStore(
-      { GET: forgeGet } as unknown as GeneratedClient,
-      { GET: roborevGet } as unknown as RoborevClient,
-    );
+    const store = daemonStore(forgeClient(forgeGet), { GET: roborevGet } as unknown as RoborevClient);
 
     const polling = startPolling(store);
     store.checkHealth();
@@ -103,10 +109,7 @@ describe("createDaemonStore", () => {
       statusSignal = options?.signal;
       return new Promise(() => {});
     });
-    const store = daemonStore(
-      { GET: forgeGet } as unknown as GeneratedClient,
-      { GET: roborevGet } as unknown as RoborevClient,
-    );
+    const store = daemonStore(forgeClient(forgeGet), { GET: roborevGet } as unknown as RoborevClient);
 
     const polling = startPolling(store);
     await vi.waitFor(() => {
@@ -180,10 +183,7 @@ describe("createDaemonStore", () => {
         version: "test",
       },
     });
-    const store = daemonStore(
-      { GET: forgeGet } as unknown as GeneratedClient,
-      { GET: roborevGet } as unknown as RoborevClient,
-    );
+    const store = daemonStore(forgeClient(forgeGet), { GET: roborevGet } as unknown as RoborevClient);
 
     const oldPolling = startPolling(store);
     expect(forgeGet).toHaveBeenCalledTimes(1);
@@ -255,9 +255,9 @@ describe("createDaemonStore", () => {
           version: "test",
         },
       });
-      const forgeClient = { GET: forgeGet } as unknown as GeneratedClient;
-      const store = daemonStore(forgeClient, { GET: roborevGet } as unknown as RoborevClient);
-      const daemonLayer = Layer.provideMerge(RoborevDaemonWorkflowLive, makeGeneratedApiLayer(forgeClient));
+      const generatedClient = forgeClient(forgeGet);
+      const store = daemonStore(generatedClient, { GET: roborevGet } as unknown as RoborevClient);
+      const daemonLayer = Layer.provideMerge(RoborevDaemonWorkflowLive, makeGeneratedApiLayer(generatedClient));
       const polling = yield* Effect.forkChild(store.pollingEffect.pipe(Effect.provide(daemonLayer)));
 
       yield* Effect.yieldNow;

@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import type { components } from "../../src/lib/api/generated/schema";
+import type { MergePRBody } from "../../src/lib/api/generated/models/index.js";
 import { mockApi } from "./support/mockApi";
 
 // Wire-level coverage for the head-pinning contract
@@ -16,7 +16,7 @@ const MERGE_SUCCESS = {
   merged: true,
   message: "merged",
   sha: REVIEWED_SHA,
-} satisfies components["schemas"]["MergePRBody"];
+} satisfies MergePRBody;
 
 const MERGE_PATH = "**/api/v1/pulls/github/acme/widgets/42/merge";
 const APPROVE_PATH = "**/api/v1/pulls/github/acme/widgets/42/approve";

@@ -2,31 +2,23 @@ import { cleanup, render, waitFor } from "@testing-library/svelte";
 import { Effect } from "effect";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { OwnedAppRuntime } from "../../app/runtime.js";
+import { GeneratedProblemResponse } from "../../api/runtime.js";
+import { makeGeneratedClient } from "../../testing/generated-client.js";
 import { navigate } from "../../stores/router.svelte.js";
 import { getInlineWorkspaceController, resetWorkspaceHostForTest } from "../../stores/workspace-host.svelte.js";
 
 const mocks = vi.hoisted(() => ({
   runtimeClient: {
-    GET: vi.fn(),
-    POST: vi.fn(),
-    PUT: vi.fn(),
-    DELETE: vi.fn(),
+    getWorkspace: vi.fn(),
   },
 }));
 const runtimeState = vi.hoisted<{ appRuntime?: OwnedAppRuntime }>(() => ({}));
 
-vi.mock("../../api/runtime.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../api/runtime.js")>();
-  return {
-    ...actual,
-    client: mocks.runtimeClient,
-    createRuntimeClient: () => mocks.runtimeClient,
-  };
-});
-
 vi.mock("../../app/runtime-context.js", async () => {
   const { makeAppRuntime } = await import("../../app/runtime.js");
-  runtimeState.appRuntime = makeAppRuntime();
+  runtimeState.appRuntime = makeAppRuntime(
+    makeGeneratedClient({ WorkspacesService: { getWorkspace: mocks.runtimeClient.getWorkspace } }),
+  );
   return { getAppRuntime: () => runtimeState.appRuntime };
 });
 
@@ -71,10 +63,7 @@ describe("MobileWorkspaceTerminal", () => {
   });
 
   beforeEach(() => {
-    mocks.runtimeClient.GET.mockReset();
-    mocks.runtimeClient.POST.mockReset();
-    mocks.runtimeClient.PUT.mockReset();
-    mocks.runtimeClient.DELETE.mockReset();
+    mocks.runtimeClient.getWorkspace.mockReset();
     localStorage.clear();
     resetWorkspaceHostForTest();
     navigate("/pulls");
@@ -86,16 +75,18 @@ describe("MobileWorkspaceTerminal", () => {
   });
 
   it("returns to the workspace list without treating a lookup miss as deletion", async () => {
-    mocks.runtimeClient.GET.mockResolvedValue({
-      error: {
-        type: "about:blank",
-        title: "Not found",
-        status: 404,
-        detail: "workspace not found",
-        code: "workspaceNotFound",
-      },
-      response: new Response(null, { status: 404 }),
-    });
+    mocks.runtimeClient.getWorkspace.mockRejectedValue(
+      new GeneratedProblemResponse(
+        {
+          type: "about:blank",
+          title: "Not found",
+          status: 404,
+          detail: "workspace not found",
+          code: "workspaceNotFound",
+        },
+        new Response(null, { status: 404 }),
+      ),
+    );
     const controller = getInlineWorkspaceController("prs");
     controller.claim(identity, workspaceRef);
     const onMissing = vi.fn();

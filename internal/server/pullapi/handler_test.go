@@ -147,6 +147,64 @@ func TestListPullsTreatsAssociatedWorkspaceSubjectAsHasWorkspace(t *testing.T) {
 	assert.Equal(t, "ws-adhoc", result.Body[0].Workspace.ID)
 }
 
+func TestListPullsReportsStackPlacementForMultiMemberStacks(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	database := dbtest.Open(t)
+	ctx := t.Context()
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	identity := db.GitHubRepoIdentity("github.com", "acme", "widget")
+	identity.PlatformRepoID = "repo-acme-widget"
+	repoID, err := database.UpsertRepo(ctx, identity)
+	require.NoError(err)
+	insert := func(number int, head, base string) int64 {
+		id, err := database.UpsertMergeRequest(ctx, &db.MergeRequest{
+			RepoID: repoID, PlatformID: int64(number), Number: number, Title: "PR",
+			Author: "alice", State: db.MergeRequestStateOpen, HeadBranch: head, BaseBranch: base,
+			CreatedAt: now, UpdatedAt: now, LastActivityAt: now,
+		})
+		require.NoError(err)
+		return id
+	}
+	firstID := insert(1, "feature/a", "main")
+	secondID := insert(2, "feature/b", "feature/a")
+	thirdID := insert(3, "feature/c", "feature/b")
+	insert(4, "solo", "main")
+	loneID := insert(5, "lone", "main")
+
+	stackID, err := database.UpsertStack(ctx, repoID, 1, "feature")
+	require.NoError(err)
+	require.NoError(database.ReplaceStackMembers(ctx, stackID, []db.StackMember{
+		{StackID: stackID, MergeRequestID: firstID, Position: 1},
+		{StackID: stackID, MergeRequestID: secondID, Position: 2},
+		{StackID: stackID, MergeRequestID: thirdID, Position: 3},
+	}))
+	loneStackID, err := database.UpsertStack(ctx, repoID, 5, "lone")
+	require.NoError(err)
+	require.NoError(database.ReplaceStackMembers(ctx, loneStackID, []db.StackMember{
+		{StackID: loneStackID, MergeRequestID: loneID, Position: 1},
+	}))
+
+	handler := New(Deps{
+		DB:       database,
+		Resolver: httpapi.NewRepositoryResolver(httpapi.RepositoryResolverDeps{DB: database}),
+	})
+	result, err := handler.listPulls(ctx, &listPullsInput{State: "open"})
+	require.NoError(err)
+
+	byNumber := map[int]MergeRequestResponse{}
+	for _, row := range result.Body {
+		byNumber[row.Number] = row
+	}
+	require.Len(byNumber, 5)
+	require.NotNil(byNumber[2].Stack)
+	assert.Equal(StackPlacementResponse{Position: 2, Size: 3}, *byNumber[2].Stack)
+	require.NotNil(byNumber[3].Stack)
+	assert.Equal(StackPlacementResponse{Position: 3, Size: 3}, *byNumber[3].Stack)
+	assert.Nil(byNumber[4].Stack, "pull requests outside a stack carry no placement")
+	assert.Nil(byNumber[5].Stack, "single-member stacks are not shown as stacked")
+}
+
 type stubPullProviderSource struct {
 	rows   []MergeRequestResponse
 	detail MergeRequestDetailResponse

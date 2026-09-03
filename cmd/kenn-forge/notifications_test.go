@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -14,7 +16,7 @@ func TestNotificationLoopStopWaitsForInFlightRun(t *testing.T) {
 	require := require.New(t)
 	parent, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	handle := newNotificationLoopHandle(parent)
+	handle := newBackgroundLoopHandle(parent)
 	started := make(chan struct{})
 	release := make(chan struct{})
 	finished := make(chan struct{})
@@ -62,7 +64,7 @@ func TestNotificationLoopStopWaitsForInFlightRun(t *testing.T) {
 
 func TestNotificationLoopStopHonorsDeadline(t *testing.T) {
 	require := require.New(t)
-	handle := newNotificationLoopHandle(t.Context())
+	handle := newBackgroundLoopHandle(t.Context())
 	started := make(chan struct{})
 	release := make(chan struct{})
 	t.Cleanup(func() { close(release) })
@@ -87,7 +89,7 @@ func TestNotificationLoopStopHonorsDeadline(t *testing.T) {
 func TestNotificationLoopRunsBeforeFirstTickerInterval(t *testing.T) {
 	parent, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	handle := newNotificationLoopHandle(parent)
+	handle := newBackgroundLoopHandle(parent)
 	defer func() { require.NoError(t, handle.Stop(t.Context())) }()
 
 	started := make(chan struct{})
@@ -105,6 +107,26 @@ func TestNotificationLoopRunsBeforeFirstTickerInterval(t *testing.T) {
 			return false
 		}
 	}, 200*time.Millisecond, 10*time.Millisecond, "notification loop should run before first ticker interval")
+}
+
+func TestBackgroundLoopWaitsForFirstTickerInterval(t *testing.T) {
+	require.Equal(t, 24*time.Hour, databaseOptimizeInterval)
+
+	synctest.Test(t, func(t *testing.T) {
+		handle := newBackgroundLoopHandle(t.Context())
+		var calls atomic.Int64
+		handle.startTickerAfterInterval("test maintenance", 24*time.Hour, func(context.Context) error {
+			calls.Add(1)
+			return nil
+		})
+
+		synctest.Wait()
+		require.Zero(t, calls.Load())
+		time.Sleep(24 * time.Hour)
+		synctest.Wait()
+		require.Equal(t, int64(1), calls.Load())
+		require.NoError(t, handle.Stop(t.Context()))
+	})
 }
 
 func TestNotificationLoopSettingsSnapshotConfig(t *testing.T) {

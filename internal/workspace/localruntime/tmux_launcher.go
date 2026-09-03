@@ -169,8 +169,20 @@ func (p tmuxEnvPolicy) environment(
 	baseEnv []string,
 	extraStripVars []string,
 ) []string {
+	return p.environmentForOS(baseEnv, extraStripVars, runtime.GOOS)
+}
+
+func (p tmuxEnvPolicy) environmentForOS(
+	baseEnv []string,
+	extraStripVars []string,
+	goos string,
+) []string {
 	if p.preserveShellEnv {
-		return sessionEnvironment(baseEnv, extraStripVars)
+		env := sessionEnvironment(baseEnv, extraStripVars)
+		if locale := shellCharacterLocaleDefault(env, goos); locale != "" {
+			return append(env, "LC_CTYPE="+locale)
+		}
+		return env
 	}
 	return tmuxSessionEnvironment(baseEnv, extraStripVars)
 }

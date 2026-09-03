@@ -335,6 +335,16 @@ describe("defaultActions", () => {
     expect(locationPath()).toBe(
       "/repo/browser?provider=gitlab&platform_host=gitlab.example.com&repo_path=group%2Fproject",
     );
+
+    window.history.replaceState(
+      null,
+      "",
+      "/?selected=commit:abcdef1234567890abcdef1234567890abcdef12&provider=github&platform_host=github.com&repo_path=acme%2Fwidgets&branch=main",
+    );
+    const commitContext = ctx("activity", { selectedPR: staleSelected });
+    expect(action.when(commitContext)).toBe(true);
+    action.handler(commitContext);
+    expect(locationPath()).toBe("/repo/browser?provider=github&platform_host=github.com&repo_path=acme%2Fwidgets");
   });
 
   it("opens the repo browser from the route-selected issue before stale issue store state", () => {

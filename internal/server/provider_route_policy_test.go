@@ -12,7 +12,7 @@ import (
 func TestProviderRouteCoverage(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
-	t.Parallel()
+	runParallelServerTest(t)
 
 	registered, err := RegisteredTransportOperations()
 	require.NoError(err)
@@ -43,7 +43,7 @@ func TestProviderRouteCoverage(t *testing.T) {
 }
 
 func TestProviderRouteCoverageRejectsUnknownAndDuplicateOperations(t *testing.T) {
-	t.Parallel()
+	runParallelServerTest(t)
 
 	registered := []RegisteredTransportOperation{{ID: "known"}}
 	_, err := buildProviderRouteRules(registered, []ProviderRouteRule{{
@@ -64,7 +64,7 @@ func TestProviderRouteCoverageRejectsUnknownAndDuplicateOperations(t *testing.T)
 
 func TestProviderRouteOwnershipExamples(t *testing.T) {
 	assert := assert.New(t)
-	t.Parallel()
+	runParallelServerTest(t)
 
 	rules, err := providerRouteRules()
 	require.NoError(t, err)

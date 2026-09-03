@@ -26,18 +26,27 @@ const launchTargets = [
   },
 ];
 
-vi.mock("../../api/runtime.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../api/runtime.js")>();
+vi.mock("../../api/generated/index.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api/generated/index.js")>();
+  return {
+    ...actual,
+    KataService: {
+      ...actual.KataService,
+      listKataDaemons: async () => (await mockGet("/kata/daemons")).data,
+    },
+  };
+});
+
+vi.mock("../../app/runtime.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../app/runtime.js")>();
+  const { makeGeneratedClientFromRouteMocks } = await import("../../testing/test/route-mock-client.js");
   const client = {
     GET: (...args: unknown[]) => mockGet(...args),
     POST: (...args: unknown[]) => mockPost(...args),
   };
   return {
     ...actual,
-    apiErrorMessage: (error: { detail?: string; title?: string } | undefined, fallback: string) =>
-      error?.detail ?? error?.title ?? fallback,
-    client,
-    createRuntimeClient: () => client,
+    makeAppRuntime: () => actual.makeAppRuntime(makeGeneratedClientFromRouteMocks(client)),
   };
 });
 
@@ -320,9 +329,8 @@ describe("NewWorkspaceDialog", () => {
     await renderDialog();
 
     await fireEvent.click(screen.getByRole("button", { name: "Kata issue" }));
-    expect(((await screen.findByRole("searchbox", { name: "Search Kata issues" })) as HTMLInputElement).disabled).toBe(
-      false,
-    );
+    const search = (await screen.findByRole("searchbox", { name: "Search Kata issues" })) as HTMLInputElement;
+    await waitFor(() => expect(search.disabled).toBe(false));
   });
 
   it("routes non-default hosts through the host-scoped path", async () => {

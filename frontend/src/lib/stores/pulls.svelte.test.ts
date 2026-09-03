@@ -4,6 +4,8 @@ import type { PullRequest } from "../api/types.js";
 import type { GeneratedClient } from "../api/generated-api.js";
 import type { OwnedAppRuntime } from "../app/runtime.js";
 import { makeTestAppRuntime } from "../testing/effect-layers.js";
+import { makeGeneratedClient } from "../testing/generated-client.js";
+import { GeneratedProblemResponse } from "../api/runtime.js";
 import {
   createPullsStore as createRuntimePullsStore,
   type PullsStore,
@@ -71,19 +73,16 @@ function pull(id: number, repoName: string, lastActivityAt: string, overrides: P
 }
 
 function clientWithPulls(data: PullRequest[]): GeneratedClient {
-  return {
-    GET: vi.fn(async () => ({ data, error: undefined })),
-  } as unknown as GeneratedClient;
+  return makeGeneratedClient({ PullRequestsService: { listPulls: vi.fn(async () => data) } });
 }
 
 describe("pulls store display order", () => {
   it("reports when a bounded list filled the requested chunk", async () => {
-    const get = vi.fn(async () => ({
-      data: Array.from({ length: 30 }, (_, index) => pull(index + 1, "api", "2026-05-20T15:00:00Z")),
-      error: undefined,
-    }));
+    const get = vi.fn(async () =>
+      Array.from({ length: 30 }, (_, index) => pull(index + 1, "api", "2026-05-20T15:00:00Z")),
+    );
     const store = createPullsStore({
-      client: { GET: get } as unknown as GeneratedClient,
+      client: makeGeneratedClient({ PullRequestsService: { listPulls: get } }),
     });
 
     store.loadPulls({ limit: 30 });
@@ -99,20 +98,17 @@ describe("pulls store display order", () => {
     });
     await refresh.exit;
 
-    expect(get).toHaveBeenCalledWith(
-      "/pulls",
-      expect.objectContaining({ params: { query: expect.objectContaining({ limit: 30 }) } }),
-    );
+    expect(get).toHaveBeenCalledWith(expect.objectContaining({ limit: 30 }), expect.anything());
   });
 
   it("preserves the bounded list request after starring a pull request", async () => {
     const listed = pull(7, "api", "2026-05-20T15:00:00Z");
-    const get = vi.fn(async () => ({ data: [listed], error: undefined }));
+    const get = vi.fn(async () => [listed]);
     const store = createPullsStore({
-      client: {
-        GET: get,
-        PUT: vi.fn(async () => ({ data: undefined, error: undefined })),
-      } as unknown as GeneratedClient,
+      client: makeGeneratedClient({
+        PullRequestsService: { listPulls: get },
+        SettingsService: { setStarred: vi.fn(async () => undefined) },
+      }),
     });
     const ref = {
       provider: "github",
@@ -128,49 +124,36 @@ describe("pulls store display order", () => {
     store.togglePRStar(ref, 7, false);
 
     await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(1));
-    expect(get).toHaveBeenCalledWith(
-      "/pulls",
-      expect.objectContaining({ params: { query: expect.objectContaining({ limit: 30 }) } }),
-    );
+    expect(get).toHaveBeenCalledWith(expect.objectContaining({ limit: 30 }), expect.anything());
   });
 
   it("persists and sends the Involves me filter", async () => {
-    const get = vi.fn(async () => ({ data: [], error: undefined }));
-    const store = createPullsStore({ client: { GET: get } as unknown as GeneratedClient });
+    const get = vi.fn(async () => []);
+    const store = createPullsStore({ client: makeGeneratedClient({ PullRequestsService: { listPulls: get } }) });
 
     store.setInvolvesMe(true);
     await loadPulls(store);
 
     expect(localStorage.getItem(involvesMeFilterStorageKey("pulls"))).toBe("1");
-    expect(get).toHaveBeenCalledWith(
-      "/pulls",
-      expect.objectContaining({
-        params: { query: expect.objectContaining({ involves_me: true }) },
-      }),
-    );
+    expect(get).toHaveBeenCalledWith(expect.objectContaining({ involves_me: true }), expect.anything());
   });
 
   it("persists and sends the Unassigned filter", async () => {
-    const get = vi.fn(async () => ({ data: [], error: undefined }));
-    const store = createPullsStore({ client: { GET: get } as unknown as GeneratedClient });
+    const get = vi.fn(async () => []);
+    const store = createPullsStore({ client: makeGeneratedClient({ PullRequestsService: { listPulls: get } }) });
 
     store.setUnassigned(true);
     await loadPulls(store);
 
     expect(localStorage.getItem(unassignedFilterStorageKey("pulls"))).toBe("1");
-    expect(get).toHaveBeenCalledWith(
-      "/pulls",
-      expect.objectContaining({
-        params: { query: expect.objectContaining({ unassigned: true }) },
-      }),
-    );
+    expect(get).toHaveBeenCalledWith(expect.objectContaining({ unassigned: true }), expect.anything());
   });
 
   it("aborts a superseded list request", async () => {
     let firstSignal: AbortSignal | undefined;
     const get = vi
       .fn()
-      .mockImplementationOnce((_path: string, options?: { signal?: AbortSignal }) => {
+      .mockImplementationOnce((_query: unknown, options?: { signal?: AbortSignal }) => {
         firstSignal = options?.signal;
         return new Promise((_resolve, reject) => {
           firstSignal?.addEventListener("abort", () => {
@@ -178,9 +161,9 @@ describe("pulls store display order", () => {
           });
         });
       })
-      .mockResolvedValueOnce({ data: [], error: undefined });
+      .mockResolvedValueOnce([]);
     const store = createPullsStore({
-      client: { GET: get } as unknown as GeneratedClient,
+      client: makeGeneratedClient({ PullRequestsService: { listPulls: get } }),
     });
 
     store.loadPulls();
@@ -193,9 +176,16 @@ describe("pulls store display order", () => {
 
   it("flashes star failures without replacing list load errors", async () => {
     const store = createPullsStore({
-      client: {
-        DELETE: vi.fn(async () => ({ error: { detail: "permission denied" } })),
-      } as unknown as GeneratedClient,
+      client: makeGeneratedClient({
+        SettingsService: {
+          unsetStarred: vi.fn(async () => {
+            throw new GeneratedProblemResponse(
+              { status: 403, title: "Forbidden", detail: "permission denied" },
+              Response.json({}, { status: 403 }),
+            );
+          }),
+        },
+      }),
     });
 
     const result = store.togglePRStar(
@@ -212,13 +202,16 @@ describe("pulls store display order", () => {
 
   it("sends unstar identity without a DELETE request body", async () => {
     const listed = pull(7, "api", "2026-05-20T15:00:00Z", { Starred: true });
-    const remove = vi.fn().mockResolvedValue({ data: undefined, error: undefined });
+    const remove = vi.fn().mockResolvedValue(undefined);
     const get = vi
       .fn()
-      .mockResolvedValueOnce({ data: [listed], error: undefined })
-      .mockResolvedValue({ data: [{ ...listed, Starred: false }], error: undefined });
+      .mockResolvedValueOnce([listed])
+      .mockResolvedValue([{ ...listed, Starred: false }]);
     const store = createPullsStore({
-      client: { DELETE: remove, GET: get } as unknown as GeneratedClient,
+      client: makeGeneratedClient({
+        PullRequestsService: { listPulls: get },
+        SettingsService: { unsetStarred: remove },
+      }),
     });
     const ref = {
       provider: "github",
@@ -232,34 +225,30 @@ describe("pulls store display order", () => {
     store.togglePRStar(ref, 7, true);
 
     await vi.waitFor(() => expect(remove).toHaveBeenCalledTimes(1));
-    expect(remove).toHaveBeenCalledWith("/starred", {
-      params: {
-        query: {
-          item_type: "pr",
-          provider: "github",
-          platform_host: "github.com",
-          owner: "acme",
-          name: "api",
-          number: 7,
-        },
+    expect(remove).toHaveBeenCalledWith(
+      {
+        item_type: "pr",
+        provider: "github",
+        platform_host: "github.com",
+        owner: "acme",
+        name: "api",
+        number: 7,
       },
-      signal: expect.any(AbortSignal),
-    });
-    expect(remove.mock.calls[0]?.[1]).not.toHaveProperty("body");
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   it("orders opposite star requests for the same provider item", async () => {
-    const first = Promise.withResolvers<{ data: undefined; error: undefined }>();
+    const first = Promise.withResolvers<void>();
     const remove = vi.fn(() => first.promise);
-    const add = vi.fn().mockResolvedValue({ data: undefined, error: undefined });
+    const add = vi.fn().mockResolvedValue(undefined);
     const listed = pull(7, "api", "2026-05-20T15:00:00Z", { Starred: true });
     const projectDetailStar = vi.fn();
     const store = createPullsStore({
-      client: {
-        DELETE: remove,
-        PUT: add,
-        GET: vi.fn().mockResolvedValue({ data: [listed], error: undefined }),
-      } as unknown as GeneratedClient,
+      client: makeGeneratedClient({
+        PullRequestsService: { listPulls: vi.fn().mockResolvedValue([listed]) },
+        SettingsService: { unsetStarred: remove, setStarred: add },
+      }),
       optimisticDetailStarUpdate: projectDetailStar,
     });
     const ref = {
@@ -282,7 +271,7 @@ describe("pulls store display order", () => {
     expect(star).toBeUndefined();
     expect(store.getPulls()[0]?.Starred).toBe(true);
     expect(add).not.toHaveBeenCalled();
-    first.resolve({ data: undefined, error: undefined });
+    first.resolve();
     await vi.waitFor(() => expect(add).toHaveBeenCalledTimes(1));
   });
 

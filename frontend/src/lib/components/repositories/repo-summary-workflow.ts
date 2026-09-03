@@ -1,21 +1,22 @@
 import { Context, Effect, Fiber, FiberHandle, FiberMap, Layer, Ref, Semaphore } from "effect";
-import type { components } from "../../api/generated/schema.js";
+import type { CreateIssueInputBody, IssueResponse } from "../../api/generated/models/index.js";
 import type { ApiProblemError, TransientTransportError } from "../../api/effect-errors.js";
 import { GeneratedApi } from "../../api/generated-api.js";
 import {
   canonicalProvider,
-  providerCollectionPath,
   providerRouteParams,
   resolvedPlatformHost,
   type ProviderRouteRef,
+  providerHostRouteParams,
+  providerUsesHostRoute,
 } from "../../api/provider-routes.js";
 import type { RepoSummary } from "../../api/types.js";
 import { CommandQueueClosed, makeOrderedCommandQueue } from "../../effect/ordered-command-queue.js";
 
 export type RepoSummaryReadError = ApiProblemError | TransientTransportError;
 export type RepoSummaryIssueError = ApiProblemError | TransientTransportError;
-export type RepoSummaryIssueResponse = components["schemas"]["IssueResponse"];
-export type RepoSummaryIssueBody = Pick<components["schemas"]["CreateIssueInputBody"], "title" | "body">;
+export type RepoSummaryIssueResponse = IssueResponse;
+export type RepoSummaryIssueBody = Pick<CreateIssueInputBody, "title" | "body">;
 
 export interface RepoSummaryIssueRequest extends RepoSummaryIssueBody {
   readonly ref: ProviderRouteRef;
@@ -99,7 +100,7 @@ export const RepoSummaryWorkflowLive = Layer.effect(RepoSummaryWorkflow)(
     const api = yield* GeneratedApi;
     const reads = yield* FiberHandle.make<RepoSummary[], RepoSummaryReadError>();
     const request = api
-      .execute("load repository summaries", (signal) => api.client.GET("/repos/summary", { signal }))
+      .execute("load repository summaries", (signal) => api.client.RepositoriesService.listRepoSummaries({ signal }))
       .pipe(Effect.map((summaries) => summaries ?? []));
     const issueSequence = yield* Ref.make(1);
     const issueRegistry = yield* Ref.make<RepoSummaryIssueRegistry>({ entries: new Map() });
@@ -168,11 +169,17 @@ export const RepoSummaryWorkflowLive = Layer.effect(RepoSummaryWorkflow)(
       Effect.fn("RepoSummaryWorkflow.createAcceptedIssue")(function* (accepted: AcceptedRepoSummaryIssueRequest) {
         const result = yield* api
           .execute("create repository issue", (signal) =>
-            api.client.POST(providerCollectionPath("issues", accepted.ref), {
-              params: { path: providerRouteParams(accepted.ref) },
-              body: { title: accepted.title, body: accepted.body },
-              signal,
-            }),
+            providerUsesHostRoute(accepted.ref)
+              ? api.client.IssuesService.createIssueOnHost(
+                  { ...providerHostRouteParams(accepted.ref) },
+                  { title: accepted.title, body: accepted.body },
+                  { signal },
+                )
+              : api.client.IssuesService.createIssue(
+                  { ...providerRouteParams(accepted.ref) },
+                  { title: accepted.title, body: accepted.body },
+                  { signal },
+                ),
           )
           .pipe(
             Effect.match({

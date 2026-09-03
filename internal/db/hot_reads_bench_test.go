@@ -150,6 +150,7 @@ func BenchmarkHotReads(b *testing.B) {
 	activity, err := probe.ListActivity(ctx, ListActivityOpts{Limit: 50})
 	require.NoError(b, err)
 	require.NotEmpty(b, activity, "benchmark store needs activity rows")
+	windowStart := activity[0].CreatedAt.AddDate(0, 0, -7)
 	require.NoError(b, probe.Close())
 	b.Logf("store: %d repos, %d merge requests, %d events, %.1f MB; newest activity is %q",
 		repos, mrs, events, float64(info.Size())/1e6, activity[0].ActivityType)
@@ -176,6 +177,12 @@ func BenchmarkHotReads(b *testing.B) {
 		}},
 		{name: "ListActivity", run: func(d *DB) error {
 			_, err := d.ListActivity(ctx, ListActivityOpts{Limit: 50})
+			return err
+		}},
+		// The activity route always applies a seven-day window unless the
+		// caller supplies one, so this is the shape production runs.
+		{name: "ActivityFeedWindowed", run: func(d *DB) error {
+			_, err := d.ListActivity(ctx, ListActivityOpts{Limit: 50, Since: &windowStart})
 			return err
 		}},
 	}

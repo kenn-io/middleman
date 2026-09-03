@@ -521,6 +521,50 @@ describe("DiffFile", () => {
     });
   });
 
+  it("does not classify inactive markdown review threads as unavailable", async () => {
+    const visibleObserver = (globalThis as GlobalWithIO).IntersectionObserver;
+    class InactiveIntersectionObserverStub {
+      root: Element | null = null;
+      rootMargin = "";
+      thresholds: readonly number[] = [];
+      constructor(private readonly callback: IntersectionObserverCallback) {}
+      observe(target: Element): void {
+        const entry = {
+          isIntersecting: false,
+          intersectionRatio: 0,
+          target,
+          boundingClientRect: {} as DOMRectReadOnly,
+          intersectionRect: {} as DOMRectReadOnly,
+          rootBounds: null,
+          time: 0,
+        } as IntersectionObserverEntry;
+        this.callback([entry], this as unknown as IntersectionObserver);
+      }
+      unobserve(): void {}
+      disconnect(): void {}
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+    }
+    (globalThis as GlobalWithIO).IntersectionObserver = InactiveIntersectionObserverStub;
+
+    try {
+      renderDiffFile(makeFile({ path: "README.md", old_path: "README.md" }), {
+        richPreview: true,
+        diffHeadSHA: "diff-head",
+        reviewThreads: [makeReviewThread({ path: "README.md", diff_head_sha: "diff-head" })],
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Loading preview")).toBeTruthy();
+      });
+      expect(screen.queryByText("Published review note")).toBeNull();
+      expect(screen.queryByText("Line unavailable")).toBeNull();
+    } finally {
+      (globalThis as GlobalWithIO).IntersectionObserver = visibleObserver;
+    }
+  });
+
   it("keeps structural markdown rich preview changes visibly highlighted", async () => {
     renderDiffFile(
       makeFile({
@@ -1096,6 +1140,32 @@ describe("DiffFile", () => {
       expect(screen.getByText("Follow up here")).toBeTruthy();
       expect(selectedPierreLines()?.length).toBeGreaterThanOrEqual(4);
     });
+  });
+
+  it("does not restore a saved draft range from an older diff snapshot", async () => {
+    renderDiffFile(makeFile(), {
+      reviewEnabled: true,
+      diffHeadSHA: "current-diff-head",
+      draftComments: [
+        {
+          id: "draft-stale",
+          body: "Stale draft range",
+          path: "src/foo.ts",
+          side: "right",
+          line: 2,
+          new_line: 2,
+          line_type: "add",
+          diff_head_sha: "older-diff-head",
+          created_at: "2026-03-30T14:01:00Z",
+          updated_at: "2026-03-30T14:01:00Z",
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Stale draft range")).toBeTruthy();
+    });
+    expect(selectedPierreLines()).toHaveLength(0);
   });
 
   it("opens a new inline composer on a line that already has a saved draft", async () => {
@@ -1951,7 +2021,7 @@ describe("DiffFile", () => {
     );
   });
 
-  it("keeps unmapped markdown rich preview threads in file-level fallback cards", async () => {
+  it("keeps unmapped markdown rich preview threads in line-unavailable fallback cards", async () => {
     renderDiffFile(
       makeFile({
         path: "README.md",
@@ -1979,7 +2049,9 @@ describe("DiffFile", () => {
     const comment = document.querySelector("[data-review-thread-id='thread-1']");
     expect(comment?.closest(".markdown-rich-diff--unified")).toBeNull();
     expect(comment?.classList.contains("inline-review-thread--file-level")).toBe(true);
-    expect(comment?.textContent).toContain("File");
+    expect(comment?.textContent).toContain("Line unavailable");
+    const preview = document.querySelector(".markdown-rich-diff--unified");
+    expect(preview?.compareDocumentPosition(comment!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("does not anchor markdown rich preview threads to hidden source gaps inside spanning blocks", async () => {
@@ -2032,6 +2104,33 @@ describe("DiffFile", () => {
     const comment = document.querySelector("[data-review-thread-id='thread-1']");
     expect(comment?.closest(".markdown-rich-diff--unified")).toBeNull();
     expect(comment?.classList.contains("inline-review-thread--file-level")).toBe(true);
+    expect(comment?.textContent).toContain("Line unavailable");
+    const preview = document.querySelector(".markdown-rich-diff--unified");
+    expect(preview?.compareDocumentPosition(comment!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps stale markdown rich preview threads after the rendered preview", async () => {
+    renderDiffFile(makeFile({ path: "README.md", old_path: "README.md" }), {
+      richPreview: true,
+      diffHeadSHA: "current-head",
+      reviewThreads: [
+        makeReviewThread({
+          path: "README.md",
+          old_path: "README.md",
+          diff_head_sha: "stale-head",
+          body: "Stale rich preview note",
+        }),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Stale rich preview note")).toBeTruthy();
+    });
+    const comment = document.querySelector("[data-review-thread-id='thread-1']");
+    const preview = document.querySelector(".markdown-rich-diff--unified");
+    expect(screen.getByText("Outdated")).toBeTruthy();
+    expect(comment?.closest(".markdown-rich-diff--unified")).toBeNull();
+    expect(preview?.compareDocumentPosition(comment!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("lets published inline review threads be replied to", async () => {
@@ -2068,13 +2167,64 @@ describe("DiffFile", () => {
     });
   });
 
-  it("does not render stale-head review threads under a matching current line", async () => {
+  it("places the reported outdated review comment after the rendered file", async () => {
+    const reviewBody =
+      "I'm wondering if we should rename this to CompactionJob and make it a union, and the field a list so we can extend it if we need to support different state for different types of compactions, or multiple jobs per compaction. On the other hand we could just keep it simple for now and bump the version when we need/want to handle those things.";
+    renderDiffFile(makeFile({ path: "schemas/compactor.fbs", old_path: "schemas/compactor.fbs" }), {
+      reviewEnabled: true,
+      diffHeadSHA: "3a6aab8fea50618d913847928c49dc4ece5e3cf0",
+      reviewThreads: [
+        makeReviewThread({
+          path: "schemas/compactor.fbs",
+          line: 97,
+          new_line: 97,
+          body: reviewBody,
+          diff_head_sha: "0e1da4256897ac5ccf479b3ab7dd410244149f0c",
+        }),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(reviewBody)).toBeTruthy();
+    });
+    expect(screen.getByText("Outdated")).toBeTruthy();
+    const comment = document.querySelector("[data-review-thread-id='thread-1']");
+    const diff = document.querySelector(".pierre-diff");
+    expect(comment?.parentElement?.classList.contains("file-content")).toBe(true);
+    expect(comment?.closest("[slot^='annotation-']")).toBeNull();
+    expect(diff?.compareDocumentPosition(comment!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps a stale review thread detached when its numeric line still exists", async () => {
     renderDiffFile(makeFile(), {
       reviewEnabled: true,
       diffHeadSHA: "current-head",
+      reviewThreads: [makeReviewThread({ diff_head_sha: "stale-head" })],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Published review note")).toBeTruthy();
+    });
+    expect(screen.getByText("Outdated")).toBeTruthy();
+    const comment = document.querySelector("[data-review-thread-id='thread-1']");
+    const diff = document.querySelector(".pierre-diff");
+    expect(comment?.closest("[slot^='annotation-']")).toBeNull();
+    expect(diff?.compareDocumentPosition(comment!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it.each([
+    ["fresh unavailable", "diff-head", "diff-head", 99, "Line unavailable"],
+    ["head-unknown thread inline", undefined, "diff-head", 2, ""],
+    ["head-unknown diff inline", "diff-head", undefined, 2, ""],
+  ] as const)("keeps %s", async (_label, threadHead, diffHead, line, expectedLabel) => {
+    renderDiffFile(makeFile(), {
+      reviewEnabled: true,
+      ...(diffHead === undefined ? {} : { diffHeadSHA: diffHead }),
       reviewThreads: [
         makeReviewThread({
-          diff_head_sha: "stale-head",
+          line,
+          new_line: line,
+          ...(threadHead === undefined ? {} : { diff_head_sha: threadHead }),
         }),
       ],
     });
@@ -2082,10 +2232,14 @@ describe("DiffFile", () => {
     await waitFor(() => {
       expect(screen.getByText("Published review note")).toBeTruthy();
     });
-    expect(screen.getByText("File")).toBeTruthy();
     const comment = document.querySelector("[data-review-thread-id='thread-1']");
-    expect(comment?.parentElement?.classList.contains("file-content")).toBe(true);
-    expect(comment?.closest("[slot^='annotation-']")).toBeNull();
+    if (expectedLabel) {
+      expect(screen.getByText(expectedLabel)).toBeTruthy();
+      expect(comment?.closest("[slot^='annotation-']")).toBeNull();
+    } else {
+      expect(comment?.closest("[slot^='annotation-']")).toBeTruthy();
+      expect(screen.queryByText("Line unavailable")).toBeNull();
+    }
   });
 
   it("does not match added-file threads only because old paths are empty", () => {
@@ -2111,7 +2265,11 @@ describe("DiffFile", () => {
     expect(screen.queryByText("Wrong added file note")).toBeNull();
   });
 
-  it("renders unmatched review threads at the file header", () => {
+  it.each([
+    ["fresh", "diff-head", "diff-head"],
+    ["stale", "diff-head", "other-head"],
+    ["head-unknown", undefined, "diff-head"],
+  ] as const)("renders %s file-level review threads at the file header", (_label, diffHead, threadHead) => {
     renderDiffFile(
       makeFile({
         patch: `diff --git a/src/foo.ts b/src/foo.ts
@@ -2138,6 +2296,7 @@ describe("DiffFile", () => {
         ],
       }),
       {
+        ...(diffHead === undefined ? {} : { diffHeadSHA: diffHead }),
         reviewThreads: [
           makeReviewThread({
             id: "thread-file",
@@ -2145,6 +2304,7 @@ describe("DiffFile", () => {
             new_line: 1,
             line_type: "file",
             body: "File-level note",
+            diff_head_sha: threadHead,
           }),
         ],
       },
@@ -2153,7 +2313,45 @@ describe("DiffFile", () => {
     expect(screen.getByText("File-level note")).toBeTruthy();
     expect(screen.getByText("File")).toBeTruthy();
     const comment = document.querySelector("[data-review-thread-id='thread-file']");
+    const diff = document.querySelector(".pierre-diff");
     expect(comment?.parentElement?.classList.contains("file-content")).toBe(true);
+    expect(comment?.compareDocumentPosition(diff!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it.each([
+    ["fresh", "diff-head", "diff-head", "Line unavailable"],
+    ["stale", "diff-head", "other-head", "Outdated"],
+    ["head-unknown", undefined, "diff-head", "Line unavailable"],
+  ] as const)("keeps binary review threads visible for %s snapshots", async (_label, diffHead, threadHead, status) => {
+    renderDiffFile(makeFile({ is_binary: true, hunks: [] }), {
+      ...(diffHead === undefined ? {} : { diffHeadSHA: diffHead }),
+      reviewThreads: [
+        makeReviewThread({
+          diff_head_sha: threadHead,
+          line: 99,
+          new_line: 99,
+        }),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Published review note")).toBeTruthy();
+    });
+    const notice = screen.getByText("Binary file changed");
+    const comment = document.querySelector("[data-review-thread-id='thread-1']");
+    expect(screen.getByText(status)).toBeTruthy();
+    expect(notice.compareDocumentPosition(comment!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps workspace review authoring disabled", async () => {
+    renderDiffFile(makeFile(), {
+      reviewEnabled: false,
+      diffHeadSHA: "diff-head",
+    });
+
+    await expectPierreDiffText(/old linenew line/);
+    expect(screen.queryByPlaceholderText("Leave a comment")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Publish review" })).toBeNull();
   });
 
   it("clears an open inline composer when review context changes", async () => {

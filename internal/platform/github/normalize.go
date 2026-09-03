@@ -193,6 +193,20 @@ func NormalizeReviewCommentEvent(
 	return event
 }
 
+type commitEventMetadata struct {
+	CommitAuthor string `json:"commit_author,omitempty"`
+}
+
+func commitIdentity(user *gh.User, signature *gh.CommitAuthor) string {
+	if login := loginOrEmpty(user); login != "" {
+		return login
+	}
+	if signature != nil {
+		return signature.GetName()
+	}
+	return ""
+}
+
 func NormalizeCommitEvent(
 	repo platform.RepoRef,
 	mrNumber int,
@@ -204,9 +218,18 @@ func NormalizeCommitEvent(
 		dedupeKey = sha[:12]
 	}
 
-	author := loginOrEmpty(c.GetAuthor())
-	if author == "" && c.GetCommit() != nil && c.GetCommit().GetAuthor() != nil {
-		author = c.GetCommit().GetAuthor().GetName()
+	commit := c.GetCommit()
+	authorSignature := (*gh.CommitAuthor)(nil)
+	committerSignature := (*gh.CommitAuthor)(nil)
+	if commit != nil {
+		authorSignature = commit.GetAuthor()
+		committerSignature = commit.GetCommitter()
+	}
+	author := commitIdentity(c.GetAuthor(), authorSignature)
+	committer := commitIdentity(c.GetCommitter(), committerSignature)
+	actor := committer
+	if actor == "" {
+		actor = author
 	}
 
 	event := platform.MergeRequestEvent{
@@ -214,13 +237,19 @@ func NormalizeCommitEvent(
 		MergeRequestNumber: mrNumber,
 		EventType:          "commit",
 		DedupeKey:          fmt.Sprintf("commit-%s", dedupeKey),
-		Author:             author,
+		Author:             actor,
 		Summary:            sha,
 	}
-	if c.GetCommit() != nil {
-		event.Body = c.GetCommit().GetMessage()
-		if c.GetCommit().Author != nil && c.GetCommit().Author.Date != nil {
-			event.CreatedAt = c.GetCommit().Author.Date.UTC()
+	if author != "" && author != actor {
+		metadata, _ := json.Marshal(commitEventMetadata{CommitAuthor: author})
+		event.MetadataJSON = string(metadata)
+	}
+	if commit != nil {
+		event.Body = commit.GetMessage()
+		if committerSignature != nil && committerSignature.Date != nil {
+			event.CreatedAt = committerSignature.Date.UTC()
+		} else if authorSignature != nil && authorSignature.Date != nil {
+			event.CreatedAt = authorSignature.Date.UTC()
 		}
 	}
 	return event

@@ -30,6 +30,7 @@ type LocalBackend interface {
 	CreateAdHocWorkspace(context.Context, RepositoryIdentity, string) (Workspace, error)
 	LaunchWorkspaceRuntime(context.Context, string, string) (RuntimeSession, error)
 	GetWorkspaceRuntime(context.Context, string) (WorkspaceRuntime, error)
+	SubmitAgentMessage(context.Context, AgentMessageRequest) (AgentMessageResult, error)
 	SubmitInitialMessage(context.Context, InitialMessageRequest) (InitialMessageStatus, error)
 	GetInitialMessage(context.Context, string, string) (InitialMessageStatus, error)
 }
@@ -324,6 +325,18 @@ type RuntimeSession struct {
 
 type WorkspaceRuntime struct {
 	Sessions []RuntimeSession
+}
+
+type AgentMessageRequest struct {
+	WorkspaceID       string
+	RuntimeSessionKey string
+	Message           string
+}
+
+type AgentMessageResult struct {
+	TargetKey    string
+	MessageBytes int
+	SubmittedAt  time.Time
 }
 
 type InitialMessageRequest struct {

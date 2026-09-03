@@ -135,7 +135,7 @@
     fetchedRepos = [];
     const execution = untrack(() => runtime.runCommand(
       executeGeneratedApiRequest("GET /repos", (generatedClient, signal) =>
-        generatedClient.GET("/repos", { signal })
+        generatedClient.RepositoriesService.listRepos({ signal })
       ).pipe(
         Effect.matchEffect({
           onFailure: () => Effect.sync(() => {

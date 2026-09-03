@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/config"
 	ghclient "go.kenn.io/forge/internal/github"
+	"go.kenn.io/forge/internal/testutil"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 )
 
@@ -85,7 +86,7 @@ func TestRoborevProxyForwarding(t *testing.T) {
 
 	srv := setupTestServerWithRoborev(t, daemon.URL)
 
-	rr := doJSON(t, srv, http.MethodGet, "/api/roborev/jobs", nil)
+	rr := testutil.DoJSON(t, srv, http.MethodGet, "/api/roborev/jobs", nil)
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
 	mu.Lock()
@@ -112,7 +113,7 @@ func TestRoborevProxyRejectsDeclaredStreamsWithoutAccept(t *testing.T) {
 		"/api/roborev/api/job/output?job_id=7&stream=1",
 	} {
 		t.Run(target, func(t *testing.T) {
-			rr := doJSON(t, srv, http.MethodGet, target, nil)
+			rr := testutil.DoJSON(t, srv, http.MethodGet, target, nil)
 
 			assert.Equal(t, http.StatusNotAcceptable, rr.Code)
 			assert.Contains(t, rr.Body.String(), "requires an explicit Accept header")
@@ -187,9 +188,9 @@ func TestRoborevProxy502(t *testing.T) {
 
 	srv := setupTestServerWithRoborev(t, "http://127.0.0.1:1")
 
-	rr := doJSON(
-		t, srv, http.MethodGet, "/api/roborev/jobs", nil,
-	)
+	rr := testutil.DoJSON(
+		t, srv, http.MethodGet, "/api/roborev/jobs", nil)
+
 	require.Equal(t, http.StatusBadGateway, rr.Code)
 
 	var body map[string]string
@@ -218,10 +219,10 @@ func TestRoborevHealthProbeAvailable(t *testing.T) {
 
 	srv := setupTestServerWithRoborev(t, daemon.URL)
 
-	rr := doJSON(
+	rr := testutil.DoJSON(
 		t, srv, http.MethodGet,
-		"/api/v1/roborev/status", nil,
-	)
+		"/api/v1/roborev/status", nil)
+
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
 	var resp roborevStatusResponse
@@ -236,10 +237,10 @@ func TestRoborevHealthProbeUnavailable(t *testing.T) {
 
 	srv := setupTestServerWithRoborev(t, "http://127.0.0.1:1")
 
-	rr := doJSON(
+	rr := testutil.DoJSON(
 		t, srv, http.MethodGet,
-		"/api/v1/roborev/status", nil,
-	)
+		"/api/v1/roborev/status", nil)
+
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
 	var resp roborevStatusResponse

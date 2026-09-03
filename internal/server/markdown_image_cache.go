@@ -20,9 +20,12 @@ import (
 
 const (
 	markdownImageCacheTTL      = 14 * 24 * time.Hour
+	markdownImageMutableTTL    = 5 * time.Minute
 	markdownImageFetchTimeout  = 30 * time.Second
 	markdownImageCacheMaxBytes = int64(512 << 20)
-	markdownImageCacheMagic    = "kenn-forge-markdown-image-v1\n"
+	markdownImageCacheMagic    = "kenn-forge-markdown-image-v2\n"
+	markdownImageMutableFlag   = "mutable"
+	markdownImageImmutableFlag = "immutable"
 )
 
 type markdownImageCache struct {
@@ -53,24 +56,66 @@ func (c *markdownImageCache) get(key string) (platform.MarkdownImage, bool) {
 	}
 	path := c.path(key)
 	info, err := os.Stat(path)
-	if err != nil || time.Since(info.ModTime()) > markdownImageCacheTTL {
-		if err == nil {
-			_ = os.Remove(path)
-		}
+	if err != nil {
 		return platform.MarkdownImage{}, false
 	}
 	data, err := os.ReadFile(path)
-	if err != nil || !bytes.HasPrefix(data, []byte(markdownImageCacheMagic)) {
+	if err != nil {
+		return platform.MarkdownImage{}, false
+	}
+	image, ok := decodeMarkdownImageCacheEntry(data)
+	if !ok {
+		_ = os.Remove(path)
+		return platform.MarkdownImage{}, false
+	}
+	ttl := markdownImageCacheTTL
+	if image.Mutable {
+		ttl = markdownImageMutableTTL
+	}
+	if time.Since(info.ModTime()) > ttl {
+		_ = os.Remove(path)
+		return platform.MarkdownImage{}, false
+	}
+	return image, true
+}
+
+// Cache entries are the magic line, the content type line, a mutability flag
+// line, then the raw bytes.
+func encodeMarkdownImageCacheHeader(image platform.MarkdownImage) string {
+	flag := markdownImageImmutableFlag
+	if image.Mutable {
+		flag = markdownImageMutableFlag
+	}
+	return markdownImageCacheMagic + image.ContentType + "\n" + flag + "\n"
+}
+
+func decodeMarkdownImageCacheEntry(data []byte) (platform.MarkdownImage, bool) {
+	if !bytes.HasPrefix(data, []byte(markdownImageCacheMagic)) {
 		return platform.MarkdownImage{}, false
 	}
 	payload := data[len(markdownImageCacheMagic):]
-	separator := bytes.IndexByte(payload, '\n')
-	if separator <= 0 {
+	typeEnd := bytes.IndexByte(payload, '\n')
+	if typeEnd <= 0 {
+		return platform.MarkdownImage{}, false
+	}
+	rest := payload[typeEnd+1:]
+	flagEnd := bytes.IndexByte(rest, '\n')
+	if flagEnd <= 0 {
+		return platform.MarkdownImage{}, false
+	}
+	var mutable bool
+	switch string(rest[:flagEnd]) {
+	case markdownImageMutableFlag:
+		mutable = true
+	case markdownImageImmutableFlag:
+		mutable = false
+	default:
 		return platform.MarkdownImage{}, false
 	}
 	return platform.MarkdownImage{
-		ContentType: string(payload[:separator]),
-		Content:     payload[separator+1:],
+		ContentType: string(payload[:typeEnd]),
+		Content:     rest[flagEnd+1:],
+		Mutable:     mutable,
 	}, true
 }
 
@@ -123,7 +168,7 @@ func (c *markdownImageCache) set(key string, image platform.MarkdownImage) error
 	}
 	tempPath := temp.Name()
 	defer func() { _ = os.Remove(tempPath) }()
-	if _, err = temp.WriteString(markdownImageCacheMagic + image.ContentType + "\n"); err == nil {
+	if _, err = temp.WriteString(encodeMarkdownImageCacheHeader(image)); err == nil {
 		_, err = temp.Write(image.Content)
 	}
 	closeErr := temp.Close()

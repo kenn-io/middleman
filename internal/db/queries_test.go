@@ -1265,7 +1265,7 @@ func TestProviderCanonicalReadPathsUseLookupKeys(t *testing.T) {
 	assert.NotNil(refreshedIssue.DetailFetchedAt)
 
 	users, err := d.ListCommentAutocompleteUsers(
-		ctx, "gitlab", "gitlab.example.com", "group/subgroup", "projectname", "auth", 10,
+		ctx, "gitlab", "gitlab.example.com", "group/subgroup", "projectname", "auth", nil, 10,
 	)
 	require.NoError(err)
 	assert.Equal([]string{"author"}, users)
@@ -3774,13 +3774,67 @@ func TestListCommentAutocompleteUsers(t *testing.T) {
 		DedupeKey: "issue-comment-1",
 	}}))
 
-	users, err := d.ListCommentAutocompleteUsers(ctx, "github", "github.com", "acme", "widget", "al", 10)
+	users, err := d.ListCommentAutocompleteUsers(ctx, "github", "github.com", "acme", "widget", "al", nil, 10)
 	require.NoError(err)
 	assert.Equal([]string{"alice", "albert", "alex"}, users)
 
-	users, err = d.ListCommentAutocompleteUsers(ctx, "github", "github.com", "acme", "widget", "bert", 10)
+	users, err = d.ListCommentAutocompleteUsers(ctx, "github", "github.com", "acme", "widget", "bert", nil, 10)
 	require.NoError(err)
 	assert.Equal([]string{"albert"}, users)
+}
+
+func TestListCommentAutocompleteUsersRanksCurrentItemParticipantsFirst(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	d := openTestDB(t)
+	ctx := t.Context()
+	base := baseTime()
+
+	repoID := insertTestRepo(t, d, "acme", "widget")
+	// The most recently active user in the repo is unrelated to the target
+	// item; without an item hint they should lead the list.
+	insertTestMRWithOptions(t, d, testMR(repoID, 30, withMRAuthor("zed"), withMRActivity(base.Add(10*time.Hour))))
+	mrID := insertTestMRWithOptions(t, d, testMR(repoID, 12, withMRAuthor("alice"), withMRActivity(base.Add(2*time.Hour))))
+	require.NoError(d.UpdateMergeRequestAssignees(ctx, repoID, mrID, []string{"bob"}))
+	require.NoError(d.UpdateMergeRequestReviewers(ctx, repoID, mrID, []string{"carol"}))
+	require.NoError(d.UpsertMREvents(ctx, []MREvent{{
+		MergeRequestID: mrID,
+		EventType:      "comment",
+		Author:         "dave",
+		CreatedAt:      base.Add(time.Hour),
+		DedupeKey:      "mr-12-comment-1",
+	}}))
+	issueID := insertTestIssueWithOptions(t, d, testIssue(repoID, 7, withIssueAuthor("erin"), withIssueActivity(base.Add(3*time.Hour))))
+	require.NoError(d.UpdateIssueAssignees(ctx, repoID, issueID, []string{"frank"}))
+
+	users, err := d.ListCommentAutocompleteUsers(ctx, "github", "github.com", "acme", "widget", "", nil, 10)
+	require.NoError(err)
+	assert.Equal("zed", users[0], "without an item hint recency wins")
+
+	users, err = d.ListCommentAutocompleteUsers(
+		ctx, "github", "github.com", "acme", "widget", "",
+		&CommentAutocompleteItem{Kind: "pull", Number: 12}, 10,
+	)
+	require.NoError(err)
+	assert.Equal(
+		[]string{"alice", "bob", "carol", "dave", "zed", "erin"}, users,
+		"author, assignee, reviewer, and commenter lead; the rest keep recency order",
+	)
+
+	users, err = d.ListCommentAutocompleteUsers(
+		ctx, "github", "github.com", "acme", "widget", "",
+		&CommentAutocompleteItem{Kind: "issue", Number: 7}, 10,
+	)
+	require.NoError(err)
+	assert.Equal([]string{"erin", "frank", "zed", "alice", "dave"}, users, "issue author and assignee lead")
+
+	// A participant that does not match the query is still filtered out.
+	users, err = d.ListCommentAutocompleteUsers(
+		ctx, "github", "github.com", "acme", "widget", "z",
+		&CommentAutocompleteItem{Kind: "pull", Number: 12}, 10,
+	)
+	require.NoError(err)
+	assert.Equal([]string{"zed"}, users)
 }
 
 func TestListCommentAutocompleteUsersScopesByProvider(t *testing.T) {
@@ -3816,11 +3870,11 @@ func TestListCommentAutocompleteUsersScopesByProvider(t *testing.T) {
 		withIssueActivity(base.Add(2*time.Hour)),
 	))
 
-	users, err := d.ListCommentAutocompleteUsers(ctx, "gitea", "github.com", "acme", "widget", "", 10)
+	users, err := d.ListCommentAutocompleteUsers(ctx, "gitea", "github.com", "acme", "widget", "", nil, 10)
 	require.NoError(err)
 	assert.Equal([]string{"gina"}, users)
 
-	users, err = d.ListCommentAutocompleteUsers(ctx, "github", "github.com", "acme", "widget", "", 10)
+	users, err = d.ListCommentAutocompleteUsers(ctx, "github", "github.com", "acme", "widget", "", nil, 10)
 	require.NoError(err)
 	assert.Equal([]string{"alice"}, users)
 }
@@ -3862,7 +3916,7 @@ func TestListCommentAutocompleteUsersHidesOnlyRemovedUpstreamItems(t *testing.T)
 	}))
 
 	users, err := d.ListCommentAutocompleteUsers(
-		ctx, "github", "github.com", "acme", "widget", "", 20,
+		ctx, "github", "github.com", "acme", "widget", "", nil, 20,
 	)
 	require.NoError(err)
 	require.ElementsMatch([]string{

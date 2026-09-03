@@ -4,8 +4,9 @@ import { tick } from "svelte";
 
 import { projectIssueDetail } from "@kenn-io/kata-ui/packages/kata-ui/src/index.ts";
 
-import type { components } from "../../api/generated/schema.js";
+import type { KataEffectiveLink, KataEffectiveLinksResponse } from "../../api/generated/models/index.js";
 import type { GeneratedClient } from "../../api/generated-api.js";
+import { makeGeneratedClient } from "../../testing/generated-client.js";
 import { NAVIGATE_KEY } from "../../context.js";
 import type { KataLinksSubject } from "../../stores/kata-links.svelte.js";
 import { resetKataWorkspaceCreateForTest } from "../../stores/kata-workspace-create.svelte.js";
@@ -16,8 +17,8 @@ vi.mock("@kenn-io/kata-ui/packages/kata-ui/src/index.ts", async (importOriginal)
   return { ...actual, projectIssueDetail: vi.fn(actual.projectIssueDetail) };
 });
 
-type Link = components["schemas"]["KataEffectiveLink"];
-type LinksResponse = components["schemas"]["KataEffectiveLinksResponse"];
+type Link = KataEffectiveLink;
+type LinksResponse = KataEffectiveLinksResponse;
 
 const subject: KataLinksSubject = { kind: "workspace", workspaceID: "workspace-1" };
 
@@ -58,18 +59,24 @@ function detail(apiSchemaVersion = "0.10.0", title = "Keep one Kata UI") {
   };
 }
 
-function forgeClient(methods: Partial<GeneratedClient>): GeneratedClient {
-  return {
-    GET: vi.fn(),
-    POST: vi.fn(),
-    PUT: vi.fn(),
-    PATCH: vi.fn(),
-    DELETE: vi.fn(),
-    OPTIONS: vi.fn(),
-    HEAD: vi.fn(),
-    TRACE: vi.fn(),
-    ...methods,
-  } as unknown as GeneratedClient;
+type KataClientMethods = {
+  listLinks?: ReturnType<typeof vi.fn>;
+  getDetail?: ReturnType<typeof vi.fn>;
+  getLaunchTarget?: ReturnType<typeof vi.fn>;
+  createWorkspace?: ReturnType<typeof vi.fn>;
+  deleteLink?: ReturnType<typeof vi.fn>;
+};
+
+function forgeClient(methods: KataClientMethods): GeneratedClient {
+  return makeGeneratedClient({
+    KataService: {
+      ...(methods.listLinks && { listWorkspaceKataLinks: methods.listLinks }),
+      ...(methods.getDetail && { getKataIssueDetail: methods.getDetail }),
+      ...(methods.getLaunchTarget && { getKataLaunchTarget: methods.getLaunchTarget }),
+      ...(methods.createWorkspace && { createKataWorkspace: methods.createWorkspace }),
+      ...(methods.deleteLink && { deleteWorkspaceKataLink: methods.deleteLink }),
+    },
+  });
 }
 
 function renderPanel(client: GeneratedClient, props: { active?: boolean; disabled?: boolean } = {}) {
@@ -96,16 +103,18 @@ function popupFixture() {
 }
 
 function listAndDetailClient(links: Link[], detailEnvelope = detail(), linksResponse?: Partial<LinksResponse>) {
-  const get = vi.fn().mockImplementation((path: string) => {
-    if (path === "/workspaces/{id}/kata-links") {
-      return Promise.resolve({ data: response(links, linksResponse) });
-    }
-    if (path === "/kata/daemons/{daemon_id}/issues/{issue_uid}") {
-      return Promise.resolve({ data: structuredClone(detailEnvelope) });
-    }
-    throw new Error(`unexpected GET ${path}`);
-  });
-  return { client: forgeClient({ GET: get }), get };
+  const get = vi.fn();
+  const methods = {
+    listLinks: vi.fn((...args) => {
+      get("listWorkspaceKataLinks", ...args);
+      return Promise.resolve(response(links, linksResponse));
+    }),
+    getDetail: vi.fn((...args) => {
+      get("getKataIssueDetail", ...args);
+      return Promise.resolve(structuredClone(detailEnvelope));
+    }),
+  };
+  return { client: forgeClient(methods), get, methods };
 }
 
 describe("KataLinksPanel", () => {
@@ -186,23 +195,20 @@ describe("KataLinksPanel", () => {
       direct_link_id: undefined,
       provenance: ["inherited"],
     });
-    const get = vi
+    const listLinks = vi
       .fn()
-      .mockResolvedValueOnce({ data: response([direct, inherited]) })
-      .mockResolvedValueOnce({ data: detail() })
-      .mockResolvedValueOnce({ data: response([inherited]) })
-      .mockResolvedValueOnce({ data: detail("0.10.0", "Second task") });
-    const remove = vi.fn().mockResolvedValue({ data: undefined });
-    renderPanel(forgeClient({ GET: get, DELETE: remove }));
+      .mockResolvedValueOnce(response([direct, inherited]))
+      .mockResolvedValueOnce(response([inherited]));
+    const getDetail = vi.fn().mockResolvedValueOnce(detail()).mockResolvedValueOnce(detail("0.10.0", "Second task"));
+    const remove = vi.fn().mockResolvedValue(undefined);
+    renderPanel(forgeClient({ listLinks, getDetail, deleteLink: remove }));
 
     await screen.findByRole("button", { name: "Unlink KT-1" });
     expect(screen.queryByRole("button", { name: "Unlink KT-2" })).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "Unlink KT-1" }));
 
     await waitFor(() => expect(remove).toHaveBeenCalledTimes(1));
-    expect(remove).toHaveBeenCalledWith("/workspaces/{id}/kata-links/{link_id}", {
-      params: { path: { id: "workspace-1", link_id: 41 } },
-    });
+    expect(remove).toHaveBeenCalledWith({ id: "workspace-1", linkId: 41 });
     expect(await screen.findByRole("button", { name: /KT-2 Second task/ })).toBeTruthy();
   });
 
@@ -270,9 +276,9 @@ describe("KataLinksPanel", () => {
 
   it("disables workspace creation while the surrounding surface is disabled", async () => {
     const creatable = link({ workspace: { available: true } });
-    const { client } = listAndDetailClient([creatable]);
-    const post = vi.mocked(client.POST);
-    renderPanel(client, { disabled: true });
+    const { methods } = listAndDetailClient([creatable]);
+    const post = vi.fn();
+    renderPanel(forgeClient({ ...methods, createWorkspace: post }), { disabled: true });
 
     const button = await screen.findByRole("button", { name: "Create workspace" });
     expect((button as HTMLButtonElement).disabled).toBe(true);
@@ -301,15 +307,13 @@ describe("KataLinksPanel", () => {
   it("opens the selected issue with the pinned daemon launch target", async () => {
     const { popup, popupDocument, replace } = popupFixture();
     const open = vi.spyOn(window, "open").mockReturnValue(popup);
-    const get = vi.fn().mockImplementation((path: string) => {
-      if (path === "/workspaces/{id}/kata-links") return Promise.resolve({ data: response([link()]) });
-      if (path === "/kata/daemons/{daemon_id}/issues/{issue_uid}") return Promise.resolve({ data: detail() });
-      if (path === "/kata/daemons/{daemon_id}/issues/{issue_uid}/launch-target") {
-        return Promise.resolve({ data: { available: true, url: "http://127.0.0.1:4222/issues/issue-1" } });
-      }
-      throw new Error(`unexpected GET ${path}`);
-    });
-    renderPanel(forgeClient({ GET: get }));
+    renderPanel(
+      forgeClient({
+        listLinks: vi.fn().mockResolvedValue(response([link()])),
+        getDetail: vi.fn().mockResolvedValue(detail()),
+        getLaunchTarget: vi.fn().mockResolvedValue({ available: true, url: "http://127.0.0.1:4222/issues/issue-1" }),
+      }),
+    );
     await screen.findByLabelText("Kata issue detail");
 
     await fireEvent.click(screen.getByRole("button", { name: "Open in Kata" }));
@@ -328,15 +332,13 @@ describe("KataLinksPanel", () => {
   it("rejects an unsafe daemon launch target before navigating the popup", async () => {
     const { popup, popupDocument } = popupFixture();
     vi.spyOn(window, "open").mockReturnValue(popup);
-    const get = vi.fn().mockImplementation((path: string) => {
-      if (path === "/workspaces/{id}/kata-links") return Promise.resolve({ data: response([link()]) });
-      if (path === "/kata/daemons/{daemon_id}/issues/{issue_uid}") return Promise.resolve({ data: detail() });
-      if (path === "/kata/daemons/{daemon_id}/issues/{issue_uid}/launch-target") {
-        return Promise.resolve({ data: { available: true, url: "javascript:alert(document.cookie)" } });
-      }
-      throw new Error(`unexpected GET ${path}`);
-    });
-    renderPanel(forgeClient({ GET: get }));
+    renderPanel(
+      forgeClient({
+        listLinks: vi.fn().mockResolvedValue(response([link()])),
+        getDetail: vi.fn().mockResolvedValue(detail()),
+        getLaunchTarget: vi.fn().mockResolvedValue({ available: true, url: "javascript:alert(document.cookie)" }),
+      }),
+    );
     await screen.findByLabelText("Kata issue detail");
 
     await fireEvent.click(screen.getByRole("button", { name: "Open in Kata" }));
@@ -347,29 +349,27 @@ describe("KataLinksPanel", () => {
   });
 
   it("closes a reserved popup when selection changes during launch lookup", async () => {
-    let resolveLaunch!: (value: { data: { available: true; url: string } }) => void;
-    const launch = new Promise<{ data: { available: true; url: string } }>((resolve) => {
+    let resolveLaunch!: (value: { available: true; url: string }) => void;
+    const launch = new Promise<{ available: true; url: string }>((resolve) => {
       resolveLaunch = resolve;
     });
     const { popup, popupDocument, close } = popupFixture();
     vi.spyOn(window, "open").mockReturnValue(popup);
     const links = [link(), link({ issue_uid: "issue-2", reference: "KT-2", title: "Second task" })];
-    const get = vi.fn().mockImplementation((path: string, options: { params?: { path?: { issue_uid?: string } } }) => {
-      if (path === "/workspaces/{id}/kata-links") return Promise.resolve({ data: response(links) });
-      if (path === "/kata/daemons/{daemon_id}/issues/{issue_uid}") {
-        return Promise.resolve({
-          data: detail("0.10.0", options.params?.path?.issue_uid === "issue-2" ? "Second task" : "Keep one Kata UI"),
-        });
-      }
-      if (path === "/kata/daemons/{daemon_id}/issues/{issue_uid}/launch-target") return launch;
-      throw new Error(`unexpected GET ${path}`);
-    });
-    renderPanel(forgeClient({ GET: get }));
+    renderPanel(
+      forgeClient({
+        listLinks: vi.fn().mockResolvedValue(response(links)),
+        getDetail: vi.fn(({ issueUid }: { issueUid: string }) =>
+          Promise.resolve(detail("0.10.0", issueUid === "issue-2" ? "Second task" : "Keep one Kata UI")),
+        ),
+        getLaunchTarget: vi.fn(() => launch),
+      }),
+    );
     await screen.findByLabelText("Kata issue detail");
 
     await fireEvent.click(screen.getByRole("button", { name: "Open in Kata" }));
     await fireEvent.click(screen.getByRole("button", { name: /KT-2 Second task/ }));
-    resolveLaunch({ data: { available: true, url: "https://kata.example.test/issues/issue-1" } });
+    resolveLaunch({ available: true, url: "https://kata.example.test/issues/issue-1" });
 
     await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
     expect(popupDocument.body.querySelector("a")).toBeNull();
@@ -382,14 +382,12 @@ describe("KataLinksPanel", () => {
       workspace: { available: true, item_key: "item-key", item_type: "kata_task" },
     });
     const createClient = listAndDetailClient([createLink]);
-    const post = vi.fn().mockResolvedValue({ data: { id: "workspace-new" } });
-    const created = renderPanel(forgeClient({ GET: createClient.get, POST: post }));
+    const post = vi.fn().mockResolvedValue({ id: "workspace-new" });
+    const created = renderPanel(forgeClient({ ...createClient.methods, createWorkspace: post }));
     await screen.findByLabelText("Kata issue detail");
     await fireEvent.click(screen.getByRole("button", { name: "Create workspace" }));
     await waitFor(() => expect(created.navigate).toHaveBeenCalledWith("/terminal/workspace-new"));
-    expect(post).toHaveBeenCalledWith("/kata/workspaces", {
-      body: expect.objectContaining({ project_name: "Forge" }),
-    });
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ project_name: "Forge" }));
     created.unmount();
 
     const existing = link({
@@ -403,10 +401,10 @@ describe("KataLinksPanel", () => {
   });
 
   it("shares pending Kata workspace creation across remounts and only navigates the current panel", async () => {
-    let resolveCreate!: (value: { data: { id: string; status: string } }) => void;
+    let resolveCreate!: (value: { id: string; status: string }) => void;
     const post = vi.fn(
       () =>
-        new Promise<{ data: { id: string; status: string } }>((resolve) => {
+        new Promise<{ id: string; status: string }>((resolve) => {
           resolveCreate = resolve;
         }),
     );
@@ -416,21 +414,21 @@ describe("KataLinksPanel", () => {
       workspace: { available: true, item_key: "item-remount", item_type: "kata_task" },
     });
     const firstClient = listAndDetailClient([createLink]);
-    const first = renderPanel(forgeClient({ GET: firstClient.get, POST: post }));
+    const first = renderPanel(forgeClient({ ...firstClient.methods, createWorkspace: post }));
     await screen.findByLabelText("Kata issue detail");
     await fireEvent.click(screen.getByRole("button", { name: "Create workspace" }));
-    expect(post).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     first.unmount();
 
     const secondClient = listAndDetailClient([createLink]);
-    const second = renderPanel(forgeClient({ GET: secondClient.get, POST: post }));
+    const second = renderPanel(forgeClient({ ...secondClient.methods, createWorkspace: post }));
     await screen.findByLabelText("Kata issue detail");
     const pendingButton = screen.getByRole("button", { name: "Creating…" });
     expect((pendingButton as HTMLButtonElement).disabled).toBe(true);
     await fireEvent.click(pendingButton);
     expect(post).toHaveBeenCalledTimes(1);
 
-    resolveCreate({ data: { id: "workspace-remount", status: "ready" } });
+    resolveCreate({ id: "workspace-remount", status: "ready" });
 
     const openButton = await screen.findByRole("button", { name: "Open workspace" });
     expect(first.navigate).not.toHaveBeenCalled();
@@ -439,10 +437,10 @@ describe("KataLinksPanel", () => {
   });
 
   it("does not let an A-to-B-to-A selection cycle reclaim an older workspace request", async () => {
-    let resolveCreate!: (value: { data: { id: string; status: string } }) => void;
+    let resolveCreate!: (value: { id: string; status: string }) => void;
     const post = vi.fn(
       () =>
-        new Promise<{ data: { id: string; status: string } }>((resolve) => {
+        new Promise<{ id: string; status: string }>((resolve) => {
           resolveCreate = resolve;
         }),
     );
@@ -451,43 +449,42 @@ describe("KataLinksPanel", () => {
       link({ workspace }),
       link({ issue_uid: "issue-2", reference: "KT-2", title: "Second task", workspace }),
     ];
-    const get = vi.fn().mockImplementation((path: string, options: { params?: { path?: { issue_uid?: string } } }) => {
-      if (path === "/workspaces/{id}/kata-links") return Promise.resolve({ data: response(links) });
-      if (path === "/kata/daemons/{daemon_id}/issues/{issue_uid}") {
-        return Promise.resolve({
-          data: detail("0.10.0", options.params?.path?.issue_uid === "issue-2" ? "Second task" : "Keep one Kata UI"),
-        });
-      }
-      throw new Error(`unexpected GET ${path}`);
-    });
-    const panel = renderPanel(forgeClient({ GET: get, POST: post }));
+    const panel = renderPanel(
+      forgeClient({
+        listLinks: vi.fn().mockResolvedValue(response(links)),
+        getDetail: vi.fn(({ issueUid }: { issueUid: string }) =>
+          Promise.resolve(detail("0.10.0", issueUid === "issue-2" ? "Second task" : "Keep one Kata UI")),
+        ),
+        createWorkspace: post,
+      }),
+    );
     await screen.findByLabelText("Kata issue detail");
     await fireEvent.click(screen.getByRole("button", { name: "Create workspace" }));
     await fireEvent.click(screen.getByRole("button", { name: /KT-2 Second task/ }));
     await fireEvent.click(screen.getByRole("button", { name: /KT-1 Keep one Kata UI/ }));
 
-    resolveCreate({ data: { id: "workspace-cycle", status: "ready" } });
+    resolveCreate({ id: "workspace-cycle", status: "ready" });
 
     await screen.findByRole("button", { name: "Open workspace" });
     expect(panel.navigate).not.toHaveBeenCalled();
   });
 
   it("ignores an unlink failure after the selected Kata issue changes", async () => {
-    let resolveDelete!: (value: { error: { detail: string } }) => void;
+    let rejectDelete!: (error: Error) => void;
     const remove = vi.fn(
       () =>
-        new Promise<{ error: { detail: string } }>((resolve) => {
-          resolveDelete = resolve;
+        new Promise<never>((_resolve, reject) => {
+          rejectDelete = reject;
         }),
     );
     const links = [link(), link({ issue_uid: "issue-2", reference: "KT-2", title: "Second task" })];
-    const { get } = listAndDetailClient(links);
-    renderPanel(forgeClient({ GET: get, DELETE: remove }));
+    const { methods } = listAndDetailClient(links);
+    renderPanel(forgeClient({ ...methods, deleteLink: remove }));
     await screen.findByLabelText("Kata issue detail");
 
     await fireEvent.click(screen.getByRole("button", { name: "Unlink KT-1" }));
     await fireEvent.click(screen.getByRole("button", { name: /KT-2 Second task/ }));
-    resolveDelete({ error: { detail: "Old unlink failed." } });
+    rejectDelete(new Error("Old unlink failed."));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Open in Kata" })).toBeTruthy());
     expect(screen.queryByText("Old unlink failed.")).toBeNull();

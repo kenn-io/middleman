@@ -16,6 +16,7 @@
   import { isSessionPaneKey } from "../stores/session-pane-key.js";
   import { getStores } from "../context.js";
   import { useItemWorkspaceClaim } from "../item-workspace-claim.svelte.js";
+  import type { ActivityCommitSelection } from "../utils/activitySelection.js";
   import type { InlineWorkspaceController, WorkspaceItemIdentity } from "../workspace-inline.js";
 
   type ActivityDetailTab = "conversation" | "files";
@@ -36,17 +37,6 @@
     detailTab?: ActivityDetailTab;
   };
 
-  type CommitDrawerItem = {
-    provider: string;
-    platformHost?: string | undefined;
-    repoPath: string;
-    owner: string;
-    name: string;
-    branchName: string;
-    commitSha: string;
-    title: string;
-  };
-
   interface Props {
     drawerItem?: DrawerItem | null;
     detailTab?: ActivityDetailTab;
@@ -54,6 +44,8 @@
     onCloseDrawer?: () => void;
     onDetailTabChange?: (tab: ActivityDetailTab, options?: { replace?: boolean }) => void;
     onDrawerItemChange?: (item: DrawerPRItem) => void;
+    commitItem?: ActivityCommitSelection | null;
+    onSelectCommit?: (item: ActivityCommitSelection) => void;
     phone?: boolean;
     inlineWorkspace?: InlineWorkspaceController | null;
     /**
@@ -71,6 +63,8 @@
     onCloseDrawer,
     onDetailTabChange,
     onDrawerItemChange,
+    commitItem: controlledCommitItem,
+    onSelectCommit,
     phone = false,
     inlineWorkspace = null,
     workspacePaneControls = undefined,
@@ -108,7 +102,7 @@
   // Internal state used when no controlled props are
   // provided (standalone usage).
   let internalDrawer = $state<DrawerItem | null>(null);
-  let commitDrawer = $state<CommitDrawerItem | null>(null);
+  let internalCommitDrawer = $state<ActivityCommitSelection | null>(null);
   let internalDetailTab = $state<ActivityDetailTab>(
     "conversation",
   );
@@ -160,6 +154,15 @@
   );
   const activeDrawer = $derived(
     controlled ? (controlledDrawer ?? null) : internalDrawer,
+  );
+  // Same seam shape as the item drawer above: a host that supplies either the
+  // value or the callback owns the commit selection and its URL round trip;
+  // standalone usage keeps it local.
+  const commitControlled = $derived(
+    controlledCommitItem !== undefined || onSelectCommit !== undefined,
+  );
+  const commitDrawer = $derived(
+    commitControlled ? (controlledCommitItem ?? null) : internalCommitDrawer,
   );
   const hasActiveDetail = $derived(
     activeDrawer !== null || commitDrawer !== null,
@@ -361,7 +364,7 @@
   }
 
   function handleSelect(item: ActivityItem): void {
-    commitDrawer = null;
+    if (!commitControlled) internalCommitDrawer = null;
     if (!item.repo) {
       throw new Error("activity item missing provider repo identity");
     }
@@ -390,7 +393,8 @@
     }
     if (!item.commit_sha) return;
 
-    commitDrawer = {
+    const entry: ActivityCommitSelection = {
+      itemType: "commit",
       provider: item.repo.provider,
       platformHost: item.repo.platform_host,
       repoPath: item.repo.repo_path,
@@ -400,16 +404,21 @@
       commitSha: item.commit_sha,
       title: item.body_preview || item.commit_sha.slice(0, 12),
     };
+    if (commitControlled) {
+      onSelectCommit?.(entry);
+    } else {
+      internalCommitDrawer = entry;
+    }
     if (!controlled) {
       internalDrawer = null;
-    } else if (activeDrawer !== null) {
+    } else if (!commitControlled && activeDrawer !== null) {
       onCloseDrawer?.();
     }
   }
 
   function handleClose(): void {
     activityPaneCollapsed = false;
-    commitDrawer = null;
+    if (!commitControlled) internalCommitDrawer = null;
     if (!controlled) {
       internalDrawer = null;
     }

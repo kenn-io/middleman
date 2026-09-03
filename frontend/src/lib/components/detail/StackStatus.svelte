@@ -6,8 +6,8 @@
   import XIcon from "@lucide/svelte/icons/x";
   import type { ApiProblemError, TransientTransportError } from "../../api/effect-errors.js";
   import { executeGeneratedApiRequest } from "../../api/generated-api.js";
-  import type { components } from "../../api/generated/schema.js";
-  import { providerItemPath, providerRouteParams } from "../../api/provider-routes.js";
+  import type { StackContextResponse, StackMemberResponse } from "../../api/generated/models/index.js";
+  import { providerItemPath, providerRouteParams, providerHostRouteParams, providerUsesHostRoute } from "../../api/provider-routes.js";
   import { retryIdempotentRead } from "../../api/retry-policy.js";
   import type { AppExecution } from "../../app/runtime.js";
   import { getAppRuntime } from "../../app/runtime-context.js";
@@ -48,8 +48,8 @@
     onmembernavigate,
   }: Props = $props();
 
-  type StackMember = components["schemas"]["StackMemberResponse"];
-  type StackContext = components["schemas"]["StackContextResponse"];
+  type StackMember = StackMemberResponse;
+  type StackContext = StackContextResponse;
 
   let data = $state<StackContext | null>(null);
   let visible = $state(false);
@@ -124,10 +124,7 @@
     const ref = { provider, platformHost, owner: o, name: n, repoPath };
     stackExecution?.interrupt();
     const program = executeGeneratedApiRequest("GET pull request stack", (client, signal) =>
-      client.GET(providerItemPath("pulls", ref, "/stack"), {
-        params: { path: { ...providerRouteParams(ref), number: num } },
-        signal,
-      }),
+      providerUsesHostRoute(ref) ? client.PullRequestsService.getPullStackOnHost({ ...providerHostRouteParams(ref), number: num }, { signal }) : client.PullRequestsService.getPullStack({ ...providerRouteParams(ref), number: num }, { signal }),
     ).pipe(
       retryIdempotentRead,
       Effect.flatMap((stack) =>
@@ -278,7 +275,7 @@
         {expanded}
       >
         <Layers2Icon size={12} strokeWidth={2.3} aria-hidden="true" />
-        <span class="stack-chip-label">Stacked: {data.position}/{data.size}</span>
+        <span class="stack-chip-label">{data.position}/{data.size}</span>
         {#if downstackBlockerCount > 0}
           <span class="stack-chip-failure" aria-hidden="true">
             <XIcon size={14} strokeWidth={2.8} /><span class="stack-chip-failure-count">{downstackBlockerCount}</span>

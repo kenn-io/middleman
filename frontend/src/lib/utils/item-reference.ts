@@ -127,6 +127,28 @@ export function parseProviderItemURL(
   };
 }
 
+// Recognizes a provider URL against the hosts of the configured repositories,
+// so surfaces without a repository context (such as a terminal) can turn a
+// printed pull request or issue link into an in-app item reference. Each
+// distinct provider/host pair is tried once; whether the matched repository is
+// actually tracked is decided by the resolve endpoint, not here.
+export function parseConfiguredProviderItemURL(
+  raw: string,
+  repos: ReadonlyArray<{ provider: string; platform_host?: string | undefined }>,
+): ResolvableItemReference | null {
+  const seen = new Set<string>();
+  for (const repo of repos) {
+    const provider = canonicalProvider(repo.provider);
+    const platformHost = repo.platform_host?.trim() || undefined;
+    const key = `${provider}\u0000${(platformHost ?? "").toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const ref = parseProviderItemURL(raw, { provider, platformHost });
+    if (ref) return ref;
+  }
+  return null;
+}
+
 export function buildItemReferenceHref(ref: ResolvableItemReference): string {
   if (ref.itemType === "pr") {
     return buildRoutedItemRoute({ ...ref, itemType: "pr" });

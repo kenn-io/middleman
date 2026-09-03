@@ -202,6 +202,71 @@ func TestListMRsBlockedByStackConflicts(t *testing.T) {
 	assert.True(blocked[mrID3])
 }
 
+func TestListStackPlacementsForMRs(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	d := openTestDB(t)
+	ctx := t.Context()
+	repoID := insertTestRepo(t, d, "org", "repo")
+
+	mrID1 := insertTestMRWithBranches(t, d, repoID, 1, "feature/a", "main", "merged")
+	mrID2 := insertTestMRWithBranches(t, d, repoID, 2, "feature/b", "feature/a", "open")
+	mrID3 := insertTestMRWithBranches(t, d, repoID, 3, "feature/c", "feature/b", "open")
+	mrID4 := insertTestMRWithBranches(t, d, repoID, 4, "feature/d", "feature/c", "open")
+	soloID := insertTestMRWithBranches(t, d, repoID, 9, "solo", "main", "open")
+	stackID, err := d.UpsertStack(ctx, repoID, 1, "feature")
+	require.NoError(err)
+	err = d.ReplaceStackMembers(ctx, stackID, []StackMember{
+		{StackID: stackID, MergeRequestID: mrID1, Position: 1},
+		{StackID: stackID, MergeRequestID: mrID2, Position: 2},
+		{StackID: stackID, MergeRequestID: mrID3, Position: 3},
+		{StackID: stackID, MergeRequestID: mrID4, Position: 4},
+	})
+	require.NoError(err)
+
+	placements, err := d.ListStackPlacementsForMRs(ctx, []int64{mrID2, mrID4, soloID})
+	require.NoError(err)
+	assert.Equal(StackPlacement{Position: 2, Size: 4}, placements[mrID2])
+	assert.Equal(StackPlacement{Position: 4, Size: 4}, placements[mrID4])
+	_, requested := placements[mrID1]
+	assert.False(requested, "unrequested members must not be returned")
+	_, inStack := placements[soloID]
+	assert.False(inStack, "merge requests outside a stack must not be returned")
+
+	// Hiding a member removed upstream renumbers the visible members.
+	_, err = d.WriteDB().ExecContext(ctx, `
+		INSERT INTO forge_archive_items (
+			repo_id, item_type, item_number, provider_item_id,
+			provider_created_at, provider_updated_at, lifecycle_state
+		) VALUES (?, 'merge_request', 2, 'pull-2', ?, ?, 'removed_upstream')`,
+		repoID, baseTime(), baseTime(),
+	)
+	require.NoError(err)
+
+	placements, err = d.ListStackPlacementsForMRs(ctx, []int64{mrID2, mrID3, mrID4})
+	require.NoError(err)
+	_, hidden := placements[mrID2]
+	assert.False(hidden, "hidden members must not be returned")
+	assert.Equal(StackPlacement{Position: 2, Size: 3}, placements[mrID3])
+	assert.Equal(StackPlacement{Position: 3, Size: 3}, placements[mrID4])
+
+	empty, err := d.ListStackPlacementsForMRs(ctx, nil)
+	require.NoError(err)
+	assert.Empty(empty)
+
+	// The pull list has no size cap, so the lookup must survive an ID set far
+	// beyond SQLite's bind-parameter ceiling (32,766 variables).
+	large := make([]int64, 0, 70_000)
+	for id := int64(1_000_000); id < 1_070_000; id++ {
+		large = append(large, id)
+	}
+	large = append(large, mrID3, mrID4)
+	placements, err = d.ListStackPlacementsForMRs(ctx, large)
+	require.NoError(err)
+	assert.Len(placements, 2)
+	assert.Equal(StackPlacement{Position: 2, Size: 3}, placements[mrID3])
+}
+
 func TestDeleteStaleStacks(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)

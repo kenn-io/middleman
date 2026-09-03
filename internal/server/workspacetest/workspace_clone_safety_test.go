@@ -16,6 +16,7 @@ import (
 	"go.kenn.io/forge/internal/apiclient"
 	"go.kenn.io/forge/internal/apiclient/generated"
 	"go.kenn.io/forge/internal/db"
+	"go.kenn.io/forge/internal/testutil/gitfixture"
 	"go.kenn.io/forge/internal/workspace"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
@@ -27,8 +28,7 @@ func setupLifecycleWorkspaceServer(t *testing.T) (*apiclient.Client, *db.DB, str
 }
 
 func TestWorkspaceForceDeleteToleratesCorruptWorktreeGitfileE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -59,8 +59,7 @@ func TestWorkspaceForceDeleteToleratesCorruptWorktreeGitfileE2E(t *testing.T) {
 func TestWorkspaceForceDeleteQuarantinesReplacedWorktreeAndAllowsRecreateE2E(
 	t *testing.T,
 ) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -110,8 +109,7 @@ func TestWorkspaceForceDeleteQuarantinesReplacedWorktreeAndAllowsRecreateE2E(
 func TestWorkspaceForceDeleteQuarantinesReplacementFileAndAllowsRecreateE2E(
 	t *testing.T,
 ) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -156,8 +154,7 @@ func TestWorkspaceForceDeleteQuarantinesReplacementFileAndAllowsRecreateE2E(
 func TestWorkspaceForceDeleteReplacementCloneClearsManagedRegistrationE2E(
 	t *testing.T,
 ) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -166,7 +163,7 @@ func TestWorkspaceForceDeleteReplacementCloneClearsManagedRegistrationE2E(
 
 	// Force setup onto the managed fallback branch so deletion has both a
 	// linked-worktree registration and a Kenn Forge branch to clear.
-	runGit(t, fixture.bare, "update-ref", "refs/heads/feature", "refs/heads/main")
+	gitfixture.Run(t, fixture.bare, "update-ref", "refs/heads/feature", "refs/heads/main")
 	ws := createReadyWorkspace(t, ctx, fixture.client)
 	worktreePath := ws.WorktreePath
 	assert.Equal(
@@ -175,15 +172,15 @@ func TestWorkspaceForceDeleteReplacementCloneClearsManagedRegistrationE2E(
 	)
 
 	require.NoError(os.RemoveAll(worktreePath))
-	runGit(t, filepath.Dir(worktreePath), "clone", fixture.remote, worktreePath)
-	runGit(
+	gitfixture.Run(t, filepath.Dir(worktreePath), "clone", fixture.remote, worktreePath)
+	gitfixture.Run(
 		t, worktreePath, "remote", "set-url", "origin",
 		"https://github.com/acme/widget.git",
 	)
 	require.NoError(os.WriteFile(
 		filepath.Join(worktreePath, "foreign.txt"), []byte("preserve me\n"), 0o644,
 	))
-	foreignHead := testGitSHA(t, worktreePath, "HEAD")
+	foreignHead := gitfixture.SHA(t, worktreePath, "HEAD")
 
 	force := true
 	deleteResp, err := fixture.client.HTTP.DeleteWorkspaceWithResponse(
@@ -197,7 +194,7 @@ func TestWorkspaceForceDeleteReplacementCloneClearsManagedRegistrationE2E(
 	stored, err := fixture.database.GetWorkspace(ctx, ws.Id)
 	require.NoError(err)
 	assert.Nil(stored)
-	assert.Equal(foreignHead, testGitSHA(t, worktreePath, "HEAD"))
+	assert.Equal(foreignHead, gitfixture.SHA(t, worktreePath, "HEAD"))
 	contents, err := os.ReadFile(filepath.Join(worktreePath, "foreign.txt"))
 	require.NoError(err)
 	assert.Equal("preserve me\n", string(contents))
@@ -219,15 +216,14 @@ func TestWorkspaceForceDeleteReplacementCloneClearsManagedRegistrationE2E(
 func TestWorkspaceForceDeletePreservesSameOriginForeignLinkedWorktreeE2E(
 	t *testing.T,
 ) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
 	ctx := t.Context()
 
-	runGit(t, fixture.bare, "update-ref", "refs/heads/feature", "refs/heads/main")
+	gitfixture.Run(t, fixture.bare, "update-ref", "refs/heads/feature", "refs/heads/main")
 	ws := createReadyWorkspace(t, ctx, fixture.client)
 	worktreePath := ws.WorktreePath
 	assert.Equal(
@@ -237,19 +233,19 @@ func TestWorkspaceForceDeletePreservesSameOriginForeignLinkedWorktreeE2E(
 
 	require.NoError(os.RemoveAll(worktreePath))
 	foreignGitDir := filepath.Join(t.TempDir(), "foreign.git")
-	runGit(t, filepath.Dir(foreignGitDir), "clone", "--bare", fixture.remote, foreignGitDir)
-	runGit(
+	gitfixture.Run(t, filepath.Dir(foreignGitDir), "clone", "--bare", fixture.remote, foreignGitDir)
+	gitfixture.Run(
 		t, foreignGitDir, "remote", "set-url", "origin",
 		"https://github.com/acme/widget.git",
 	)
-	runGit(
+	gitfixture.Run(
 		t, foreignGitDir, "worktree", "add", worktreePath,
 		"-b", "foreign/scratch", "HEAD",
 	)
 	require.NoError(os.WriteFile(
 		filepath.Join(worktreePath, "base.txt"), []byte("foreign dirty data\n"), 0o644,
 	))
-	foreignHead := testGitSHA(t, worktreePath, "HEAD")
+	foreignHead := gitfixture.SHA(t, worktreePath, "HEAD")
 
 	force := true
 	deleteResp, err := fixture.client.HTTP.DeleteWorkspaceWithResponse(
@@ -267,7 +263,7 @@ func TestWorkspaceForceDeletePreservesSameOriginForeignLinkedWorktreeE2E(
 	contents, err := os.ReadFile(filepath.Join(worktreePath, "base.txt"))
 	require.NoError(err)
 	assert.Equal("foreign dirty data\n", string(contents))
-	assert.Equal(foreignHead, testGitSHA(t, worktreePath, "HEAD"))
+	assert.Equal(foreignHead, gitfixture.SHA(t, worktreePath, "HEAD"))
 	assert.Contains(
 		workspaceGitOutput(t, worktreePath, "status", "--porcelain"),
 		"M base.txt",
@@ -282,7 +278,7 @@ func TestWorkspaceForceDeletePreservesSameOriginForeignLinkedWorktreeE2E(
 	)
 	requireGitRefMissing(t, fixture.bare, "refs/heads/kenn-forge/pr-1")
 
-	runGit(t, foreignGitDir, "worktree", "remove", "--force", worktreePath)
+	gitfixture.Run(t, foreignGitDir, "worktree", "remove", "--force", worktreePath)
 	recreated := createReadyWorkspace(t, ctx, fixture.client)
 	assert.Equal(worktreePath, recreated.WorktreePath)
 	assert.Equal(
@@ -294,15 +290,14 @@ func TestWorkspaceForceDeletePreservesSameOriginForeignLinkedWorktreeE2E(
 func TestWorkspaceForceDeletePreservesForeignLinkedWorktreeAfterManagedPruneE2E(
 	t *testing.T,
 ) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
 	ctx := t.Context()
 
-	runGit(t, fixture.bare, "update-ref", "refs/heads/feature", "refs/heads/main")
+	gitfixture.Run(t, fixture.bare, "update-ref", "refs/heads/feature", "refs/heads/main")
 	ws := createReadyWorkspace(t, ctx, fixture.client)
 	worktreePath := ws.WorktreePath
 	assert.Equal(
@@ -311,26 +306,26 @@ func TestWorkspaceForceDeletePreservesForeignLinkedWorktreeAfterManagedPruneE2E(
 	)
 
 	require.NoError(os.RemoveAll(worktreePath))
-	runGit(t, fixture.bare, "worktree", "prune")
+	gitfixture.Run(t, fixture.bare, "worktree", "prune")
 	assert.NotContains(
 		workspaceGitOutput(t, fixture.bare, "worktree", "list", "--porcelain"),
 		worktreePath,
 	)
 
 	foreignGitDir := filepath.Join(t.TempDir(), "foreign.git")
-	runGit(t, filepath.Dir(foreignGitDir), "clone", "--bare", fixture.remote, foreignGitDir)
-	runGit(
+	gitfixture.Run(t, filepath.Dir(foreignGitDir), "clone", "--bare", fixture.remote, foreignGitDir)
+	gitfixture.Run(
 		t, foreignGitDir, "remote", "set-url", "origin",
 		"https://github.com/acme/widget.git",
 	)
-	runGit(
+	gitfixture.Run(
 		t, foreignGitDir, "worktree", "add", worktreePath,
 		"-b", "foreign/scratch", "HEAD",
 	)
 	require.NoError(os.WriteFile(
 		filepath.Join(worktreePath, "base.txt"), []byte("foreign dirty data\n"), 0o644,
 	))
-	foreignHead := testGitSHA(t, worktreePath, "HEAD")
+	foreignHead := gitfixture.SHA(t, worktreePath, "HEAD")
 
 	force := true
 	deleteResp, err := fixture.client.HTTP.DeleteWorkspaceWithResponse(
@@ -348,7 +343,7 @@ func TestWorkspaceForceDeletePreservesForeignLinkedWorktreeAfterManagedPruneE2E(
 	contents, err := os.ReadFile(filepath.Join(worktreePath, "base.txt"))
 	require.NoError(err)
 	assert.Equal("foreign dirty data\n", string(contents))
-	assert.Equal(foreignHead, testGitSHA(t, worktreePath, "HEAD"))
+	assert.Equal(foreignHead, gitfixture.SHA(t, worktreePath, "HEAD"))
 	assert.Contains(
 		workspaceGitOutput(t, worktreePath, "status", "--porcelain"),
 		"M base.txt",
@@ -362,15 +357,14 @@ func TestWorkspaceForceDeletePreservesForeignLinkedWorktreeAfterManagedPruneE2E(
 func TestWorkspaceForceDeleteRemovesSameRepoReplacementAfterManagedPruneE2E(
 	t *testing.T,
 ) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
 	ctx := t.Context()
 
-	runGit(t, fixture.bare, "update-ref", "refs/heads/feature", "refs/heads/main")
+	gitfixture.Run(t, fixture.bare, "update-ref", "refs/heads/feature", "refs/heads/main")
 	ws := createReadyWorkspace(t, ctx, fixture.client)
 	worktreePath := ws.WorktreePath
 	assert.Equal(
@@ -379,15 +373,15 @@ func TestWorkspaceForceDeleteRemovesSameRepoReplacementAfterManagedPruneE2E(
 	)
 
 	require.NoError(os.RemoveAll(worktreePath))
-	runGit(t, fixture.bare, "worktree", "prune")
-	runGit(
+	gitfixture.Run(t, fixture.bare, "worktree", "prune")
+	gitfixture.Run(
 		t, fixture.bare, "worktree", "add", worktreePath,
 		"-b", "foreign/scratch", "HEAD",
 	)
 	require.NoError(os.WriteFile(
 		filepath.Join(worktreePath, "base.txt"), []byte("foreign dirty data\n"), 0o644,
 	))
-	foreignHead := testGitSHA(t, worktreePath, "HEAD")
+	foreignHead := gitfixture.SHA(t, worktreePath, "HEAD")
 
 	force := true
 	deleteResp, err := fixture.client.HTTP.DeleteWorkspaceWithResponse(
@@ -408,22 +402,21 @@ func TestWorkspaceForceDeleteRemovesSameRepoReplacementAfterManagedPruneE2E(
 	)
 	assert.Equal(
 		foreignHead,
-		testGitSHA(t, fixture.bare, "refs/heads/foreign/scratch"),
+		gitfixture.SHA(t, fixture.bare, "refs/heads/foreign/scratch"),
 	)
 }
 
 func TestWorkspaceForceDeleteRemovesPreMarkerWorkspaceAfterUpgradeE2E(
 	t *testing.T,
 ) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
 	fixture := setupWorkspaceServerFixture(t, nil)
 	ctx := t.Context()
 
-	runGit(t, fixture.bare, "update-ref", "refs/heads/feature", "refs/heads/main")
+	gitfixture.Run(t, fixture.bare, "update-ref", "refs/heads/feature", "refs/heads/main")
 	ws := createReadyWorkspace(t, ctx, fixture.client)
 	worktreePath := ws.WorktreePath
 	assert.Equal(
@@ -457,8 +450,7 @@ func TestWorkspaceForceDeleteRemovesPreMarkerWorkspaceAfterUpgradeE2E(
 }
 
 func TestWorkspaceForceDeleteRetainsLockedWorktreeE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -466,7 +458,7 @@ func TestWorkspaceForceDeleteRetainsLockedWorktreeE2E(t *testing.T) {
 	ctx := t.Context()
 
 	ws := createReadyWorkspace(t, ctx, fixture.client)
-	runGit(
+	gitfixture.Run(
 		t, fixture.bare, "worktree", "lock", "--reason", "test lock",
 		ws.WorktreePath,
 	)
@@ -499,7 +491,7 @@ func TestWorkspaceForceDeleteRetainsLockedWorktreeE2E(t *testing.T) {
 	require.NoError(err)
 	assert.Equal(ws.Id+"\n", string(marker))
 
-	runGit(t, fixture.bare, "worktree", "unlock", ws.WorktreePath)
+	gitfixture.Run(t, fixture.bare, "worktree", "unlock", ws.WorktreePath)
 	deleteResp, err = fixture.client.HTTP.DeleteWorkspaceWithResponse(
 		ctx, ws.Id, &generated.DeleteWorkspaceParams{Force: &force},
 	)
@@ -515,8 +507,7 @@ func TestWorkspaceForceDeleteRetainsLockedWorktreeE2E(t *testing.T) {
 func TestWorkspaceForceDeleteForgetsSymlinkToSameRepoWorktreeE2E(
 	t *testing.T,
 ) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -526,10 +517,10 @@ func TestWorkspaceForceDeleteForgetsSymlinkToSameRepoWorktreeE2E(
 	ws := createReadyWorkspace(t, ctx, fixture.client)
 	worktreePath := ws.WorktreePath
 	require.NoError(os.RemoveAll(worktreePath))
-	runGit(t, fixture.bare, "worktree", "prune")
+	gitfixture.Run(t, fixture.bare, "worktree", "prune")
 
 	targetPath := filepath.Join(t.TempDir(), "replacement-worktree")
-	runGit(
+	gitfixture.Run(
 		t, fixture.bare, "worktree", "add", targetPath,
 		"-b", "foreign/symlink-target", "HEAD",
 	)
@@ -537,7 +528,7 @@ func TestWorkspaceForceDeleteForgetsSymlinkToSameRepoWorktreeE2E(
 		filepath.Join(targetPath, "base.txt"), []byte("foreign dirty data\n"), 0o644,
 	))
 	require.NoError(os.Symlink(targetPath, worktreePath))
-	foreignHead := testGitSHA(t, targetPath, "HEAD")
+	foreignHead := gitfixture.SHA(t, targetPath, "HEAD")
 
 	force := true
 	deleteResp, err := fixture.client.HTTP.DeleteWorkspaceWithResponse(
@@ -557,7 +548,7 @@ func TestWorkspaceForceDeleteForgetsSymlinkToSameRepoWorktreeE2E(
 	contents, err := os.ReadFile(filepath.Join(targetPath, "base.txt"))
 	require.NoError(err)
 	assert.Equal("foreign dirty data\n", string(contents))
-	assert.Equal(foreignHead, testGitSHA(t, targetPath, "HEAD"))
+	assert.Equal(foreignHead, gitfixture.SHA(t, targetPath, "HEAD"))
 	assert.Contains(
 		workspaceGitOutput(t, fixture.bare, "worktree", "list", "--porcelain"),
 		targetPath,
@@ -565,8 +556,7 @@ func TestWorkspaceForceDeleteForgetsSymlinkToSameRepoWorktreeE2E(
 }
 
 func TestWorkspaceCreateRejectsSymlinkedReusableWorktreeE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -578,10 +568,10 @@ func TestWorkspaceCreateRejectsSymlinkedReusableWorktreeE2E(t *testing.T) {
 		fmt.Sprintf("repo-%d", fixture.repoID), "pr-1",
 	)
 	targetPath := filepath.Join(t.TempDir(), "linked-worktree")
-	runGit(t, fixture.bare, "worktree", "add", targetPath, "feature")
+	gitfixture.Run(t, fixture.bare, "worktree", "add", targetPath, "feature")
 	require.NoError(os.MkdirAll(filepath.Dir(worktreePath), 0o755))
 	require.NoError(os.Symlink(targetPath, worktreePath))
-	wantHead := testGitSHA(t, targetPath, "HEAD")
+	wantHead := gitfixture.SHA(t, targetPath, "HEAD")
 
 	createResp, err := fixture.client.HTTP.CreateWorkspaceWithResponse(
 		ctx,
@@ -615,7 +605,7 @@ func TestWorkspaceCreateRejectsSymlinkedReusableWorktreeE2E(t *testing.T) {
 	pathInfo, err := os.Lstat(worktreePath)
 	require.NoError(err)
 	assert.NotZero(pathInfo.Mode() & os.ModeSymlink)
-	assert.Equal(wantHead, testGitSHA(t, targetPath, "HEAD"))
+	assert.Equal(wantHead, gitfixture.SHA(t, targetPath, "HEAD"))
 	assert.Contains(
 		workspaceGitOutput(t, fixture.bare, "worktree", "list", "--porcelain"),
 		targetPath,
@@ -631,8 +621,7 @@ func TestWorkspaceCreateRejectsSymlinkedReusableWorktreeE2E(t *testing.T) {
 func TestWorkspaceRetryAcceptsPreMarkerWorkspaceAfterUpgradeE2E(
 	t *testing.T,
 ) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -674,8 +663,7 @@ func TestWorkspaceRetryAcceptsPreMarkerWorkspaceAfterUpgradeE2E(
 }
 
 func TestWorkspaceRetryCleansStalePreMarkerRegistrationE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -718,8 +706,7 @@ func TestWorkspaceRetryCleansStalePreMarkerRegistrationE2E(t *testing.T) {
 }
 
 func TestWorkspaceCreateOccupiedPathCreatesNoBranchesE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -735,8 +722,8 @@ func TestWorkspaceCreateOccupiedPathCreatesNoBranchesE2E(t *testing.T) {
 		t, fixture.database, "github.com", "acme", "widget", mrNumber,
 		"https://github.com/contributor/widget.git",
 	)
-	headSHA := testGitSHA(t, fixture.remote, "refs/heads/feature")
-	runGit(t, fixture.remote, "update-ref", "refs/pull/2/head", headSHA)
+	headSHA := gitfixture.SHA(t, fixture.remote, "refs/heads/feature")
+	gitfixture.Run(t, fixture.remote, "update-ref", "refs/pull/2/head", headSHA)
 	_, err := fixture.database.WriteDB().ExecContext(
 		ctx,
 		`UPDATE forge_merge_requests SET head_branch = ? WHERE number = ?`,
@@ -794,8 +781,7 @@ func TestWorkspaceCreateOccupiedPathCreatesNoBranchesE2E(t *testing.T) {
 }
 
 func TestWorkspaceCreateSameRepoHeadCloneURLTracksOriginBranchE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
@@ -803,9 +789,9 @@ func TestWorkspaceCreateSameRepoHeadCloneURLTracksOriginBranchE2E(t *testing.T) 
 	client, database, clonePath, remotePath := setupLifecycleWorkspaceServer(t)
 	ctx := t.Context()
 
-	headSHA := testGitSHA(t, remotePath, "refs/heads/feature")
-	runGit(t, remotePath, "update-ref", "refs/pull/2/head", headSHA)
-	runGit(t, clonePath, "update-ref", "refs/pull/2/head", headSHA)
+	headSHA := gitfixture.SHA(t, remotePath, "refs/heads/feature")
+	gitfixture.Run(t, remotePath, "update-ref", "refs/pull/2/head", headSHA)
+	gitfixture.Run(t, clonePath, "update-ref", "refs/pull/2/head", headSHA)
 	seedPROnHost(t, database, "github.com", "acme", "widget", 2)
 
 	createResp, err := client.HTTP.CreateWorkspaceWithResponse(
@@ -831,7 +817,7 @@ func TestWorkspaceCreateSameRepoHeadCloneURLTracksOriginBranchE2E(t *testing.T) 
 	assert.Nil(stored.MRHeadRepo)
 	assert.Empty(stored.WorkspaceBranch)
 	assert.Equal("feature", workspaceGitOutput(t, ws.WorktreePath, "branch", "--show-current"))
-	assert.Equal(headSHA, testGitSHA(t, ws.WorktreePath, "HEAD"))
+	assert.Equal(headSHA, gitfixture.SHA(t, ws.WorktreePath, "HEAD"))
 	assert.Equal(
 		"origin/feature",
 		workspaceGitOutput(
@@ -862,8 +848,7 @@ func requireGitRefMissing(t *testing.T, dir, ref string) {
 }
 
 func TestWorkspaceRetryUnknownHeadRepoFailsClosedE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -935,8 +920,7 @@ func TestWorkspaceRetryUnknownHeadRepoFailsClosedE2E(t *testing.T) {
 }
 
 func TestWorkspaceDeletePreservesUserCreatedBranch(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -959,8 +943,8 @@ func TestWorkspaceDeletePreservesUserCreatedBranch(t *testing.T) {
 	require.NotNil(createResp.JSON202)
 
 	ws := waitForWorkspaceReady(t, ctx, client, createResp.JSON202.Id)
-	runGit(t, ws.WorktreePath, "checkout", "-b", "user-scratch")
-	scratchSHA := testGitSHA(t, ws.WorktreePath, "HEAD")
+	gitfixture.Run(t, ws.WorktreePath, "checkout", "-b", "user-scratch")
+	scratchSHA := gitfixture.SHA(t, ws.WorktreePath, "HEAD")
 
 	force := true
 	deleteResp, err := client.HTTP.DeleteWorkspaceWithResponse(
@@ -972,13 +956,12 @@ func TestWorkspaceDeletePreservesUserCreatedBranch(t *testing.T) {
 
 	assert.Equal(
 		scratchSHA,
-		testGitSHA(t, clonePath, "refs/heads/user-scratch"),
+		gitfixture.SHA(t, clonePath, "refs/heads/user-scratch"),
 	)
 }
 
 func TestWorkspaceDeleteDoesNotCleanupReplacementCloneE2E(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -987,13 +970,13 @@ func TestWorkspaceDeleteDoesNotCleanupReplacementCloneE2E(t *testing.T) {
 	ctx := t.Context()
 	const branch = "kenn-forge/pr-42"
 	replacementClone := filepath.Join(t.TempDir(), "replacement-clone")
-	runGit(t, filepath.Dir(replacementClone), "clone", remotePath, replacementClone)
-	runGit(
+	gitfixture.Run(t, filepath.Dir(replacementClone), "clone", remotePath, replacementClone)
+	gitfixture.Run(
 		t, replacementClone, "remote", "set-url", "origin",
 		"https://github.com/acme/widget.git",
 	)
-	runGit(t, replacementClone, "branch", branch, "HEAD")
-	branchSHA := testGitSHA(t, replacementClone, "refs/heads/"+branch)
+	gitfixture.Run(t, replacementClone, "branch", branch, "HEAD")
+	branchSHA := gitfixture.SHA(t, replacementClone, "refs/heads/"+branch)
 	wsID := "ws-replacement-clone"
 	require.NoError(database.InsertWorkspace(ctx, &workspace.Workspace{
 		ID:              wsID,
@@ -1018,15 +1001,14 @@ func TestWorkspaceDeleteDoesNotCleanupReplacementCloneE2E(t *testing.T) {
 	require.NoError(err)
 	require.Equal(http.StatusNoContent, deleteResp.StatusCode())
 	assert.DirExists(replacementClone)
-	assert.Equal(branchSHA, testGitSHA(t, replacementClone, "refs/heads/"+branch))
+	assert.Equal(branchSHA, gitfixture.SHA(t, replacementClone, "refs/heads/"+branch))
 	got, err := database.GetWorkspace(ctx, wsID)
 	require.NoError(err)
 	assert.Nil(got)
 }
 
 func TestWorkspaceCreatePreservesExistingLocalPreferredBranch(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -1035,23 +1017,23 @@ func TestWorkspaceCreatePreservesExistingLocalPreferredBranch(t *testing.T) {
 	ctx := t.Context()
 
 	privateClone := filepath.Join(t.TempDir(), "private-clone")
-	runGit(t, filepath.Dir(privateClone), "clone", clonePath, privateClone)
-	runGit(t, privateClone, "config", "user.email", "test@test.com")
-	runGit(t, privateClone, "config", "user.name", "Test")
-	runGit(t, privateClone, "checkout", "feature")
+	gitfixture.Run(t, filepath.Dir(privateClone), "clone", clonePath, privateClone)
+	gitfixture.Run(t, privateClone, "config", "user.email", "test@test.com")
+	gitfixture.Run(t, privateClone, "config", "user.name", "Test")
+	gitfixture.Run(t, privateClone, "checkout", "feature")
 
 	require.NoError(os.WriteFile(
 		filepath.Join(privateClone, "private.txt"),
 		[]byte("private\n"), 0o644,
 	))
-	runGit(t, privateClone, "add", "private.txt")
-	runGit(t, privateClone, "commit", "-m", "private commit")
-	privateSHA := testGitSHA(t, privateClone, "HEAD")
-	runGit(t, privateClone, "push", clonePath, "HEAD:feature")
+	gitfixture.Run(t, privateClone, "add", "private.txt")
+	gitfixture.Run(t, privateClone, "commit", "-m", "private commit")
+	privateSHA := gitfixture.SHA(t, privateClone, "HEAD")
+	gitfixture.Run(t, privateClone, "push", clonePath, "HEAD:feature")
 
-	originSHA := testGitSHA(t, remotePath, "refs/heads/feature")
+	originSHA := gitfixture.SHA(t, remotePath, "refs/heads/feature")
 	assert.NotEqual(originSHA, privateSHA)
-	assert.Equal(privateSHA, testGitSHA(t, clonePath, "refs/heads/feature"))
+	assert.Equal(privateSHA, gitfixture.SHA(t, clonePath, "refs/heads/feature"))
 
 	createResp, err := client.HTTP.CreateWorkspaceWithResponse(
 		ctx,
@@ -1072,8 +1054,8 @@ func TestWorkspaceCreatePreservesExistingLocalPreferredBranch(t *testing.T) {
 		"kenn-forge/pr-1",
 		workspaceGitOutput(t, ws.WorktreePath, "branch", "--show-current"),
 	)
-	assert.Equal(originSHA, testGitSHA(t, ws.WorktreePath, "HEAD"))
-	assert.Equal(privateSHA, testGitSHA(t, clonePath, "refs/heads/feature"))
+	assert.Equal(originSHA, gitfixture.SHA(t, ws.WorktreePath, "HEAD"))
+	assert.Equal(privateSHA, gitfixture.SHA(t, clonePath, "refs/heads/feature"))
 
 	force := true
 	deleteResp, err := client.HTTP.DeleteWorkspaceWithResponse(
@@ -1083,12 +1065,11 @@ func TestWorkspaceCreatePreservesExistingLocalPreferredBranch(t *testing.T) {
 	require.NoError(err)
 	require.Equal(http.StatusNoContent, deleteResp.StatusCode())
 
-	assert.Equal(privateSHA, testGitSHA(t, clonePath, "refs/heads/feature"))
+	assert.Equal(privateSHA, gitfixture.SHA(t, clonePath, "refs/heads/feature"))
 }
 
 func TestWorkspaceDeleteLegacySyntheticBranchAllowsRecreate(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	assert := assert.New(t)
 	require := require.New(t)
@@ -1097,19 +1078,19 @@ func TestWorkspaceDeleteLegacySyntheticBranchAllowsRecreate(t *testing.T) {
 	ctx := t.Context()
 
 	privateClone := filepath.Join(t.TempDir(), "legacy-private-clone")
-	runGit(t, filepath.Dir(privateClone), "clone", clonePath, privateClone)
-	runGit(t, privateClone, "config", "user.email", "test@test.com")
-	runGit(t, privateClone, "config", "user.name", "Test")
-	runGit(t, privateClone, "checkout", "feature")
+	gitfixture.Run(t, filepath.Dir(privateClone), "clone", clonePath, privateClone)
+	gitfixture.Run(t, privateClone, "config", "user.email", "test@test.com")
+	gitfixture.Run(t, privateClone, "config", "user.name", "Test")
+	gitfixture.Run(t, privateClone, "checkout", "feature")
 	require.NoError(os.WriteFile(
 		filepath.Join(privateClone, "legacy-private.txt"),
 		[]byte("legacy private\n"), 0o644,
 	))
-	runGit(t, privateClone, "add", "legacy-private.txt")
-	runGit(t, privateClone, "commit", "-m", "legacy private commit")
-	privateSHA := testGitSHA(t, privateClone, "HEAD")
-	runGit(t, privateClone, "push", clonePath, "HEAD:feature")
-	originSHA := testGitSHA(t, remotePath, "refs/heads/feature")
+	gitfixture.Run(t, privateClone, "add", "legacy-private.txt")
+	gitfixture.Run(t, privateClone, "commit", "-m", "legacy private commit")
+	privateSHA := gitfixture.SHA(t, privateClone, "HEAD")
+	gitfixture.Run(t, privateClone, "push", clonePath, "HEAD:feature")
+	originSHA := gitfixture.SHA(t, remotePath, "refs/heads/feature")
 	assert.NotEqual(originSHA, privateSHA)
 
 	createResp, err := client.HTTP.CreateWorkspaceWithResponse(
@@ -1148,7 +1129,7 @@ func TestWorkspaceDeleteLegacySyntheticBranchAllowsRecreate(t *testing.T) {
 	require.NoError(err)
 	require.Equal(http.StatusNoContent, deleteResp.StatusCode())
 
-	runGit(t, clonePath, "fetch", "--prune", "origin")
+	gitfixture.Run(t, clonePath, "fetch", "--prune", "origin")
 
 	recreateResp, err := client.HTTP.CreateWorkspaceWithResponse(
 		ctx,
@@ -1169,12 +1150,11 @@ func TestWorkspaceDeleteLegacySyntheticBranchAllowsRecreate(t *testing.T) {
 		"kenn-forge/pr-1",
 		workspaceGitOutput(t, recreated.WorktreePath, "branch", "--show-current"),
 	)
-	assert.Equal(originSHA, testGitSHA(t, recreated.WorktreePath, "HEAD"))
+	assert.Equal(originSHA, gitfixture.SHA(t, recreated.WorktreePath, "HEAD"))
 }
 
 func TestWorkspaceDeleteDirty(t *testing.T) {
-	t.Parallel()
-	acquireWorkspaceGitSlot(t)
+	runParallelWorkspaceGitTest(t)
 
 	require := require.New(t)
 	assert := assert.New(t)
