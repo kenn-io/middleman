@@ -31216,7 +31216,7 @@ func TestAPIHeadRepoKindClassifiesSameRepoForkAndUnknown(t *testing.T) {
 			CreatedAt:        now, UpdatedAt: now, LastActivityAt: now,
 		})
 		require.NoError(err)
-		response := doJSON(
+		response := testutil.DoJSON(
 			t, srv, http.MethodGet,
 			"/api/v1/pulls/gh/acme/widget/"+strconv.Itoa(number),
 			nil,

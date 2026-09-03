@@ -699,7 +699,7 @@ func TestHandleUpdateSettingsPersistsModes(t *testing.T) {
 
 	activity := srv.cfg.Activity
 	activity.TimeRange = "30d"
-	rr = doJSON(t, srv, http.MethodPut, "/api/v1/settings", updateSettingsRequest{
+	rr = testutil.DoJSON(t, srv, http.MethodPut, "/api/v1/settings", updateSettingsRequest{
 		Activity: &activity,
 	})
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
