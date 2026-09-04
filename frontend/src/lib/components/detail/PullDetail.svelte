@@ -1,6 +1,5 @@
 <script module lang="ts">
   const pullDetailScrollPositions: Record<string, number> = Object.create(null) as Record<string, number>;
-  let nextWorkflowRepositoryOwner = 0;
 </script>
 
 <script lang="ts">
@@ -126,7 +125,7 @@
     recordWorkspaceCreated,
     resolveControllerlessWorkspaceRef,
   } from "../../stores/workspace-create-pending.svelte.js";
-  import type { WorkflowDefinition } from "../../stores/workflow-actions-workflow.js";
+  import type { WorkflowDefinition } from "../../stores/workflow-actions.svelte.js";
 
   type ChipTrailing = ComponentProps<typeof Chip>["trailing"];
 
@@ -1339,7 +1338,6 @@
     actionMenuOpen = false;
   }
 
-  const workflowRepositoryOwner = `pull-detail:${++nextWorkflowRepositoryOwner}`;
   let workflowDialogWorkflow = $state<WorkflowDefinition | null>(null);
   let actionMenuTriggerEl = $state<HTMLButtonElement>();
   const captureActionMenuTrigger: Attachment<HTMLButtonElement> = (button) => {
@@ -1422,12 +1420,11 @@
     workflowDialogWorkflow = null;
   }
 
-  function claimWorkflowRepository(ref: ProviderRouteRef | null): Attachment {
+  function loadWorkflowCatalog(ref: ProviderRouteRef | null): Attachment {
     return () => {
       if (!ref) return;
-      untrack(() => workflowActions.claimRepository(workflowRepositoryOwner, ref));
+      untrack(() => workflowActions.loadCatalog(ref));
       return () => {
-        untrack(() => workflowActions.releaseRepository(workflowRepositoryOwner));
         workflowDialogWorkflow = null;
         closeActionMenu();
       };
@@ -2132,7 +2129,7 @@
       detail.repo?.owner ?? owner,
       detail.repo?.name ?? name,
     )}
-    <div class="pull-detail-wrap" {@attach claimWorkflowRepository(workflowCatalogDemandEnabled ? routeRef : null)}>
+    <div class="pull-detail-wrap" {@attach loadWorkflowCatalog(workflowCatalogDemandEnabled ? routeRef : null)}>
       {#if staleLoadError}
         <div class="detail-load-error" data-testid="detail-load-error">
           Couldn't load this pull request: {detailStore.getDetailError()}

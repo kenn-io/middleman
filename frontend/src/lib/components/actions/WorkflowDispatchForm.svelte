@@ -219,21 +219,6 @@
     <div class="dispatch-outcome">
       <h2>{workflow.name}</h2>
       <p class="notice notice--error" role="alert">{presentation.message}</p>
-      {#if presentation.candidates.length > 0}
-        <ul class="candidate-runs" aria-label="Possible workflow runs">
-          {#each presentation.candidates as candidate (candidate.id)}
-            <li>
-              <span>{candidate.id}</span>
-              {#if candidate.head_sha}<code>{candidate.head_sha}</code>{/if}
-              {#if candidate.web_url && isSafeExternalHTTPURL(candidate.web_url)}
-                <a href={candidate.web_url} target="_blank" rel="noopener" aria-label="Open candidate run on provider">
-                  Open on provider
-                </a>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-      {/if}
       {#if onnewcycle}<Button type="button" tone="workflow" surface="solid" onclick={onnewcycle}>Dispatch again</Button>{/if}
     </div>
   {:else}
@@ -333,13 +318,11 @@
   .workflow-input-dropdown { min-width: 0; }
   .workflow-input-dropdown :global(.kit-select-dropdown),
   .workflow-input-dropdown :global(.kit-select-dropdown__trigger) { width: 100%; min-width: 0; }
-  .field-error, .notice, .run-details, .candidate-runs { font-size: var(--font-size-sm); }
+  .field-error, .notice, .run-details { font-size: var(--font-size-sm); }
   .field-error, .notice--error { color: var(--status-danger-text, var(--text-danger)); }
   .notice--success { color: var(--status-success-text, var(--text-success)); }
-  .run-details, .candidate-runs { display: grid; gap: var(--space-2); }
+  .run-details { display: grid; gap: var(--space-2); }
   .run-details > div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-3); }
   .run-details dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-  .candidate-runs { margin: 0; padding: 0; list-style: none; }
-  .candidate-runs li { display: flex; min-width: 0; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
   a { color: var(--accent-blue); }
 </style>

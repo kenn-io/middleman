@@ -259,6 +259,8 @@ func (h *Handler) dispatch(ctx context.Context, input *workflowDispatchInput) (*
 		WorkflowID: workflowID, Ref: strings.TrimSpace(input.Body.Ref), Inputs: input.Body.Inputs,
 		ExpectedDefinitionSHA: input.Body.ExpectedDefinitionSHA,
 	}
+	dispatchID := newDispatchID()
+	startedAt := time.Now()
 	var result platform.WorkflowDispatchResult
 	matched, err := h.resolver.GuardRepositoryRouteFence(ctx, *resolved.repo, resolved.fence, func() error {
 		availability := h.operations(*resolved.repo).DispatchWorkflow
@@ -288,12 +290,20 @@ func (h *Handler) dispatch(ctx context.Context, input *workflowDispatchInput) (*
 		return nil, repositoryIdentityChangedProblem()
 	}
 	response := WorkflowDispatchResponse{
-		Accepted: result.Accepted, LocatingRun: result.LocatingRun, Actor: result.Actor,
+		Accepted: result.Accepted, DispatchID: dispatchID, Actor: result.Actor,
 	}
 	if result.Run != nil {
 		run := workflowRun(*result.Run)
 		response.Run = &run
 	}
+	follow := dispatchFollow{
+		repo: *resolved.repo, ref: ref, request: request, result: result,
+		dispatchID: dispatchID, startedAt: startedAt,
+	}
+	if runReader, readerErr := registry.WorkflowRunReader(httpapi.ProviderKind(*resolved.repo), httpapi.ProviderHost(*resolved.repo)); readerErr == nil {
+		follow.reader = runReader
+	}
+	h.background(func(ctx context.Context) { h.followDispatch(ctx, follow) })
 	return &dispatchOutput{Status: http.StatusAccepted, Body: response}, nil
 }
 

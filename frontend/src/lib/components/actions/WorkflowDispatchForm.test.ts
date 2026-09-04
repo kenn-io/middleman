@@ -288,7 +288,6 @@ describe("WorkflowDispatchForm", () => {
       state: {
         kind: "uncertain",
         message: "The provider may have accepted this run. Verify on the provider before trying again.",
-        candidates: [],
       },
     });
     expect(screen.getByRole("alert").textContent).toContain("may have accepted");

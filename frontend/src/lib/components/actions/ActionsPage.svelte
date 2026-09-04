@@ -27,9 +27,6 @@
   } from "./workflow-dispatch-presentation.js";
   import WorkflowRunList from "./WorkflowRunList.svelte";
 
-  const repositoryOwner = "actions-page:repository";
-  const expandedRunIds = new Set<string>();
-
   const runtime = getAppRuntime();
   const { workflowActions } = getStores();
 
@@ -113,16 +110,13 @@
   }
 
   function selectRepository(summary: RepoSummaryCard): void {
-    releaseAllRunOwners();
     selectedRepositoryKey = repoStateKey(summary);
   }
 
   function selectWorkflow(workflowId: string): void {
     if (!selectedRef) return;
-    releaseAllRunOwners();
     workflowActions.selectWorkflow(selectedRef, workflowId);
   }
-
 
   function submitWorkflow(request: WorkflowDispatchRequest): void {
     if (!selectedRef || !selectedWorkflow) return;
@@ -147,20 +141,7 @@
 
   function expandRun(runId: string): void {
     if (!selectedRef) return;
-    expandedRunIds.add(runId);
-    workflowActions.expandRun(`actions-page:jobs:${runId}`, selectedRef, runId);
-  }
-
-  function collapseRun(runId: string): void {
-    expandedRunIds.delete(runId);
-    workflowActions.collapseRun(`actions-page:jobs:${runId}`);
-  }
-
-  function releaseAllRunOwners(): void {
-    for (const runId of expandedRunIds) {
-      workflowActions.collapseRun(`actions-page:jobs:${runId}`);
-    }
-    expandedRunIds.clear();
+    workflowActions.loadJobs(selectedRef, runId);
   }
 
   onMount(() => {
@@ -170,14 +151,10 @@
     };
   });
 
-  function claimSelectedRepository(ref: ProviderRouteRef | null): Attachment {
+  function loadSelectedCatalog(ref: ProviderRouteRef | null): Attachment {
     return () => {
       if (!ref) return;
-      untrack(() => workflowActions.claimRepository(repositoryOwner, ref));
-      return () => untrack(() => {
-        releaseAllRunOwners();
-        workflowActions.releaseRepository(repositoryOwner);
-      });
+      untrack(() => workflowActions.loadCatalog(ref));
     };
   }
 
@@ -186,7 +163,7 @@
 <section
   class="actions-page"
   aria-labelledby="actions-title"
-  {@attach claimSelectedRepository(selectedRef)}
+  {@attach loadSelectedCatalog(selectedRef)}
 >
   <header class="actions-page__header">
     <div>
@@ -331,7 +308,6 @@
                 jobs={snapshot.jobs}
                 loadingJobs={snapshot.loading.jobs}
                 onexpand={expandRun}
-                oncollapse={collapseRun}
               />
               {#if snapshot.runsPage.nextCursor && !snapshot.runsPage.exhausted}
                 <div class="runs-pagination">

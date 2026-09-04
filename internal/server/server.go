@@ -352,6 +352,18 @@ func (s *Server) subscribeWorkspaceEvents(
 // SetBuildInfo sets the metadata returned by GET /api/v1/version.
 func (s *Server) SetBuildInfo(info BuildInfo) { s.buildInfo = info }
 
+// workflowRuntime exposes event publication and tracked background work to
+// the workflow API without leaking the rest of the server.
+type workflowRuntime struct{ server *Server }
+
+func (r workflowRuntime) Publish(eventType string, data any) {
+	r.server.hub.Broadcast(Event{Type: eventType, Data: data})
+}
+
+func (r workflowRuntime) Go(fn func(context.Context)) bool {
+	return r.server.runBackground(fn)
+}
+
 // runBackground launches fn as a tracked goroutine. fn receives a
 // context cancelled by Shutdown. If Shutdown has already started,
 // runBackground drops the task: these goroutines are best-effort
@@ -1211,6 +1223,7 @@ func newServer(
 		Resolver:       repoResolver,
 		Syncer:         syncer,
 		RepoOperations: s.repoOperations,
+		Runtime:        workflowRuntime{server: s},
 	})
 	var pullProviderSource pullapi.ProviderSource
 	var issueProviderSource issueapi.ProviderSource

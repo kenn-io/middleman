@@ -72,12 +72,11 @@ The archive worker uses the backoff schedule type only as an idle delay calculat
 not as a retry wrapper: idle passes double up to a five-minute cap and any wake or
 worked pass resets it (`internal/github/sync.go::runArchiveLoop`).
 
-- Manual workflow dispatch is non-idempotent and never retried; reconcile
-  accepted or uncertain outcomes by reads instead of replaying POST
-  (`frontend/src/lib/stores/workflow-actions-workflow.ts::dispatchQueueFor`).
-- Selected runs poll every 5 seconds while active; idle runs and failed catalog
-  reads wait 30 seconds. Removing demand or disabling Actions interrupts it
-  (`frontend/src/lib/stores/workflow-actions-workflow.ts::waitForPoll`).
+- Manual workflow dispatch is non-idempotent and never retried by either side.
+  The server locates the created run by reading runs for about a minute, then
+  watches that run at a fixed interval until it completes or thirty minutes pass;
+  the browser never polls workflow state
+  (`internal/server/workflowapi/dispatch_follow.go::Handler.followDispatch`).
 
 ## Long-lived stream recovery
 

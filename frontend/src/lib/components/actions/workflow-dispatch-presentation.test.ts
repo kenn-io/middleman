@@ -4,7 +4,7 @@ import type {
   WorkflowActionsError,
   WorkflowActionsSnapshot,
   WorkflowDispatchState,
-} from "../../stores/workflow-actions-workflow.js";
+} from "../../stores/workflow-actions.svelte.js";
 import { workflowActionsErrorMessage, workflowDispatchPresentation } from "./workflow-dispatch-presentation.js";
 
 const ref = {
@@ -13,16 +13,6 @@ const ref = {
   owner: "acme",
   name: "app",
   repoPath: "acme/app",
-} as const;
-
-const request = {
-  id: "dispatch-1",
-  ref,
-  workflowId: "deploy.yml",
-  expectedDefinitionSha: "definition-a",
-  dispatchRef: "main",
-  inputs: {},
-  startedAt: 1,
 } as const;
 
 const run = {
@@ -78,7 +68,7 @@ function snapshot(dispatch?: WorkflowDispatchState): WorkflowActionsSnapshot {
     runsPage: { nextCursor: null, exhausted: true, loadingMore: false },
     jobs: {},
     loading: { catalog: false, runs: false, jobs: [] },
-    dispatches: dispatch ? [dispatch] : [],
+    dispatches: dispatch ? { "deploy.yml": dispatch } : {},
     catalogRefreshErrors: {},
     error: null,
   };
@@ -87,45 +77,41 @@ function snapshot(dispatch?: WorkflowDispatchState): WorkflowActionsSnapshot {
 describe("workflow dispatch presentation", () => {
   it("projects idle, pending, locating, and succeeded states", () => {
     expect(workflowDispatchPresentation(null, "deploy.yml")).toEqual({ kind: "idle" });
-    expect(workflowDispatchPresentation(snapshot({ kind: "pending", request }), "deploy.yml")).toEqual({
-      kind: "pending",
-    });
-    expect(workflowDispatchPresentation(snapshot({ kind: "locating", request }), "deploy.yml")).toEqual({
+    expect(workflowDispatchPresentation(snapshot({ kind: "pending" }), "other.yml")).toEqual({ kind: "idle" });
+    expect(workflowDispatchPresentation(snapshot({ kind: "pending" }), "deploy.yml")).toEqual({ kind: "pending" });
+    expect(workflowDispatchPresentation(snapshot({ kind: "locating", dispatchId: "d1" }), "deploy.yml")).toEqual({
       kind: "locating",
     });
-    expect(workflowDispatchPresentation(snapshot({ kind: "succeeded", request }), "deploy.yml")).toEqual({
+    expect(workflowDispatchPresentation(snapshot({ kind: "succeeded", dispatchId: "d1" }), "deploy.yml")).toEqual({
       kind: "succeeded",
     });
-    expect(workflowDispatchPresentation(snapshot({ kind: "succeeded", request, run }), "deploy.yml")).toEqual({
+    expect(workflowDispatchPresentation(snapshot({ kind: "succeeded", dispatchId: "d1", run }), "deploy.yml")).toEqual({
       kind: "succeeded",
       run,
     });
   });
 
-  it("projects failed, timeout, and uncertain recovery branches", () => {
-    expect(workflowDispatchPresentation(snapshot({ kind: "failed", request, error: rejected }), "deploy.yml")).toEqual({
+  it("projects failed, unresolved, and uncertain recovery branches", () => {
+    expect(workflowDispatchPresentation(snapshot({ kind: "failed", error: rejected }), "deploy.yml")).toEqual({
       kind: "failed",
       message: "The ref is invalid.",
     });
-    expect(workflowDispatchPresentation(snapshot({ kind: "locating_timed_out", request }), "deploy.yml")).toEqual({
+    expect(workflowDispatchPresentation(snapshot({ kind: "unresolved", dispatchId: "d1" }), "deploy.yml")).toEqual({
       kind: "succeeded",
       message: "The provider accepted the workflow, but its run was not observed.",
     });
-    expect(
-      workflowDispatchPresentation(
-        snapshot({ kind: "uncertain", request, error: rejected, candidates: [run] }),
-        "deploy.yml",
-      ),
-    ).toEqual({
+    expect(workflowDispatchPresentation(snapshot({ kind: "uncertain", error: rejected }), "deploy.yml")).toEqual({
       kind: "uncertain",
       message: "The ref is invalid.",
-      candidates: [run],
     });
   });
 
   it("uses the shared reload fallback and cycle-specific conflict error", () => {
+    expect(workflowDispatchPresentation(snapshot({ kind: "failed", error: conflict }), "deploy.yml")).toEqual({
+      kind: "conflict",
+    });
     const current: WorkflowActionsSnapshot = {
-      ...snapshot({ kind: "failed", request, error: conflict }),
+      ...snapshot({ kind: "failed", error: conflict }),
       catalogRefreshErrors: { "deploy.yml": reloadFailure },
     };
     expect(workflowDispatchPresentation(current, "deploy.yml")).toEqual({

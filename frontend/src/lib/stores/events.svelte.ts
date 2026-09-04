@@ -19,6 +19,7 @@ import {
   type WorkspaceCreatedEvent,
   type WorkspaceDeletedEvent,
   type WorkspaceStatusEvent,
+  type WorkflowDispatchProgressEvent,
 } from "./provider-events-workflow.js";
 
 export interface EventsStoreOptions {
@@ -52,6 +53,9 @@ export interface EventsStoreOptions {
   readonly onPRCIRefreshed?: (event: PRCIRefreshedEvent) => Effect.Effect<void, ProviderEventsError, AppServices>;
   readonly onDeferredMergeCompleted?: (
     event: DeferredMergeCompletedEvent,
+  ) => Effect.Effect<void, ProviderEventsError, AppServices>;
+  readonly onWorkflowDispatchProgress?: (
+    event: WorkflowDispatchProgressEvent,
   ) => Effect.Effect<void, ProviderEventsError, AppServices>;
   readonly onTerminalFailure?: (message: string) => void;
   readonly onRecoverableFailure?: (message: string) => void;
@@ -117,6 +121,8 @@ export function createEventsStore(opts: EventsStoreOptions) {
           return opts.onPRCIRefreshed?.(event.payload) ?? Effect.void;
         case "deferred_merge_completed":
           return opts.onDeferredMergeCompleted?.(event.payload) ?? Effect.void;
+        case "workflow_dispatch_progress":
+          return opts.onWorkflowDispatchProgress?.(event.payload) ?? Effect.void;
         case "workspace_diff_ready":
         case "workspace_diff_changed":
           return Effect.void;

@@ -78,8 +78,6 @@ export const nodeUnitTestFiles = [
   "src/lib/stores/provider-events-workflow.test.ts",
   "src/lib/stores/provider-key.test.ts",
   "src/lib/stores/pulls-workflow.test.ts",
-  "src/lib/stores/workflow-actions.svelte.test.ts",
-  "src/lib/stores/workflow-actions-workflow.test.ts",
   "src/lib/stores/repo-browser-workflow.test.ts",
   "src/lib/stores/roborev/roborev-workflow.test.ts",
   "src/lib/stores/session-pane-key.test.ts",

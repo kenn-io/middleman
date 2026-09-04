@@ -5437,11 +5437,11 @@ type WorkflowDispatchResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/WorkflowDispatchResponse.json
-	Schema      *string              `json:"$schema,omitempty"`
-	Accepted    bool                 `json:"accepted"`
-	Actor       *string              `json:"actor,omitempty"`
-	LocatingRun bool                 `json:"locating_run"`
-	Run         *WorkflowRunResponse `json:"run,omitempty"`
+	Schema     *string              `json:"$schema,omitempty"`
+	Accepted   bool                 `json:"accepted"`
+	Actor      *string              `json:"actor,omitempty"`
+	DispatchId string               `json:"dispatch_id"`
+	Run        *WorkflowRunResponse `json:"run,omitempty"`
 }
 
 // WorkflowEnvironmentResponse defines model for WorkflowEnvironmentResponse.

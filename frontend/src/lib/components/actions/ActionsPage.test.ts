@@ -261,10 +261,9 @@ describe("ActionsPage", () => {
     );
   });
 
-  it("uses distinct job owners for two expanded runs and collapsing one does not release the other", async () => {
+  it("reads jobs once per expanded run and keeps other expanded runs open on collapse", async () => {
     const workflowActions = createWorkflowActionsStore({ runtime });
-    const expandRun = vi.spyOn(workflowActions, "expandRun");
-    const collapseRun = vi.spyOn(workflowActions, "collapseRun");
+    const loadJobs = vi.spyOn(workflowActions, "loadJobs");
     render(ActionsPage, {
       context: new Map([[STORES_KEY, { workflowActions }]]),
     });
@@ -275,19 +274,15 @@ describe("ActionsPage", () => {
     await fireEvent.click(newest);
     await fireEvent.click(older);
     await screen.findByRole("button", { name: /Verify/ });
-    expect(expandRun.mock.calls.map(([owner, , runId]) => [owner, runId])).toEqual([
-      ["actions-page:jobs:alpha-run-1", "alpha-run-1"],
-      ["actions-page:jobs:alpha-run-2", "alpha-run-2"],
-    ]);
+    expect(loadJobs.mock.calls.map(([, runId]) => runId)).toEqual(["alpha-run-1", "alpha-run-2"]);
 
     await fireEvent.click(newest);
-    expect(collapseRun).toHaveBeenCalledWith("actions-page:jobs:alpha-run-1");
-    expect(collapseRun).not.toHaveBeenCalledWith("actions-page:jobs:alpha-run-2");
+    expect(loadJobs).toHaveBeenCalledTimes(2);
     expect(older.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("button", { name: /Verify/ })).toBeTruthy();
   });
 
-  it("releases every expanded run before switching workflows", async () => {
+  it("resets runs and jobs when switching workflows without refetching old jobs", async () => {
     const twoWorkflows: MockRouteOverride = (request) => {
       if (request.method !== "GET" || request.url.pathname !== "/api/v1/actions/github/acme/alpha/workflows")
         return null;
@@ -321,23 +316,21 @@ describe("ActionsPage", () => {
     api = createMockApiFetch([twoWorkflows, workflowFixtures()]);
     globalThis.fetch = api.fetch;
     const workflowActions = createWorkflowActionsStore({ runtime });
-    const collapseRun = vi.spyOn(workflowActions, "collapseRun");
-    const selectWorkflow = vi.spyOn(workflowActions, "selectWorkflow");
     render(ActionsPage, {
       context: new Map([[STORES_KEY, { workflowActions }]]),
     });
 
     await fireEvent.click(await screen.findByRole("button", { name: /alpha deploy/ }));
     await fireEvent.click(await screen.findByRole("button", { name: /Run 7 alpha deploy/ }));
-    await fireEvent.click(await screen.findByRole("button", { name: /Run 6 alpha deploy/ }));
-    await screen.findByRole("button", { name: /Verify/ });
+    await screen.findByRole("button", { name: /Publish/ });
     const jobReads = api.requests.filter((request) => request.url.pathname.endsWith("/jobs")).length;
 
     await fireEvent.click(screen.getByRole("button", { name: /alpha verify/ }));
-    expect(collapseRun).toHaveBeenCalledWith("actions-page:jobs:alpha-run-1");
-    expect(collapseRun).toHaveBeenCalledWith("actions-page:jobs:alpha-run-2");
-    const switchOrder = selectWorkflow.mock.invocationCallOrder.at(-1)!;
-    expect(collapseRun.mock.invocationCallOrder.every((order) => order < switchOrder)).toBe(true);
+    await waitFor(() => {
+      const runReads = api.requests.filter((request) => request.url.pathname.endsWith("/runs"));
+      expect(runReads.at(-1)?.url.searchParams.get("workflow_id")).toBe("alpha-verify.yml");
+    });
+    expect(screen.queryByRole("button", { name: /Publish/ })).toBeNull();
     expect(api.requests.filter((request) => request.url.pathname.endsWith("/jobs"))).toHaveLength(jobReads);
   });
 
@@ -535,7 +528,7 @@ describe("ActionsPage", () => {
       return jsonResponse(
         {
           accepted: true,
-          locating_run: false,
+          dispatch_id: `dispatch-${dispatches}`,
           actor: "maintainer",
           run: {
             actor: "maintainer",

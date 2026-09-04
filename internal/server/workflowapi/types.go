@@ -163,11 +163,14 @@ type WorkflowJobsResponse struct {
 	Items []WorkflowRunJobResponse `json:"items"`
 }
 
+// WorkflowDispatchResponse acknowledges an accepted dispatch. Run is present only
+// when the provider named the run immediately; otherwise the server locates it
+// and reports through workflow_dispatch_progress events keyed by DispatchID.
 type WorkflowDispatchResponse struct {
-	Accepted    bool                 `json:"accepted"`
-	LocatingRun bool                 `json:"locating_run"`
-	Actor       string               `json:"actor,omitempty"`
-	Run         *WorkflowRunResponse `json:"run,omitempty"`
+	Accepted   bool                 `json:"accepted"`
+	DispatchID string               `json:"dispatch_id"`
+	Actor      string               `json:"actor,omitempty"`
+	Run        *WorkflowRunResponse `json:"run,omitempty"`
 }
 
 type catalogOutput = httpapi.BodyOutput[WorkflowCatalogResponse]

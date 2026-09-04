@@ -2469,8 +2469,7 @@ func (p *gitHubClientProvider) DispatchWorkflow(
 		return result, err
 	}
 	result.Accepted = true
-	result.LocatingRun = details == nil || details.GetWorkflowRunID() == 0
-	if !result.LocatingRun {
+	if details != nil && details.GetWorkflowRunID() != 0 {
 		run := platform.WorkflowRun{
 			ID:         strconv.FormatInt(details.GetWorkflowRunID(), 10),
 			WorkflowID: request.WorkflowID, Actor: actor, WebURL: details.GetHTMLURL(),

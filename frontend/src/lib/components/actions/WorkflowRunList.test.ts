@@ -40,7 +40,7 @@ const jobs: Record<string, readonly Job[]> = {
 };
 
 it("exposes compact textual run data, local time, and secure provider links", () => {
-  render(WorkflowRunList, { runs, jobs: {}, loadingJobs: [], onexpand: vi.fn(), oncollapse: vi.fn() });
+  render(WorkflowRunList, { runs, jobs: {}, loadingJobs: [], onexpand: vi.fn() });
   const row = screen.getByRole("button", { name: /Run 42 Deploy/ });
   expect(row.textContent).toContain("#42");
   expect(row.textContent).toContain("Deploy");
@@ -62,7 +62,6 @@ it.each([
     jobs: {},
     loadingJobs: [],
     onexpand: vi.fn(),
-    oncollapse: vi.fn(),
   });
   expect(screen.getByRole("link", { name: `Open on ${providerLabel}` })).toBeTruthy();
 });
@@ -73,15 +72,13 @@ it("omits unsafe provider links", () => {
     jobs: {},
     loadingJobs: [],
     onexpand: vi.fn(),
-    oncollapse: vi.fn(),
   });
   expect(screen.queryByRole("link")).toBeNull();
 });
 
-it("owns one lazy job request per exact expand and collapse transition and preserves provider order", async () => {
+it("requests jobs only when a run expands and preserves provider order", async () => {
   const onexpand = vi.fn();
-  const oncollapse = vi.fn();
-  const view = render(WorkflowRunList, { runs, jobs, loadingJobs: [], onexpand, oncollapse });
+  const view = render(WorkflowRunList, { runs, jobs, loadingJobs: [], onexpand });
   const disclosure = screen.getByRole("button", { name: /Run 42 Deploy/ });
   expect(disclosure.getAttribute("aria-expanded")).toBe("false");
 
@@ -104,11 +101,11 @@ it("owns one lazy job request per exact expand and collapse transition and prese
   ).toEqual([expect.stringContaining("Upload"), expect.stringContaining("Build")]);
 
   await fireEvent.click(disclosure);
-  expect(oncollapse).toHaveBeenCalledTimes(1);
-  expect(oncollapse).toHaveBeenCalledWith("run-2");
+  expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+  expect(onexpand).toHaveBeenCalledTimes(1);
   await fireEvent.click(disclosure);
   expect(onexpand).toHaveBeenCalledTimes(2);
 
-  await view.rerender({ runs, jobs, loadingJobs: ["run-2"], onexpand, oncollapse });
+  await view.rerender({ runs, jobs, loadingJobs: ["run-2"], onexpand });
   expect(screen.getByText("Loading jobs…").getAttribute("role")).toBe("status");
 });

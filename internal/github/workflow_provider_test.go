@@ -368,7 +368,7 @@ func TestGitHubWorkflowProviderNormalizesRunsJobsAndDispatch(t *testing.T) {
 	fake.dispatch = nil
 	result, err = provider.DispatchWorkflow(t.Context(), platform.RepoRef{Owner: "acme", Name: "widgets"}, platform.WorkflowDispatchRequest{WorkflowID: "42", Ref: "main"})
 	require.NoError(err)
-	assert.Equal(platform.WorkflowDispatchResult{Accepted: true, LocatingRun: true, Actor: "maintainer"}, result)
+	assert.Equal(platform.WorkflowDispatchResult{Accepted: true, Actor: "maintainer"}, result)
 	_, err = provider.DispatchWorkflow(t.Context(), platform.RepoRef{}, platform.WorkflowDispatchRequest{WorkflowID: "not-decimal"})
 	require.ErrorIs(err, platform.ErrInvalidArgument)
 }

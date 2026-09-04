@@ -204,20 +204,17 @@ describe("PullDetail provider workflow action geometry", () => {
     settings.setModeVisibility({ ...settings.getModeVisibility(), actions: true });
     settings.setDetailSettings({ ...settings.getDetailSettings(), initial_timeline_entry_limit: 250 });
     const workflowActions = {
-      claimRepository: vi.fn(() => {
+      loadCatalog: vi.fn(() => {
         catalogClaimed = true;
       }),
-      releaseRepository: vi.fn(() => {
-        catalogClaimed = false;
-      }),
-      selectWorkflow: vi.fn(),
       refreshCatalog: vi.fn(),
       clearCatalogRefreshError: vi.fn(),
+      selectWorkflow: vi.fn(),
       loadMoreRuns: vi.fn(),
-      newDispatchCycle: vi.fn(),
-      expandRun: vi.fn(),
-      collapseRun: vi.fn(),
+      loadJobs: vi.fn(),
       dispatch: vi.fn(),
+      newDispatchCycle: vi.fn(),
+      applyDispatchProgress: vi.fn(),
       setEnabled: vi.fn(),
       getSnapshot: vi.fn(() => null),
       getCatalog: () => (catalogClaimed ? { repo: detail.repo, environments: [], workflows: [workflow] } : null),
@@ -226,7 +223,7 @@ describe("PullDetail provider workflow action geometry", () => {
       getRuns: vi.fn(() => []),
       getJobs: vi.fn(() => []),
       getLoading: vi.fn(() => ({ catalog: false, runs: false, jobs: [] })),
-      getDispatches: () => [],
+      getDispatch: () => null,
     };
     const detailStore = {
       loadDetail: vi.fn(),

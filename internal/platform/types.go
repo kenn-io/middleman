@@ -592,11 +592,12 @@ type WorkflowDispatchRequest struct {
 	ExpectedDefinitionSHA string
 }
 
+// WorkflowDispatchResult reports an accepted dispatch. Run is set only when the
+// provider names the created run; otherwise callers locate it by reading runs.
 type WorkflowDispatchResult struct {
-	Accepted    bool
-	LocatingRun bool
-	Run         *WorkflowRun
-	Actor       string
+	Accepted bool
+	Run      *WorkflowRun
+	Actor    string
 }
 
 type Capabilities struct {

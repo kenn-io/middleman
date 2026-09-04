@@ -623,7 +623,7 @@ function workflowClient(detail: PullDetail) {
       return { data: repoSettings };
     },
   );
-  const POST = vi.fn(async () => ({ data: { accepted: true, locating_run: true } }));
+  const POST = vi.fn(async () => ({ data: { accepted: true, dispatch_id: "dispatch-1" } }));
   return {
     client: { GET, POST } as unknown as GeneratedClient,
     GET,
@@ -848,10 +848,9 @@ describe("PullDetail provider workflow actions", () => {
     expect(rendered.api.POST).toHaveBeenCalledTimes(1);
   });
 
-  it("tears down demand and confirmation without dispatch when Actions mode is disabled", async () => {
+  it("closes the confirmation without dispatch when Actions mode is disabled", async () => {
     const detail = pullDetail();
     const rendered = await openReleaseWorkflow(detail);
-    const releaseRepository = vi.spyOn(rendered.workflowActions, "releaseRepository");
 
     rendered.settings.setModeVisibility({
       ...rendered.settings.getModeVisibility(),
@@ -861,7 +860,6 @@ describe("PullDetail provider workflow actions", () => {
 
     expect(screen.queryByRole("dialog", { name: "Run workflow" })).toBeNull();
     expect(screen.queryByText("GitHub Actions")).toBeNull();
-    expect(releaseRepository).toHaveBeenCalled();
     expect(rendered.api.POST).not.toHaveBeenCalled();
 
     rendered.settings.setModeVisibility({

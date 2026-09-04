@@ -13,10 +13,9 @@
     jobs: Readonly<Record<string, readonly Job[]>>;
     loadingJobs: readonly string[];
     onexpand: (runId: string) => void;
-    oncollapse: (runId: string) => void;
   }
 
-  let { runs, jobs, loadingJobs, onexpand, oncollapse }: Props = $props();
+  let { runs, jobs, loadingJobs, onexpand }: Props = $props();
   let expandedRuns = $state<Record<string, boolean>>({});
   let expandedJobs = $state<Record<string, boolean>>({});
 
@@ -26,7 +25,7 @@
   function toggleRun(id: string): void {
     const expanded = expandedRuns[id] === true;
     expandedRuns[id] = !expanded;
-    if (expanded) oncollapse(id); else onexpand(id);
+    if (!expanded) onexpand(id);
   }
   function providerName(url: string): string {
     try {

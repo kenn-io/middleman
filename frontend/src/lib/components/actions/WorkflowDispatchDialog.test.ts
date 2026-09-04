@@ -47,7 +47,7 @@ it("restores trigger focus when canceled before admission", async () => {
 
 it.each([
   [{ kind: "pending" } as const],
-  [{ kind: "uncertain", message: "Outcome unknown", candidates: [] } as const],
+  [{ kind: "uncertain", message: "Outcome unknown" } as const],
   [{ kind: "conflict" } as const],
 ])("refuses Escape and overlay dismissal while state is %s", async (state) => {
   const onclose = vi.fn();
@@ -196,7 +196,7 @@ it("presents definite rejection as dismissible and requires a fresh explicit cyc
   expect(onclose).toHaveBeenCalledOnce();
 });
 
-it("renders ambiguous candidates and makes Dispatch again only begin a fresh confirmation cycle", async () => {
+it("keeps an uncertain outcome open and makes Dispatch again only begin a fresh confirmation cycle", async () => {
   const onclose = vi.fn();
   const onsubmit = vi.fn();
   const onnewcycle = vi.fn();
@@ -209,21 +209,6 @@ it("renders ambiguous candidates and makes Dispatch again only begin a fresh con
     state: {
       kind: "uncertain",
       message: "The provider could not confirm the dispatch.",
-      candidates: [
-        {
-          actor: "maintainer",
-          conclusion: "",
-          event: "workflow_dispatch",
-          head_sha: "candidate-head",
-          id: "candidate-9",
-          name: "Deploy",
-          ref: "main",
-          run_number: 9,
-          status: "queued",
-          web_url: "https://github.com/acme/app/actions/runs/9",
-          workflow_id: "deploy",
-        },
-      ],
     },
     trigger: null,
     onsubmit,
@@ -232,10 +217,6 @@ it("renders ambiguous candidates and makes Dispatch again only begin a fresh con
     onnewcycle,
   });
 
-  expect(screen.getByText("candidate-9")).toBeTruthy();
-  expect(screen.getByRole("link", { name: "Open candidate run on provider" }).getAttribute("href")).toContain(
-    "/actions/runs/9",
-  );
   await fireEvent.keyDown(window, { key: "Escape" });
   expect(onclose).not.toHaveBeenCalled();
 

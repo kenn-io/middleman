@@ -31,7 +31,6 @@ import { ProjectMutationWorkflowLive } from "../components/terminal/project-muta
 import { WorkspaceRuntimeWorkflowLive } from "../components/terminal/workspace-runtime-workflow.js";
 import { RepoSummaryWorkflowLive } from "../components/repositories/repo-summary-workflow.js";
 import { ToolingStatusWorkflowLive } from "../stores/tooling-status-workflow.js";
-import { WorkflowActionsWorkflowLive } from "../stores/workflow-actions-workflow.js";
 
 export function makeAppLiveLayer(generatedApiLayer: Layer.Layer<GeneratedApi>) {
   const browserBoundaryLive = Layer.mergeAll(
@@ -69,7 +68,6 @@ export function makeAppLiveLayer(generatedApiLayer: Layer.Layer<GeneratedApi>) {
     WorkspaceRuntimeWorkflowLive,
     RepoSummaryWorkflowLive,
     ToolingStatusWorkflowLive,
-    WorkflowActionsWorkflowLive,
   );
   const applicationWorkflowsLive = Layer.mergeAll(SettingsWorkflowLive, providerWorkflowsLive);
 

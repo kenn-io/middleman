@@ -9005,13 +9005,13 @@ components:
           type: boolean
         actor:
           type: string
-        locating_run:
-          type: boolean
+        dispatch_id:
+          type: string
         run:
           $ref: "#/components/schemas/WorkflowRunResponse"
       required:
         - accepted
-        - locating_run
+        - dispatch_id
       type: object
     WorkflowEnvironmentResponse:
       additionalProperties: false

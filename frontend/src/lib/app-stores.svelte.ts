@@ -342,6 +342,7 @@ export function createAppStores(options: AppStoreOptions): AppStoreComposition {
       }
       return Effect.void;
     },
+    onWorkflowDispatchProgress: (event) => Effect.sync(() => workflowActions.applyDispatchProgress(event)),
     onDeferredMergeCompleted: (event) =>
       Effect.gen(function* () {
         const refreshes: Array<Effect.Effect<void, ProviderEventsError, AppServices>> = [
