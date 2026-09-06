@@ -96,6 +96,8 @@ export function createAppStores(options: AppStoreOptions): AppStoreComposition {
   pullsOpts.optimisticDetailStarUpdate = (ref, number, starred, envelopeTick) => {
     detailStarProjection.current?.(ref, number, starred, envelopeTick);
   };
+  pullsOpts.getGroupByWorkflow = () => grouping.getGroupingMode() === "byWorkflow";
+  pullsOpts.getUseWorkspaceActivityForRecency = () => activityStore.getUseWorkspaceActivityForRecency();
   const pullsStore = createPullsStore(pullsOpts);
 
   const syncStore = createSyncStore({

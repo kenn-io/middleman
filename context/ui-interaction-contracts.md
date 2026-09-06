@@ -942,6 +942,9 @@ action, or the two fight and the control renders the inverse of its real state.
 
 Not every visibility control means "remove this entity entirely."
 
+- PR stack trees stay inside the active filters and grouping; a filtered-out root
+  must not reappear as context. Keyboard navigation follows rendered stack rows.
+  (`frontend/src/lib/stores/pulls.svelte.ts::getSidebarRows`)
 - Controls that toggle detail visibility should preserve the parent row unless
   the feature explicitly removes that category from the result set.
 - Activity's Commits filter controls top-level default-branch commits only; it

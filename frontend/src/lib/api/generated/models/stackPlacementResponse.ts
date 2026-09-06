@@ -7,4 +7,6 @@ export interface StackPlacementResponse {
   position: number;
   /** Number of visible pull requests in the stack */
   size: number;
+  /** Stable local stack identity */
+  stack_id: number;
 }

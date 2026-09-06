@@ -226,8 +226,8 @@ func TestListStackPlacementsForMRs(t *testing.T) {
 
 	placements, err := d.ListStackPlacementsForMRs(ctx, []int64{mrID2, mrID4, soloID})
 	require.NoError(err)
-	assert.Equal(StackPlacement{Position: 2, Size: 4}, placements[mrID2])
-	assert.Equal(StackPlacement{Position: 4, Size: 4}, placements[mrID4])
+	assert.Equal(StackPlacement{StackID: stackID, Position: 2, Size: 4}, placements[mrID2])
+	assert.Equal(StackPlacement{StackID: stackID, Position: 4, Size: 4}, placements[mrID4])
 	_, requested := placements[mrID1]
 	assert.False(requested, "unrequested members must not be returned")
 	_, inStack := placements[soloID]
@@ -247,8 +247,8 @@ func TestListStackPlacementsForMRs(t *testing.T) {
 	require.NoError(err)
 	_, hidden := placements[mrID2]
 	assert.False(hidden, "hidden members must not be returned")
-	assert.Equal(StackPlacement{Position: 2, Size: 3}, placements[mrID3])
-	assert.Equal(StackPlacement{Position: 3, Size: 3}, placements[mrID4])
+	assert.Equal(StackPlacement{StackID: stackID, Position: 2, Size: 3}, placements[mrID3])
+	assert.Equal(StackPlacement{StackID: stackID, Position: 3, Size: 3}, placements[mrID4])
 
 	empty, err := d.ListStackPlacementsForMRs(ctx, nil)
 	require.NoError(err)
@@ -264,7 +264,7 @@ func TestListStackPlacementsForMRs(t *testing.T) {
 	placements, err = d.ListStackPlacementsForMRs(ctx, large)
 	require.NoError(err)
 	assert.Len(placements, 2)
-	assert.Equal(StackPlacement{Position: 2, Size: 3}, placements[mrID3])
+	assert.Equal(StackPlacement{StackID: stackID, Position: 2, Size: 3}, placements[mrID3])
 }
 
 func TestDeleteStaleStacks(t *testing.T) {

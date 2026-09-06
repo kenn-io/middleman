@@ -305,6 +305,78 @@ describe("pulls store display order", () => {
     expect(store.getDisplayOrderPRs().map((pr) => pr.ID)).toEqual([1, 3, 2]);
   });
 
+  it("collapses stacks to their root and navigates only rendered rows", async () => {
+    const store = createPullsStore({
+      client: clientWithPulls([
+        pull(3, "api", "2026-05-20T15:00:00Z", { stack: { stack_id: 7, position: 3, size: 3 } }),
+        pull(4, "api", "2026-05-20T14:00:00Z"),
+        pull(1, "api", "2026-05-20T13:00:00Z", { stack: { stack_id: 7, position: 1, size: 3 } }),
+        pull(2, "api", "2026-05-20T12:00:00Z", { stack: { stack_id: 7, position: 2, size: 3 } }),
+      ]),
+    });
+    await loadPulls(store);
+    expect(store.getStackTree()).toBe(false);
+    store.setStackTree(true);
+    expect(localStorage.getItem("kenn-forge:pullStackTree")).toBe("1");
+    expect(store.getDisplayOrderPRs().map((pr) => pr.ID)).toEqual([1, 4]);
+    store.selectNextPR();
+    expect(store.getSelectedPR()?.number).toBe(1);
+    store.selectNextPR();
+    expect(store.getSelectedPR()?.number).toBe(4);
+
+    const root = store.getSidebarRows(store.getFilteredPulls())[0]!;
+    store.toggleStack(root.stackKey, false);
+    expect(store.getDisplayOrderPRs().map((pr) => pr.ID)).toEqual([1, 2, 3, 4]);
+    store.selectPrevPR();
+    expect(store.getSelectedPR()?.number).toBe(3);
+    store.toggleStack(root.stackKey, true);
+    expect(store.getDisplayOrderPRs().map((pr) => pr.ID)).toEqual([1, 4]);
+    // A new selection inside the stack reveals it without changing the view preference.
+    store.selectPR("acme", "api", 2, "github", "github.com", "acme/api");
+    expect(store.getDisplayOrderPRs().map((pr) => pr.ID)).toEqual([1, 2, 3, 4]);
+    store.toggleStack(root.stackKey, true);
+    store.selectPR("acme", "api", 4, "github", "github.com", "acme/api");
+    store.selectPR("acme", "api", 2, "github", "github.com", "acme/api");
+    expect(store.getDisplayOrderPRs().map((pr) => pr.ID)).toEqual([1, 2, 3, 4]);
+    store.setStackTree(false);
+    expect(store.getDisplayOrderPRs().map((pr) => pr.ID)).toEqual([3, 4, 1, 2]);
+  });
+
+  it("keeps filtered and status-grouped stack members within their view", async () => {
+    const store = createPullsStore({
+      getGroupByWorkflow: () => true,
+      client: clientWithPulls([
+        pull(3, "api", "2026-05-20T15:00:00Z", { stack: { stack_id: 7, position: 3, size: 3 }, IsDraft: true }),
+        pull(1, "api", "2026-05-20T13:00:00Z", {
+          stack: { stack_id: 7, position: 1, size: 3 },
+          KanbanStatus: "reviewing",
+        }),
+        pull(2, "api", "2026-05-20T12:00:00Z", { stack: { stack_id: 7, position: 2, size: 3 }, IsDraft: true }),
+      ]),
+    });
+    await loadPulls(store);
+    store.setStackTree(true);
+    expect(store.getDisplayOrderPRs().map((pr) => pr.ID)).toEqual([2, 1]);
+    store.toggleAttributeFilter("draft");
+    const rows = store.getSidebarRows(store.getFilteredPulls());
+    expect(rows.map((row) => [row.pr.ID, row.memberCount])).toEqual([[2, 2]]);
+    store.toggleStack(rows[0]!.stackKey, false);
+    expect(store.getDisplayOrderPRs().map((pr) => pr.ID)).toEqual([2, 3]);
+  });
+
+  it("does not join stacks from different repository identities", async () => {
+    const store = createPullsStore({
+      client: clientWithPulls([
+        pull(1, "api", "2026-05-20T15:00:00Z", { RepoID: 1, stack: { stack_id: 7, position: 1, size: 2 } }),
+        pull(2, "api", "2026-05-20T14:00:00Z", { RepoID: 2, stack: { stack_id: 8, position: 1, size: 2 } }),
+        pull(3, "api", "2026-05-20T13:00:00Z", { RepoID: 1, stack: { stack_id: 7, position: 2, size: 2 } }),
+      ]),
+    });
+    await loadPulls(store);
+    store.setStackTree(true);
+    expect(store.getDisplayOrderPRs().map((pr) => pr.ID)).toEqual([1, 2]);
+  });
+
   it("filters pull requests by review state, readiness, CI, merge conflicts, and multiple kanban statuses", async () => {
     const store = createPullsStore({
       client: clientWithPulls([
