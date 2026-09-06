@@ -8,6 +8,11 @@ test.use({
   userAgent: iPhone13.userAgent,
 });
 
+test.afterEach(async ({ page }) => {
+  // Background detail refreshes can still be inside a route callback at teardown.
+  await page.unrouteAll({ behavior: "wait" });
+});
+
 async function expectPathname(page: Page, pathname: string): Promise<void> {
   await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
 }

@@ -167,6 +167,10 @@ server cannot produce the state. Use `frontend/src/test/mockApiFetch.ts` rather
 than forking the Playwright fixture, and do not assert backend-computed values
 through hand-written frontend data.
 
+- Drain asynchronous Playwright route handlers before page teardown; background refreshes
+  can outlive passing assertions. Use `unrouteAll({ behavior: "wait" })` to retain callback errors
+  (`frontend/tests/e2e-full/mobile-routes.spec.ts:11`).
+
 A UI regression can be sufficiently covered by a backend/server test for the
 real runtime path plus a component or Vitest browser test for presentation. Do
 not require a duplicate full-stack browser test when it would only replay data
