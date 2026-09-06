@@ -166,14 +166,6 @@ Unauthorized retries evict only the exact rejected token; in-flight mints, activ
 and newer completed tokens survive stale responses.
 (`internal/tokenauth/source.go::githubAppTokenStore.invalidateToken`)
 
-Public App cache keys include scope and credential generation; invalidation fences
-in-flight publication without affecting other credentials. Standalone cooldown and
-fallback remain outside that cache (`githubapp/cache.go::TokenCache`).
-
-Shared mint expiry is terminal for waiters with the same or earlier deadline;
-only later-deadline waiters may retry. Independent timers must not extend the
-caller's budget (`githubapp/cache.go::TokenCache.Token`).
-
 Roborev discovery retains definitive results until managed-clone initialization
 confirms a registration. Invalidation clears all inventory state and fences out
 older refreshes by generation; transient failures still retry after cooldown and

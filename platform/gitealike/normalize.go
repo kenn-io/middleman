@@ -84,8 +84,6 @@ func NormalizePullRequest(repo platform.RepoRef, pr PullRequestDTO) platform.Mer
 		Title:              pr.Title,
 		Author:             pr.User.UserName,
 		AuthorDisplayName:  pr.User.FullName,
-		AuthorAccount:      NormalizeAccount(pr.User),
-		MergerAccount:      NormalizeAccount(pr.MergedBy),
 		State:              state,
 		IsDraft:            pr.Draft,
 		IsLocked:           pr.IsLocked,
@@ -112,15 +110,6 @@ func NormalizePullRequest(repo platform.RepoRef, pr PullRequestDTO) platform.Mer
 		Assignees:          userDTONames(pr.Assignees),
 		RequestedReviewers: userDTONames(pr.RequestedReviewers),
 	}
-}
-
-// NormalizeAccount preserves immutable identity without interpreting names.
-// Neither adapter currently provides authoritative account-type evidence.
-func NormalizeAccount(user UserDTO) *platform.Account {
-	if user.ID <= 0 {
-		return nil
-	}
-	return &platform.Account{ID: strconv.FormatInt(user.ID, 10), Login: user.UserName, DisplayName: user.FullName, Type: platform.AccountUnknown}
 }
 
 // userDTONames preserves nil (field unknown to the transport) versus an

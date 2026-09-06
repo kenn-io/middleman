@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.kenn.io/forge/platform"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
-
-	"go.kenn.io/forge/platform"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -377,16 +376,12 @@ func TestGitHubAppMintCancellationIsNotPublishedToWaiters(t *testing.T) {
 		assert := assert.New(t)
 		var mints atomic.Int64
 		winnerEntered := make(chan struct{})
-		release := make(chan struct{})
 		src := NewManagedSource(githubAppDescriptor(42), Options{
 			GitHubApp: func(ctx context.Context, _ Candidate) (string, time.Time, error) {
 				if mints.Add(1) == 1 {
 					close(winnerEntered)
-					select {
-					case <-release:
-					case <-ctx.Done():
-						return "", time.Time{}, ctx.Err()
-					}
+					<-ctx.Done()
+					return "", time.Time{}, ctx.Err()
 				}
 				return "ghs_recovered", time.Now().Add(time.Hour), nil
 			},
@@ -412,12 +407,11 @@ func TestGitHubAppMintCancellationIsNotPublishedToWaiters(t *testing.T) {
 		cancel()
 
 		require.ErrorIs(<-winnerErr, context.Canceled)
-		close(release)
 		waiter := <-waiterResult
 		require.NoError(waiter.err)
 		assert.Equal("ghs_recovered", waiter.token)
-		assert.Equal(int64(1), mints.Load(),
-			"canceling one waiter must not abort the shared mint")
+		assert.Equal(int64(2), mints.Load(),
+			"waiter must re-mint with its own context after the winner cancels")
 	})
 }
 

@@ -2,8 +2,6 @@ package github
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -69,36 +67,4 @@ func TestLiveGraphQLQueriesValidateAgainstGitHub(t *testing.T) {
 	err = client.Query(ctx, &issueQuery, vars)
 	require.NoError(err, "bulk issue GraphQL query should validate against GitHub")
 
-	reviewClient, err := platformgithub.NewClient(platformgithub.ClientConfig{
-		Host: "github.com", Read: httpClient, Write: httpClient, Notifications: httpClient, Clock: time.Now,
-	})
-	require.NoError(err)
-	threads, _, _, err := reviewClient.ListInventoryReviewThreadsPage(
-		ctx, "github.com", "kenn-io", "forge", 830, "",
-	)
-	require.NoError(err, "review-thread GraphQL query should validate against GitHub")
-	require.NotEmpty(threads, "live review fixture should contain a review thread")
-	require.NotEmpty(threads[0].Comments, "live review fixture should contain a review comment")
-	require.False(threads[0].Comments[0].CreatedAt.IsZero(),
-		"review-thread GraphQL query should return comment creation time")
-	require.False(threads[0].Comments[0].UpdatedAt.IsZero(),
-		"review-thread GraphQL query should return comment update time")
-
-	// Exercise the child-query shape without requiring a live thread to have
-	// more than one hundred comments. This is the provider's serialized cursor.
-	cursor, err := json.Marshal(map[string]any{
-		"host": "github.com", "owner": "kenn-io", "repo": "forge", "number": 830,
-		"phase": "comments", "thread": map[string]any{"node_id": threads[0].NodeID},
-	})
-	require.NoError(err)
-	comments, _, _, err := reviewClient.ListInventoryReviewThreadsPage(
-		ctx, "github.com", "kenn-io", "forge", 830, base64.RawURLEncoding.EncodeToString(cursor),
-	)
-	require.NoError(err, "review-thread comment GraphQL query should validate against GitHub")
-	require.NotEmpty(comments, "live review fixture should return its review thread")
-	require.NotEmpty(comments[0].Comments, "live review fixture should contain a review comment")
-	require.False(comments[0].Comments[0].CreatedAt.IsZero(),
-		"paginated review-comment query should return creation time")
-	require.False(comments[0].Comments[0].UpdatedAt.IsZero(),
-		"paginated review-comment query should return update time")
 }

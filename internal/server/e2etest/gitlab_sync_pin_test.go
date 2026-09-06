@@ -127,8 +127,7 @@ func TestGitLabNormalSyncEnablesHeadBoundMutations(t *testing.T) {
 	client, err := platformgitlab.NewClient(
 		"gitlab.com",
 		staticGitLabTokenSource("token"),
-		platformgitlab.WithBaseURLForTesting(api.URL+"/api/v4"), platformgitlab.WithTransport(http.DefaultTransport), platformgitlab.WithClock(time.Now),
-	)
+		platformgitlab.WithBaseURLForTesting(api.URL+"/api/v4"), platformgitlab.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := platform.NewRegistry(client)
 	require.NoError(err)

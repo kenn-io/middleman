@@ -286,8 +286,7 @@ func setupGitLabLabelStack(t *testing.T) (*server.Server, *db.DB, int64, *fakeGi
 	client, err := gitlabprovider.NewClient(
 		platform.DefaultGitLabHost,
 		staticTokenSource("token"),
-		gitlabprovider.WithBaseURLForTesting(upstream.URL+"/api/v4"), gitlabprovider.WithTransport(http.DefaultTransport), gitlabprovider.WithClock(time.Now),
-	)
+		gitlabprovider.WithBaseURLForTesting(upstream.URL+"/api/v4"), gitlabprovider.WithTransport(http.DefaultTransport))
 	require.NoError(t, err)
 
 	repoID := seedProviderRepo(t, database, platform.KindGitLab, platform.DefaultGitLabHost)
@@ -616,8 +615,7 @@ func gitealikeLabelVariants() []gitealikeLabelVariant {
 				client, err := forgejo.NewClient(
 					platform.DefaultForgejoHost,
 					staticTokenSource("token"),
-					forgejo.WithBaseURLForTesting(upstreamURL), forgejo.WithTransport(http.DefaultTransport), forgejo.WithClock(time.Now),
-				)
+					forgejo.WithBaseURLForTesting(upstreamURL), forgejo.WithTransport(http.DefaultTransport))
 				require.NoError(t, err)
 				return client
 			},
@@ -633,8 +631,7 @@ func gitealikeLabelVariants() []gitealikeLabelVariant {
 					platform.DefaultGiteaHost,
 					staticTokenSource("token"),
 					gitea.WithBaseURL(upstreamURL, true),
-					gitea.WithServerVersion("1.26.0"), gitea.WithTransport(http.DefaultTransport), gitea.WithClock(time.Now),
-				)
+					gitea.WithServerVersion("1.26.0"), gitea.WithTransport(http.DefaultTransport))
 				require.NoError(t, err)
 				return client
 			},

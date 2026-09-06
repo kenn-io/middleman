@@ -485,7 +485,7 @@ func TestArchivePreemptedItemRecordsNoFailureAndCompletesOnNextPass(t *testing.T
 
 	// beginProviderWork cancels the in-flight archive lease and waits for it to
 	// release; the hydration pass observes preemption and records nothing.
-	releaseLive := syncer.beginProviderWork(t.Context(), key, archive.PriorityActiveDetail)
+	releaseLive := syncer.beginProviderWork(key, archive.PriorityActiveDetail)
 	require.NoError(<-hydrationDone)
 
 	lookup, err := database.GetDatasetProgress(
@@ -1457,7 +1457,7 @@ func TestArchiveAdmissionDefersToNotificationAndActiveDetailWork(t *testing.T) {
 		archive.PriorityNotificationRefresh,
 		archive.PriorityActiveDetail,
 	} {
-		release := syncer.beginProviderWork(t.Context(), key, priority)
+		release := syncer.beginProviderWork(key, priority)
 		denied, err := syncer.Admit(t.Context(), ref, db.ArchiveItemTypeIssue, 1)
 		require.NoError(err)
 		assert.False(denied.Allowed)
@@ -1612,7 +1612,7 @@ func TestLiveProviderWorkCancelsAndWaitsForArchiveRequest(t *testing.T) {
 	liveStarted := make(chan struct{})
 	liveDone := make(chan struct{})
 	go func() {
-		releaseLive := syncer.beginProviderWork(t.Context(), key, archive.PriorityActiveDetail)
+		releaseLive := syncer.beginProviderWork(key, archive.PriorityActiveDetail)
 		close(liveStarted)
 		releaseLive()
 		close(liveDone)

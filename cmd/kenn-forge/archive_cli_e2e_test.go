@@ -2,30 +2,25 @@ package main
 
 import (
 	"bytes"
-	"encoding/json/v2"
 	"encoding/pem"
 	"fmt"
+	"go.kenn.io/forge/internal/platformdb"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
 
-	"go.kenn.io/forge/internal/platformdb"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.kenn.io/forge/internal/archive/report"
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/procutil"
 	"go.kenn.io/forge/internal/runtimelock"
 	"go.kenn.io/forge/internal/testutil/dbtest"
-	"go.kenn.io/forge/internal/testutil/gitsafe"
 	"go.kenn.io/forge/platform"
 )
 
@@ -36,29 +31,8 @@ func TestArchiveCommandE2E(t *testing.T) {
 	root := t.TempDir()
 	dataDir := filepath.Join(root, "data")
 	require.NoError(os.MkdirAll(dataDir, 0o700))
-	gitDir := t.TempDir()
-	git := func(args ...string) string {
-		out, stderr, err := gitsafe.Runner().Run(t.Context(), gitDir, nil, append([]string{"-c", "gc.auto=0", "-c", "maintenance.auto=false"}, args...)...)
-		require.NoError(err, "%s", stderr)
-		return strings.TrimSpace(string(out))
-	}
-	git("init", "--template=", "--initial-branch=main")
-	git("config", "user.name", "Author A")
-	git("config", "user.email", "author@example.org")
-	require.NoError(os.WriteFile(filepath.Join(gitDir, "main.go"), []byte("one\n"), 0o600))
-	git("add", ".")
-	git("commit", "-m", "base")
-	base := git("rev-parse", "HEAD")
-	require.NoError(os.WriteFile(filepath.Join(gitDir, "main.go"), []byte("one\ntwo\n"), 0o600))
-	git("add", ".")
-	git("commit", "-m", "direct change")
-	head := git("rev-parse", "HEAD")
 	api := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v4/projects/1/repository/branches/main" {
-			_, _ = fmt.Fprintf(w, `{"commit":{"id":%q}}`, head)
-			return
-		}
 		projectPath := "/api/v4/projects/owner%2Farchive"
 		if r.Method == http.MethodGet &&
 			(r.URL.EscapedPath() == projectPath || r.URL.Path == "/api/v4/projects/owner/archive") {
@@ -74,7 +48,6 @@ func TestArchiveCommandE2E(t *testing.T) {
 	}))
 	t.Cleanup(api.Close)
 	host := api.Listener.Addr().String()
-	git("remote", "add", "origin", "https://"+host+"/old-owner/old-name.git")
 	certPath := filepath.Join(root, "provider-cert.pem")
 	require.NoError(os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{
 		Type: "CERTIFICATE", Bytes: api.Certificate().Raw,
@@ -217,21 +190,6 @@ token_env = "KENN_FORGE_ARCHIVE_E2E_TOKEN"
 	require.NoError(err)
 	assert.Contains(string(contents), "# Activity archive")
 	assert.Contains(string(contents), "Issues opened: 1")
-
-	stdout, stderr, code = run("report", "--config", cfgPath, "--days", "1", "--repo", "gitlab|"+host+"/owner/archive", "--landed-work", "--git-dir", gitDir, "--base-sha", base, "--head-sha", head, "--format", "json")
-	require.Equal(0, code, "%s", stderr)
-	var landedReport report.Model
-	require.NoError(json.Unmarshal([]byte(stdout), &landedReport))
-	require.NotNil(landedReport.LandedWork)
-	assert.Equal("1", landedReport.LandedWork.Evidence.Repository.ID)
-	assert.Equal("candidate_inventory_order_unproven", landedReport.LandedWork.Snapshot.Coverage.Reason)
-	assert.False(landedReport.LandedWork.Graph.Complete)
-	assert.Nil(landedReport.LandedWork.Graph.DirectPushLandingShare)
-	assert.Equal(base, landedReport.LandedWork.Evidence.CertifiedHead)
-	stdout, stderr, code = run("report", "--config", cfgPath, "--days", "1", "--repo", "gitlab|"+host+"/owner/archive", "--landed-work", "--git-dir", gitDir, "--base-sha", base, "--head-sha", head)
-	require.Equal(0, code, "%s", stderr)
-	assert.Contains(stdout, "Graph interval (partial)")
-	assert.Contains(stdout, "Direct-push landing share: unknown")
 
 	stdout, stderr, code = run(
 		"report", "--config", cfgPath, "--days", "1",

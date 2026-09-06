@@ -19,10 +19,7 @@ type ProviderConfig struct {
 // NewProvider adapts the supplied GitHub API to neutral capability interfaces.
 // The caller owns transports, credentials, observation policy and lifecycle.
 func NewProvider(config ProviderConfig) (*Provider, error) {
-	host, err := platform.NormalizeHost(platform.KindGitHub, config.Host)
-	if err != nil {
-		return nil, err
-	}
+	host := config.Host
 	if config.Client == nil || config.Clock == nil {
 		return nil, &platform.Error{Code: platform.ErrCodeInvalidArgument, Provider: platform.KindGitHub,
 			PlatformHost: host, Err: errors.New("a GitHub client and clock are required")}

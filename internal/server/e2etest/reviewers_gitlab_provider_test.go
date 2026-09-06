@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -142,8 +141,7 @@ func TestGitLabSetPullReviewersRetainsReviewerAbsentFromUserSearch(t *testing.T)
 	client, err := gitlabprovider.NewClient(
 		platform.DefaultGitLabHost,
 		staticTokenSource("token"),
-		gitlabprovider.WithBaseURLForTesting(upstream.URL+"/api/v4"), gitlabprovider.WithTransport(http.DefaultTransport), gitlabprovider.WithClock(time.Now),
-	)
+		gitlabprovider.WithBaseURLForTesting(upstream.URL+"/api/v4"), gitlabprovider.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 
 	repoID := seedProviderRepo(t, database, platform.KindGitLab, platform.DefaultGitLabHost)
@@ -191,8 +189,7 @@ func TestGitLabSetPullAssigneesRetainsAssigneeAbsentFromUserSearch(t *testing.T)
 	client, err := gitlabprovider.NewClient(
 		platform.DefaultGitLabHost,
 		staticTokenSource("token"),
-		gitlabprovider.WithBaseURLForTesting(upstream.URL+"/api/v4"), gitlabprovider.WithTransport(http.DefaultTransport), gitlabprovider.WithClock(time.Now),
-	)
+		gitlabprovider.WithBaseURLForTesting(upstream.URL+"/api/v4"), gitlabprovider.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 
 	repoID := seedProviderRepo(t, database, platform.KindGitLab, platform.DefaultGitLabHost)
@@ -237,8 +234,7 @@ func TestGitLabSetIssueAssigneesRetainsAssigneeAbsentFromUserSearch(t *testing.T
 	client, err := gitlabprovider.NewClient(
 		platform.DefaultGitLabHost,
 		staticTokenSource("token"),
-		gitlabprovider.WithBaseURLForTesting(upstream.URL+"/api/v4"), gitlabprovider.WithTransport(http.DefaultTransport), gitlabprovider.WithClock(time.Now),
-	)
+		gitlabprovider.WithBaseURLForTesting(upstream.URL+"/api/v4"), gitlabprovider.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 
 	repoID := seedProviderRepo(t, database, platform.KindGitLab, platform.DefaultGitLabHost)

@@ -29,13 +29,11 @@ cmd/internal/server/etc. -> registry plus provider-neutral DB rows
 Do not make a provider package import server code, config startup, or another
 provider package. Do not make `platform` import provider-specific SDKs.
 
-Public provider/App/analyzer libraries must have no transitive application,
-SQLite, config, telemetry or credential-discovery dependency. Callers own
-transport, clock, credentials and admission (`platform/github/config.go`).
-
-Landed-work proof flags are independent of interactive capabilities and of shared
-SDK shape; enable only endpoint-proven methods. Missing proof blocks attribution,
-never implies direct push (`landedwork/proof.go::prove`).
+Public provider and App libraries must have no transitive application, SQLite,
+config or credential-discovery dependency. Application credential selection,
+cache policy and admission remain internal
+(`cmd/kenn-forge/provider_startup.go::defaultProviderFactories`,
+`internal/tokenauth/source.go::githubAppTokenStore`).
 
 ## Adding A Provider
 

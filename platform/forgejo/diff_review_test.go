@@ -82,7 +82,7 @@ func TestPublishDiffReviewDraftCreatesForgejoReview(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	result, err := client.PublishDiffReviewDraft(context.Background(), platform.RepoRef{
 		Owner: "acme",
@@ -137,7 +137,7 @@ func TestPublishDiffReviewDraftApproveSubmitsReview(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	result, err := client.PublishDiffReviewDraft(context.Background(), platform.RepoRef{
 		Owner: "acme",
@@ -161,7 +161,7 @@ func TestRequestChangesMapsNotFoundResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	err = client.RequestChanges(
 		context.Background(), platform.RepoRef{Owner: "acme", Name: "widgets"},
@@ -207,7 +207,7 @@ func TestListMergeRequestReviewThreadsReadsForgejoReviewComments(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	threads, err := client.ListMergeRequestReviewThreads(context.Background(), platform.RepoRef{
 		Owner: "acme",
@@ -252,7 +252,7 @@ func TestListMergeRequestReviewThreadsReadsBeyondTenthReviewPage(t *testing.T) {
 		assert.NoError(json.NewEncoder(w).Encode([]map[string]any{{"id": page}}))
 	}))
 	defer server.Close()
-	client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 
 	threads, err := client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
@@ -314,7 +314,7 @@ func TestListMergeRequestReviewThreadsClassifiesDisabledMergeRequests(t *testing
 			}))
 			defer server.Close()
 
-			client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now))
+			client, err := NewClient("codeberg.test", testTokenSource("token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 			require.NoError(err)
 			_, err = client.ListMergeRequestReviewThreads(context.Background(), platform.RepoRef{
 				Platform: platform.KindForgejo,
@@ -343,15 +343,14 @@ func TestListMergeRequestReviewThreadsMapsAuthenticationErrors(t *testing.T) {
 
 			client, err := NewClient(
 				"codeberg.test", testTokenSource("token"),
-				WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now),
-			)
+				WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 			require.NoError(err)
 			_, err = client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 				Owner: "acme", Name: "widgets",
 			}, 42)
 
 			if status == http.StatusUnauthorized {
-				require.ErrorIs(err, platform.ErrCredentialRejected)
+				require.ErrorIs(err, platform.ErrPermissionDenied)
 			} else {
 				require.ErrorIs(err, platform.ErrPermissionDenied)
 			}
@@ -387,8 +386,7 @@ func TestListMergeRequestReviewThreadsReadsEveryLargeDatasetReview(t *testing.T)
 
 	client, err := NewClient(
 		"codeberg.test", testTokenSource("token"),
-		WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	threads, err := client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 		Owner: "acme", Name: "widgets",
@@ -423,8 +421,7 @@ func TestListMergeRequestReviewThreadsReadsEveryLargeDatasetComment(t *testing.T
 
 	client, err := NewClient(
 		"codeberg.test", testTokenSource("token"),
-		WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	threads, err := client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 		Owner: "acme", Name: "widgets",

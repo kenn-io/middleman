@@ -165,11 +165,6 @@ func DBMergeRequest(repoID int64, mr platform.MergeRequest) *db.MergeRequest {
 		ReviewersJSON:           MarshalUserNamesJSON(mr.RequestedReviewers),
 	}
 	out.Labels = DBLabels(mr.Labels, itemLabelUpdatedAt(mr.UpdatedAt, mr.CreatedAt))
-	// Activity reports expose one resulting commit. Keep that application
-	// projection here; public evidence must preserve both GitLab fields.
-	if mr.Repo.Platform == platform.KindGitLab && out.MergeCommitSHA == "" {
-		out.MergeCommitSHA = mr.SquashCommitSHA
-	}
 	return out
 }
 

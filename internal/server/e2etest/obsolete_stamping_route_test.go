@@ -164,8 +164,7 @@ func TestForgejoSyncRouteStampsObsoleteCommitEventsAcrossForcePushes(t *testing.
 	provider, err := forgejo.NewClient(
 		platform.DefaultForgejoHost,
 		staticTokenSource("token"),
-		forgejo.WithBaseURLForTesting(providerAPI.URL), forgejo.WithTransport(http.DefaultTransport), forgejo.WithClock(time.Now),
-	)
+		forgejo.WithBaseURLForTesting(providerAPI.URL), forgejo.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := platform.NewRegistry(provider)
 	require.NoError(err)

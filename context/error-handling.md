@@ -119,7 +119,6 @@ Translate `platform` typed errors at the server boundary:
 | `conflict` | `409 conflict` |
 | `rate_limited` | `429 rateLimited` |
 | `permission_denied` | `403 forbidden` |
-| `credential_rejected`, `installation_suspended`, `installation_deleted` | `403 forbidden`; library callers retain the distinct credential error and its scope |
 | `not_found` | `404 notFound`, or a more specific not-found code when the caller knows the resource type |
 | `provider_not_configured`, `missing_token`, `invalid_repo_ref`, `invalid_argument` | `400 badRequest` |
 | Unknown provider/platform failures | `502 upstreamError` |
@@ -127,10 +126,6 @@ Translate `platform` typed errors at the server boundary:
 Cancellation and deadline errors pass through only when the request context is
 done; a provider child-context deadline while the request remains active is a
 `502 upstreamError` (`internal/server/markdown_images.go::markdownImageError`).
-
-An installation-token rejection proves nothing about App-key revocation. Installation
-deletion requires successful expected-App JWT identity before the installation 404;
-consumers must not classify status codes themselves (`githubapp/client.go::Client.GetInstallation`).
 
 ## Frontend Handling
 

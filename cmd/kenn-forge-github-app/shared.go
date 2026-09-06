@@ -4,15 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
+	appfiles "go.kenn.io/forge/internal/githubapp"
 	"strings"
 	"time"
 
-	appfiles "go.kenn.io/forge/internal/githubapp"
-
 	"go.kenn.io/forge/githubapp"
 	"go.kenn.io/forge/internal/config"
-	"go.kenn.io/forge/platform"
 )
 
 // loadConfig uses the GitHub App management entry point so every command
@@ -26,11 +23,10 @@ func (env *appEnv) loadConfig() (*config.Config, error) {
 }
 
 func (env *appEnv) apiClient(host string) *githubapp.Client {
-	httpClient := &http.Client{Timeout: 30 * time.Second}
 	if env.apiBase != "" {
-		return githubapp.NewClient(host, httpClient, githubapp.WithAPIBase(env.apiBase))
+		return githubapp.NewClientWithBase(env.apiBase)
 	}
-	return githubapp.NewClient(host, httpClient)
+	return githubapp.NewClient(host)
 }
 
 func (env *appEnv) webBaseFor(host string) string {
@@ -268,7 +264,7 @@ func (env *appEnv) pollUntil(
 
 func normalizeHostFlag(host string) (string, error) {
 	host = strings.TrimSpace(host)
-	normalized, err := platform.NormalizeHost(platform.KindGitHub, host)
+	normalized, err := config.NormalizePlatformHost("github", host)
 	if err != nil {
 		return "", err
 	}

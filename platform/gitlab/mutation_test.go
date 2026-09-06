@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	Require "github.com/stretchr/testify/require"
@@ -255,7 +254,7 @@ func TestGitLabSetIssueStateSendsStateEvent(t *testing.T) {
 func TestGitLabSetStateRejectsUnknownState(t *testing.T) {
 	assert := assert.New(t)
 	require := Require.New(t)
-	client, err := NewClient("gitlab.example.com", testTokenSource("token"), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("gitlab.example.com", testTokenSource("token"), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 
 	var platformErr *platform.Error
@@ -402,7 +401,7 @@ func TestGitLabMergeMergeRequestRejectsRebaseWithTypedError(t *testing.T) {
 	require := Require.New(t)
 	// No fake server: rebase must fail before any API call because GitLab
 	// selects rebase/fast-forward behavior via project settings, not per merge.
-	client, err := NewClient("gitlab.example.com", testTokenSource("token"), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("gitlab.example.com", testTokenSource("token"), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 
 	_, err = client.MergeMergeRequest(
@@ -560,7 +559,7 @@ func TestGitLabApproveMergeRequestReportsNotePostedWhenApprovalFails(t *testing.
 	assert.Contains(err.Error(), "review comment was posted but the approval failed")
 	var platformErr *platform.Error
 	require.ErrorAs(err, &platformErr)
-	assert.Equal(platform.ErrCodeCredentialRejected, platformErr.Code)
+	assert.Equal(platform.ErrCodePermissionDenied, platformErr.Code)
 	assert.Equal("gitlab.example.com", platformErr.PlatformHost)
 }
 

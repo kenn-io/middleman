@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.kenn.io/forge/internal/platformdb"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"go.kenn.io/forge/internal/platformdb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

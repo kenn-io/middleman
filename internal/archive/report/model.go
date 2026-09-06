@@ -97,14 +97,13 @@ type Activity struct {
 }
 
 type Model struct {
-	Schema       string         `json:"schema"`
-	Start        time.Time      `json:"start"`
-	End          time.Time      `json:"end"`
-	Repositories []Repository   `json:"repositories"`
-	Totals       Counts         `json:"totals"`
-	Contributors []Contributor  `json:"contributors"`
-	Activity     []Activity     `json:"activity,omitempty"`
-	LandedWork   *LandedSection `json:"landed_work,omitempty"`
+	Schema       string        `json:"schema"`
+	Start        time.Time     `json:"start"`
+	End          time.Time     `json:"end"`
+	Repositories []Repository  `json:"repositories"`
+	Totals       Counts        `json:"totals"`
+	Contributors []Contributor `json:"contributors"`
+	Activity     []Activity    `json:"activity,omitempty"`
 }
 
 type LimitError struct {

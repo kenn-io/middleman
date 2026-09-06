@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +20,7 @@ func TestConstructionDoesNotProbeProvider(t *testing.T) {
 		calls++
 		return nil, errors.New("fixture provider unavailable")
 	})
-	client, err := NewClient("code.example.org", testTokenSource("fixture-token"), WithTransport(transport), WithClock(time.Now))
+	client, err := NewClient("code.example.org", testTokenSource("fixture-token"), WithTransport(transport))
 	require.NoError(err)
 	assert.Zero(calls)
 	_, err = client.GetRepository(t.Context(), platform.RepoRef{Platform: platform.KindForgejo, Host: "code.example.org", Owner: "team-a", Name: "project-a"})
@@ -36,14 +35,14 @@ func TestServerVersionRequiresExplicitRead(t *testing.T) {
 		paths = append(paths, req.URL.Path)
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"version":"13.0.0+gitea-1.26.0"}`)), Request: req}, nil
 	})
-	client, err := NewClient("code.example.org", testTokenSource("fixture-token"), WithTransport(transport), WithClock(time.Now))
+	client, err := NewClient("code.example.org", testTokenSource("fixture-token"), WithTransport(transport))
 	require.NoError(t, err)
 	assert.Empty(paths)
 	version, err := client.ServerVersion(t.Context())
 	require.NoError(t, err)
 	assert.Equal("13.0.0+gitea-1.26.0", version)
 	assert.Equal([]string{"/api/v1/version"}, paths)
-	_, err = NewClient("code.example.org", testTokenSource("fixture-token"), WithTransport(transport), WithServerVersion(version), WithClock(time.Now))
+	_, err = NewClient("code.example.org", testTokenSource("fixture-token"), WithTransport(transport), WithServerVersion(version))
 	require.NoError(t, err)
 	assert.Len(paths, 1)
 }

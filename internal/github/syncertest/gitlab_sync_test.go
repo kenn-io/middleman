@@ -147,8 +147,7 @@ func TestGitLabProviderSyncPersistsAndRetainsInaccessibleItems(t *testing.T) {
 	client, err := gitlab.NewClient(
 		"gitlab.example.com", staticGitLabToken("token"),
 		gitlab.WithBaseURLForTesting(server.URL+"/api/v4"),
-		gitlab.WithoutRetriesForTesting(), gitlab.WithTransport(http.DefaultTransport), gitlab.WithClock(time.Now),
-	)
+		gitlab.WithoutRetriesForTesting(), gitlab.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := ghclient.NewProviderRegistry(nil, client)
 	require.NoError(err)
@@ -330,8 +329,7 @@ func TestGitLabArchiveIssueLifecyclePersistsCloseActorInReport(t *testing.T) {
 	client, err := gitlab.NewClient(
 		"gitlab.example.com", staticGitLabToken("token"),
 		gitlab.WithBaseURLForTesting(server.URL+"/api/v4"),
-		gitlab.WithoutRetriesForTesting(), gitlab.WithTransport(http.DefaultTransport), gitlab.WithClock(time.Now),
-	)
+		gitlab.WithoutRetriesForTesting(), gitlab.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := ghclient.NewProviderRegistry(nil, client)
 	require.NoError(err)

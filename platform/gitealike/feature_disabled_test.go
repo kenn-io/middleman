@@ -184,7 +184,7 @@ func TestRepositoryFeatureError(t *testing.T) {
 		{
 			name: "unauthorized", feature: platform.RepositoryFeatureIssues,
 			operationErr: &HTTPError{StatusCode: http.StatusUnauthorized},
-			wantTarget:   platform.ErrCredentialRejected,
+			wantTarget:   platform.ErrPermissionDenied,
 		},
 		{
 			name: "rate limited", feature: platform.RepositoryFeatureIssues,

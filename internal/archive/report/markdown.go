@@ -8,15 +8,15 @@ import (
 )
 
 func RenderMarkdown(model Model) (string, error) {
-	var out outputBuffer
-	_, _ = out.WriteString("# Activity archive\n\nUTC range: ")
-	_, _ = out.WriteString(formatTime(model.Start))
-	_, _ = out.WriteString(" to ")
-	_, _ = out.WriteString(formatTime(model.End))
-	_, _ = out.WriteString(" (exclusive)\n\n## Totals\n\n")
+	var out strings.Builder
+	out.WriteString("# Activity archive\n\nUTC range: ")
+	out.WriteString(formatTime(model.Start))
+	out.WriteString(" to ")
+	out.WriteString(formatTime(model.End))
+	out.WriteString(" (exclusive)\n\n## Totals\n\n")
 	writeCounts(&out, model.Totals)
 
-	_, _ = out.WriteString("\n## Repositories\n")
+	out.WriteString("\n## Repositories\n")
 	for _, repo := range model.Repositories {
 		fmt.Fprintf(&out, "\n### %s\n\nStatus: %s\n\n", formatRepository(repo.Repository), inline(repo.Coverage.Status))
 		writeCounts(&out, repo.Counts)
@@ -27,9 +27,9 @@ func RenderMarkdown(model Model) (string, error) {
 		fmt.Fprintf(&out, "- Inline comment coverage: %s\n", inline(repo.Coverage.InlineComments))
 	}
 
-	_, _ = out.WriteString("\n## Contributors\n\n")
-	_, _ = out.WriteString("| Provider | Host | Login | Issues Opened | Issues Closed | Pull/Merge Requests Opened | Pull/Merge Requests Merged | Comments | Reviews | Inline Comments | Total |\n")
-	_, _ = out.WriteString("| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	out.WriteString("\n## Contributors\n\n")
+	out.WriteString("| Provider | Host | Login | Issues Opened | Issues Closed | Pull/Merge Requests Opened | Pull/Merge Requests Merged | Comments | Reviews | Inline Comments | Total |\n")
+	out.WriteString("| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, contributor := range model.Contributors {
 		login := contributor.Login
 		if login == "" {
@@ -46,7 +46,7 @@ func RenderMarkdown(model Model) (string, error) {
 	}
 
 	if len(model.Activity) > 0 {
-		_, _ = out.WriteString("\n## Activity\n")
+		out.WriteString("\n## Activity\n")
 		for _, activity := range model.Activity {
 			fmt.Fprintf(&out, "\n### %s\n\n", activityHeading(activity))
 			fmt.Fprintf(&out, "- Repository: %s\n", formatRepository(activity.Repository))
@@ -79,18 +79,10 @@ func RenderMarkdown(model Model) (string, error) {
 			}
 		}
 	}
-	if model.LandedWork != nil {
-		if err := writeLandedSection(&out, model.LandedWork); err != nil {
-			return "", err
-		}
-	}
-	if out.err != nil {
-		return "", out.err
-	}
 	return out.String(), nil
 }
 
-func writeCounts(out *outputBuffer, counts Counts) {
+func writeCounts(out *strings.Builder, counts Counts) {
 	fmt.Fprintf(out, "- Issues opened: %d\n", counts.IssuesOpened)
 	fmt.Fprintf(out, "- Issues closed: %d\n", counts.IssuesClosed)
 	fmt.Fprintf(out, "- Pull or merge requests opened: %d\n", counts.MergeRequestsOpened)

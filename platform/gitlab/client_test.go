@@ -506,8 +506,7 @@ func TestClientArchiveAttemptAllowanceCapsProviderRetries(t *testing.T) {
 	// could make six wire attempts and overspend the protected live floor.
 	client, err := NewClient(
 		"gitlab.example.com", testTokenSource("token"),
-		WithBaseURLForTesting(server.URL+"/api/v4"), WithTransport(ghsync.WrapSyncBudgetTransport(http.DefaultTransport, budget)), WithClock(time.Now),
-	)
+		WithBaseURLForTesting(server.URL+"/api/v4"), WithTransport(ghsync.WrapSyncBudgetTransport(http.DefaultTransport, budget)))
 	require.NoError(err)
 	ref := platform.RepoRef{
 		Platform: platform.KindGitLab, Host: "gitlab.example.com", RepoPath: "group/project",
@@ -544,8 +543,7 @@ func TestClientReadsTokenSourceForEachRequest(t *testing.T) {
 	client, err := NewClient(
 		"gitlab.example.com",
 		source,
-		WithBaseURLForTesting(server.URL+"/api/v4"), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithBaseURLForTesting(server.URL+"/api/v4"), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	ref := platform.RepoRef{
 		Platform: platform.KindGitLab,
@@ -985,7 +983,7 @@ func TestListCIChecksReturnsEmptyWhenNoPipelineExists(t *testing.T) {
 }
 
 func TestSelfHostedBaseURLConstruction(t *testing.T) {
-	client, err := NewClient("gitlab.example.com:8443", testTokenSource("token"), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("gitlab.example.com:8443", testTokenSource("token"), WithTransport(http.DefaultTransport))
 	require.NoError(t, err)
 
 	assert.Equal(t, "https://gitlab.example.com:8443/api/v4", client.baseURL)
@@ -995,7 +993,6 @@ func newTestClient(t *testing.T, serverURL string, opts ...ClientOption) *Client
 	t.Helper()
 	allOpts := append([]ClientOption{
 		WithTransport(http.DefaultTransport),
-		WithClock(time.Now),
 		WithBaseURLForTesting(serverURL + "/api/v4"),
 		WithoutRetriesForTesting(),
 		WithOptionalRequestContext(ghsync.WithoutEssentialSyncBudget),

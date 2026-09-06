@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"go.kenn.io/forge/internal/platformdb"
 	"sync"
 	"testing"
 	"time"
-
-	"go.kenn.io/forge/internal/platformdb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -785,7 +784,6 @@ func TestDefaultArchiveRetryClassifierDistinguishesTerminalProviderErrors(t *tes
 		wantRetry bool
 	}{
 		{name: "authentication", err: platform.ErrPermissionDenied, wantCode: db.ArchiveErrorCodeAuthentication},
-		{name: "rejected credential", err: platform.ErrCredentialRejected, wantCode: db.ArchiveErrorCodeAuthentication},
 		{name: "contract", err: platform.ErrProviderContract, wantCode: db.ArchiveErrorCodeRepoBlocked},
 		{name: "page limit", err: platform.ErrPageLimit, wantCode: db.ArchiveErrorCodeRepoBlocked},
 		{name: "transient", err: errors.New("temporary"), wantCode: db.ArchiveErrorCodeTransient, wantRetry: true},

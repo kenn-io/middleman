@@ -100,8 +100,7 @@ token_file = %q
 	client, err := platformgitlab.NewClient(
 		"gitlab.example.com",
 		source,
-		platformgitlab.WithBaseURLForTesting(gitlabAPI.URL+"/api/v4"), platformgitlab.WithTransport(http.DefaultTransport), platformgitlab.WithClock(time.Now),
-	)
+		platformgitlab.WithBaseURLForTesting(gitlabAPI.URL+"/api/v4"), platformgitlab.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := platform.NewRegistry(client)
 	require.NoError(err)
@@ -663,15 +662,13 @@ func TestSharedHostCloneAuthFollowsSurvivingProviderTokenE2E(t *testing.T) {
 	forgejoClient, err := platformforgejo.NewClient(
 		"code.example.com", forgejoSource,
 		platformforgejo.WithBaseURLForTesting(forgeAPI.URL), platformforgejo.
-			WithTransport(http.DefaultTransport), platformforgejo.
-			WithClock(time.Now),
+			WithTransport(http.DefaultTransport),
 	)
 	require.NoError(err)
 	giteaClient, err := platformgitea.NewClient(
 		"code.example.com", giteaSource,
 		platformgitea.WithBaseURL(forgeAPI.URL, true),
-		platformgitea.WithServerVersion("1.26.0"), platformgitea.WithTransport(http.DefaultTransport), platformgitea.WithClock(time.Now),
-	)
+		platformgitea.WithServerVersion("1.26.0"), platformgitea.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := platform.NewRegistry(forgejoClient, giteaClient)
 	require.NoError(err)
@@ -774,8 +771,7 @@ func startGitLabTokenSyncServer(
 	client, err := platformgitlab.NewClient(
 		"gitlab.example.com",
 		source,
-		platformgitlab.WithBaseURLForTesting(gitlabBaseURL), platformgitlab.WithTransport(http.DefaultTransport), platformgitlab.WithClock(time.Now),
-	)
+		platformgitlab.WithBaseURLForTesting(gitlabBaseURL), platformgitlab.WithTransport(http.DefaultTransport))
 	require.NoError(t, err)
 	registry, err := platform.NewRegistry(client)
 	require.NoError(t, err)

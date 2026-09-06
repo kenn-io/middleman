@@ -233,8 +233,7 @@ func TestNormalizeDetailedMergeRequestPreservesResultCommitSHA(t *testing.T) {
 				MergeCommitSHA: tt.mergeSHA, SquashCommitSHA: tt.squashSHA,
 			})
 
-			assert.Equal(t, tt.mergeSHA, mr.MergeCommitSHA)
-			assert.Equal(t, tt.squashSHA, mr.SquashCommitSHA)
+			assert.Equal(t, tt.want, mr.MergeCommitSHA)
 		})
 	}
 }

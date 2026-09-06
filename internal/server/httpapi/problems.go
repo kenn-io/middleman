@@ -551,9 +551,6 @@ func ProviderMutationProblem(err error, provider, host string) huma.StatusError 
 			platform.ErrCodeInvalidRepoRef,
 			platform.ErrCodeInvalidArgument,
 			platform.ErrCodePermissionDenied,
-			platform.ErrCodeCredentialRejected,
-			platform.ErrCodeInstallationSuspended,
-			platform.ErrCodeInstallationDeleted,
 			platform.ErrCodeNotFound,
 			platform.ErrCodeRateLimited,
 			platform.ErrCodeStaleState,
@@ -647,7 +644,7 @@ func MapPlatformError(err error) huma.StatusError {
 		)
 	case platform.ErrCodeRateLimited:
 		return RateLimited(provider, host, pe.ResetAt)
-	case platform.ErrCodePermissionDenied, platform.ErrCodeCredentialRejected, platform.ErrCodeInstallationSuspended, platform.ErrCodeInstallationDeleted:
+	case platform.ErrCodePermissionDenied:
 		d := platformErrorDetails(provider, host)
 		if len(d) == 0 {
 			d = nil

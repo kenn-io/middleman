@@ -716,7 +716,7 @@ with installation tokens. Even though kenn-forge disables webhooks and polls,
 the manifest must still include a syntactically valid `hook_attributes.url`;
 GitHub's live manifest validator can report the missing hook URL as a generic
 `"url" wasn't supplied` error. Do not remove that hook URL from
-`githubapp/manifest.go::NewManifest`; keep
+`internal/githubapp/manifest.go::NewManifest`; keep
 `cmd/kenn-forge-github-app/e2e_test.go::TestCreateFlowEndToEnd` asserting the
 serialized manifest shape so the fake cannot accept a payload GitHub rejects.
 
@@ -792,5 +792,6 @@ For notification sync specifics, see [`context/notifications-in-activity.md`](./
 Also see [`context/testing.md`](./testing.md):
 
 - Run the normal Go tests with `-shuffle=on`.
-- If you change GraphQL query shape in `internal/github/graphql.go`, run the
-  gated live GitHub validation as well.
+- If you change GraphQL query shape in `internal/github/graphql.go` or
+  `platform/github`, run the gated live GitHub validation for the owning
+  package as well.

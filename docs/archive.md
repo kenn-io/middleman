@@ -4,8 +4,7 @@ Kenn Forge can backfill provider activity into its local SQLite database.
 Archive work uses spare provider capacity, so normal sync stays ahead of
 historical requests.
 
-Ordinary reports read only local data. The optional landed-work report also
-requests current provider evidence and reads a local Git repository.
+Reports read only local data. They do not spend provider requests.
 
 ## Coverage
 
@@ -84,34 +83,3 @@ complete.
 
 See [Commands](commands.md#manage-historical-archives) for the short syntax
 reference.
-
-## Landed work
-
-Add a separate view of code that reached the default branch:
-
-```sh
-kenn-forge archive report --days 7 \
-  --repo 'github|github.com/owner/repo' --landed-work \
-  --git-dir /path/to/local/repo --base-sha FULL_BASE_SHA --head-sha FULL_HEAD_SHA
-```
-
-Choose exactly one configured repository and full commit IDs. The base is
-exclusive and the head inclusive. Forge never fetches missing Git objects or
-changes the repository. Its origin host must match the selected provider; a
-stale repository name produces a warning when the graph still matches.
-
-The section measures each landing's net changes once, including direct pushes.
-It keeps graph totals separate from the selected date window and from ordinary
-activity totals. Git timestamps and Git-email claims remain unverified.
-`--format json` includes the evidence, with raw Git bytes encoded as base64.
-
-Missing objects, incomplete provider history and unproven merge methods leave
-explicit gaps. Partial totals are not complete totals; an unknown direct-push
-share is not zero. GitHub can prove ordinary merges; other methods require
-evidence its API may not supply. GitLab, Forgejo and Gitea currently retain
-partial inventory coverage. Code-only counts use the versioned `forge-code/1`
-inclusion and generated-file policy, not a measure of code value.
-
-The existing `--timeout` covers the whole command. The report is bounded to
-10,000 evidence records/traversal nodes and 32 MiB of input/output per analysis.
-Large requests return a gap or size error, rather than silently omit work.

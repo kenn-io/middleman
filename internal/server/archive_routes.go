@@ -150,7 +150,6 @@ type archiveReportResponse struct {
 	Totals       archiveReportCountsResponse        `json:"totals"`
 	Contributors []archiveReportContributorResponse `json:"contributors"`
 	Activity     []archiveReportActivityResponse    `json:"activity,omitempty"`
-	LandedWork   *report.LandedSection              `json:"landed_work,omitempty"`
 }
 
 func (*archiveReportResponse) TransformSchema(_ huma.Registry, schema *huma.Schema) *huma.Schema {
@@ -171,7 +170,6 @@ func (*archiveReportResponse) TransformSchema(_ huma.Registry, schema *huma.Sche
 type archiveReportOutput = httpapi.BodyOutput[archiveReportResponse]
 
 func (s *Server) registerArchiveAPI(api huma.API) {
-	s.registerArchiveLandingAPI(api)
 	huma.Register(api, huma.Operation{
 		OperationID: "start-archives", Method: http.MethodPost, Path: "/archive/start",
 		DefaultStatus: http.StatusOK, Summary: "Start historical archives", Tags: []string{"Archive"},
@@ -192,7 +190,6 @@ func (s *Server) registerArchiveAPI(api huma.API) {
 		OperationID: "list-archive-pacing", Method: http.MethodGet, Path: "/archive/pacing",
 		DefaultStatus: http.StatusOK, Summary: "List archive hydration pacing per provider credential", Tags: []string{"Archive"},
 	}, s.listArchivePacing)
-	completeLandedSchemas(api.OpenAPI().Components.Schemas)
 }
 
 // archivePacingStatusResponse reports one provider credential's archive
@@ -481,7 +478,6 @@ func archiveReportModelResponse(model report.Model) archiveReportResponse {
 		Repositories: make([]archiveReportRepositoryResponse, len(model.Repositories)),
 		Totals:       archiveReportCounts(model.Totals),
 		Contributors: make([]archiveReportContributorResponse, len(model.Contributors)),
-		LandedWork:   model.LandedWork,
 	}
 	for i, repository := range model.Repositories {
 		coverage := repository.Coverage

@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
 	"go.kenn.io/forge/internal/federation"
@@ -171,7 +172,7 @@ func normalizeRepoPresets(presets []RepoPreset) error {
 					"repo_presets[%d].repos[%d]: platform_repo_id is required", i, j,
 				)
 			}
-			host, err = configuredPlatformHost(provider, host)
+			host, err = normalizePlatformHost(provider, host)
 			if err != nil {
 				return fmt.Errorf("repo_presets[%d].repos[%d]: %w", i, j, err)
 			}
@@ -374,7 +375,7 @@ func (r *Repo) normalize(defaultGitHubHost string) error {
 			r.RepoPath = strings.ToLower(r.RepoPath)
 		}
 	}
-	r.PlatformHost, err = configuredPlatformHost(r.Platform, r.PlatformHost)
+	r.PlatformHost, err = normalizePlatformHost(r.Platform, r.PlatformHost)
 	if err != nil {
 		return err
 	}
@@ -558,16 +559,123 @@ func normalizePlatform(raw string) (string, error) {
 	return string(kind), nil
 }
 
-// configuredPlatformHost applies the application's provider default before
-// using the shared instance-key contract.
-func configuredPlatformHost(provider, raw string) (string, error) {
-	kind, err := platformpkg.NormalizeKind(provider)
+// NormalizePlatformHost normalizes a configured provider host and rejects
+// URL authority forms that could redirect provider tokens through userinfo or
+// malformed host parsing.
+func NormalizePlatformHost(platform, raw string) (string, error) {
+	return normalizePlatformHost(platform, raw)
+}
+
+func normalizePlatformHost(platform, raw string) (string, error) {
+	platform, err := normalizePlatform(platform)
 	if err != nil {
 		return "", err
 	}
-	return platformpkg.NormalizeHost(kind, raw)
+	host := strings.ToLower(strings.TrimSpace(raw))
+	if host == "" {
+		if defaultHost, ok := platformpkg.DefaultHost(platformpkg.Kind(platform)); ok {
+			return defaultHost, nil
+		}
+		return "", fmt.Errorf("platform_host is required for platform %q", platform)
+	}
+	if strings.HasPrefix(host, "http://") || strings.HasPrefix(host, "https://") {
+		u, err := url.Parse(host)
+		if err != nil {
+			return "", fmt.Errorf("invalid_repo_ref: invalid platform_host %q: %w", raw, err)
+		}
+		if u.User != nil {
+			return "", fmt.Errorf("invalid_repo_ref: platform_host %q must not include userinfo", raw)
+		}
+		if (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+			return "", fmt.Errorf(
+				"invalid_repo_ref: platform_host %q must be a host; subpath installs are not supported",
+				raw,
+			)
+		}
+		host = u.Host
+	} else {
+		host = strings.TrimRight(host, "/")
+		if strings.Contains(host, "/") {
+			return "", fmt.Errorf(
+				"invalid_repo_ref: platform_host %q must be a host; subpath installs are not supported",
+				raw,
+			)
+		}
+	}
+	return normalizePlatformHostAuthority(raw, host)
 }
 
+func normalizePlatformHostAuthority(raw, host string) (string, error) {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return "", fmt.Errorf("invalid_repo_ref: platform_host %q is empty", raw)
+	}
+	if strings.Contains(host, "@") {
+		return "", fmt.Errorf("invalid_repo_ref: platform_host %q must not include userinfo", raw)
+	}
+	if strings.ContainsFunc(host, func(r rune) bool {
+		return unicode.IsControl(r) || unicode.IsSpace(r)
+	}) {
+		return "", fmt.Errorf("invalid_repo_ref: platform_host %q contains invalid characters", raw)
+	}
+	if err := validatePlatformHostPort(raw, host); err != nil {
+		return "", err
+	}
+
+	parsed, err := url.Parse("//" + host)
+	if err != nil {
+		return "", fmt.Errorf("invalid_repo_ref: invalid platform_host %q: %w", raw, err)
+	}
+	if parsed.User != nil || parsed.Hostname() == "" || parsed.Path != "" {
+		return "", fmt.Errorf("invalid_repo_ref: platform_host %q must be a host", raw)
+	}
+	return normalizePublicHost(host), nil
+}
+
+func validatePlatformHostPort(raw, host string) error {
+	if strings.HasPrefix(host, "[") {
+		closing := strings.LastIndex(host, "]")
+		if closing == -1 {
+			return fmt.Errorf("invalid_repo_ref: invalid platform_host %q", raw)
+		}
+		if closing == len(host)-1 {
+			return nil
+		}
+		if host[closing+1] != ':' {
+			return fmt.Errorf("invalid_repo_ref: invalid platform_host %q", raw)
+		}
+		return validatePlatformHostPortNumber(raw, host[closing+2:])
+	}
+
+	colonCount := strings.Count(host, ":")
+	switch colonCount {
+	case 0:
+		return nil
+	case 1:
+		_, port, _ := strings.Cut(host, ":")
+		return validatePlatformHostPortNumber(raw, port)
+	default:
+		return fmt.Errorf("invalid_repo_ref: platform_host %q must bracket IPv6 literals", raw)
+	}
+}
+
+func validatePlatformHostPortNumber(raw, port string) error {
+	if port == "" {
+		return fmt.Errorf("invalid_repo_ref: platform_host %q has an empty port", raw)
+	}
+	for _, r := range port {
+		if r < '0' || r > '9' {
+			return fmt.Errorf("invalid_repo_ref: platform_host %q has a non-numeric port", raw)
+		}
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber > 65535 {
+		return fmt.Errorf("invalid_repo_ref: platform_host %q has an invalid port", raw)
+	}
+	return nil
+}
+
+// cleanPath strips query strings, fragments, trailing slashes,
 // and an optional .git suffix from a GitHub ref path.
 func cleanPath(path string) string {
 	if idx := strings.IndexAny(path, "?#"); idx != -1 {
@@ -1269,7 +1377,7 @@ func (c *Config) validate() error {
 	if c.Fleet.Enabled && c.BasePath != "" && c.BasePath != defaultBasePath {
 		return errors.New("config: fleet.enabled requires base_path = \"/\"")
 	}
-	c.DefaultPlatformHost, err = configuredPlatformHost(
+	c.DefaultPlatformHost, err = normalizePlatformHost(
 		defaultPlatform, c.DefaultPlatformHost,
 	)
 	if err != nil {
@@ -1285,7 +1393,7 @@ func (c *Config) validate() error {
 		if err != nil {
 			return fmt.Errorf("config: platforms[%d]: %w", i, err)
 		}
-		p.Host, err = configuredPlatformHost(p.Type, p.Host)
+		p.Host, err = normalizePlatformHost(p.Type, p.Host)
 		if err != nil {
 			return fmt.Errorf("config: platforms[%d]: %w", i, err)
 		}
@@ -1909,7 +2017,7 @@ func (c *Config) validateGitHubOwnerTokens() error {
 				"config: github_owner_tokens[%d]: owner must be one exact GitHub owner", i,
 			)
 		}
-		host, err := configuredPlatformHost(defaultPlatform, item.Host)
+		host, err := normalizePlatformHost(defaultPlatform, item.Host)
 		if err != nil {
 			return fmt.Errorf("config: github_owner_tokens[%d]: %w", i, err)
 		}
@@ -1953,7 +2061,7 @@ func (c *Config) validateGitHubApps() error {
 		app.Owner = strings.TrimSpace(app.Owner)
 		app.PrivateKeyPath = strings.TrimSpace(app.PrivateKeyPath)
 		app.InstallationAccount = strings.TrimSpace(app.InstallationAccount)
-		host, err := configuredPlatformHost(defaultPlatform, app.Host)
+		host, err := normalizePlatformHost(defaultPlatform, app.Host)
 		if err != nil {
 			return fmt.Errorf("config: github_apps[%d]: %w", i, err)
 		}
@@ -2041,7 +2149,7 @@ func (c *Config) GitHubAppsForHost(host string) []GitHubAppConfig {
 	if c == nil {
 		return nil
 	}
-	h, err := configuredPlatformHost(defaultPlatform, host)
+	h, err := normalizePlatformHost(defaultPlatform, host)
 	if err != nil {
 		return nil
 	}
@@ -2149,7 +2257,7 @@ func (c *Config) validateKataProjectRepoMappings() error {
 			return fmt.Errorf("config: kata_projects[%d]: provider: %w", i, err)
 		}
 		mapping.Provider = normalizedProvider
-		mapping.PlatformHost, err = configuredPlatformHost(mapping.Provider, mapping.PlatformHost)
+		mapping.PlatformHost, err = normalizePlatformHost(mapping.Provider, mapping.PlatformHost)
 		if err != nil {
 			return fmt.Errorf("config: kata_projects[%d]: platform_host: %w", i, err)
 		}
@@ -2287,7 +2395,7 @@ func (c *Config) TokenForPlatformHost(platform, host, repoTokenEnv string) strin
 	if err != nil {
 		return ""
 	}
-	h, err := configuredPlatformHost(p, host)
+	h, err := normalizePlatformHost(p, host)
 	if err != nil {
 		return ""
 	}
@@ -2434,7 +2542,7 @@ func (c *Config) GitHubOwnerTokenFor(
 	if c == nil {
 		return GitHubOwnerTokenConfig{}, false
 	}
-	h, err := configuredPlatformHost(defaultPlatform, host)
+	h, err := normalizePlatformHost(defaultPlatform, host)
 	if err != nil {
 		return GitHubOwnerTokenConfig{}, false
 	}
@@ -2880,7 +2988,7 @@ func (c *Config) TokenSourceForPlatformHost(
 	if err != nil {
 		return tokenauth.Descriptor{}
 	}
-	h, err := configuredPlatformHost(p, host)
+	h, err := normalizePlatformHost(p, host)
 	if err != nil {
 		return tokenauth.Descriptor{}
 	}

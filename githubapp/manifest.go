@@ -9,8 +9,6 @@ package githubapp
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
-	"slices"
 )
 
 // Manifest is the GitHub App Manifest posted to
@@ -30,37 +28,6 @@ type Manifest struct {
 type HookAttributes struct {
 	URL    string `json:"url,omitempty"`
 	Active bool   `json:"active"`
-}
-
-// maxAppNameLength is GitHub's limit for app names.
-const maxAppNameLength = 34
-
-// NewManifest builds an App manifest with the caller's explicit permissions
-// and events. It owns no callback server, session or default permission policy.
-func NewManifest(name, homepageURL, redirectURL string, permissions map[string]string, events []string) (Manifest, error) {
-	if name == "" {
-		return Manifest{}, fmt.Errorf("app name is required")
-	}
-	if len(name) > maxAppNameLength {
-		return Manifest{}, fmt.Errorf(
-			"app name %q exceeds GitHub's %d character limit", name, maxAppNameLength,
-		)
-	}
-	if homepageURL == "" {
-		return Manifest{}, fmt.Errorf("app homepage URL is required")
-	}
-	if permissions == nil || events == nil {
-		return Manifest{}, fmt.Errorf("explicit app permissions and events are required")
-	}
-	return Manifest{
-		Name:               name,
-		URL:                homepageURL,
-		HookAttributes:     HookAttributes{URL: homepageURL, Active: false},
-		RedirectURL:        redirectURL,
-		Public:             false,
-		DefaultPermissions: maps.Clone(permissions),
-		DefaultEvents:      slices.Clone(events),
-	}, nil
 }
 
 func (m Manifest) JSON() (string, error) {

@@ -69,8 +69,7 @@ func TestListMergeRequestReviewThreadsReadsBeyondTenthReviewPage(t *testing.T) {
 	defer server.Close()
 	client, err := NewClient(
 		"gitea.test", testTokenSource("token"), WithBaseURL(server.URL, true),
-		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 
 	threads, err := client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
@@ -140,7 +139,7 @@ func TestListMergeRequestReviewThreadsReadsEveryReviewPageAndComment(t *testing.
 	}))
 	defer server.Close()
 
-	client, err := NewClient("gitea.test", testTokenSource("token"), WithBaseURL(server.URL, true), WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("gitea.test", testTokenSource("token"), WithBaseURL(server.URL, true), WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	threads, err := client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 		Platform: platform.KindGitea, Host: "gitea.test", Owner: "acme", Name: "widgets",
@@ -194,7 +193,7 @@ func TestListMergeRequestReviewThreadsRejectsPartialDataset(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient("gitea.test", testTokenSource("token"), WithBaseURL(server.URL, true), WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("gitea.test", testTokenSource("token"), WithBaseURL(server.URL, true), WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	threads, err := client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 		Owner: "acme", Name: "widgets",
@@ -216,15 +215,14 @@ func TestListMergeRequestReviewThreadsMapsAuthenticationErrors(t *testing.T) {
 			client, err := NewClient(
 				"gitea.test", testTokenSource("token"),
 				WithBaseURL(server.URL, true),
-				WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now),
-			)
+				WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 			require.NoError(err)
 			_, err = client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 				Owner: "acme", Name: "widgets",
 			}, 42)
 
 			if status == http.StatusUnauthorized {
-				require.ErrorIs(err, platform.ErrCredentialRejected)
+				require.ErrorIs(err, platform.ErrPermissionDenied)
 			} else {
 				require.ErrorIs(err, platform.ErrPermissionDenied)
 			}
@@ -261,8 +259,7 @@ func TestListMergeRequestReviewThreadsReadsEveryLargeDatasetReview(t *testing.T)
 	client, err := NewClient(
 		"gitea.test", testTokenSource("token"),
 		WithBaseURL(server.URL, true),
-		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	threads, err := client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 		Owner: "acme", Name: "widgets",
@@ -298,8 +295,7 @@ func TestListMergeRequestReviewThreadsReadsEveryLargeDatasetComment(t *testing.T
 	client, err := NewClient(
 		"gitea.test", testTokenSource("token"),
 		WithBaseURL(server.URL, true),
-		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	threads, err := client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 		Owner: "acme", Name: "widgets",
@@ -342,8 +338,7 @@ func TestListMergeRequestReviewThreadsRejectsReviewPageCycleBeforeFanout(t *test
 	client, err := NewClient(
 		"gitea.test", testTokenSource("token"),
 		WithBaseURL(server.URL, true),
-		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	threads, err := client.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 		Owner: "acme", Name: "widgets",
@@ -380,8 +375,7 @@ func TestListMergeRequestReviewThreadsRejectsDatasetBeyondArchiveAttemptAllowanc
 		"gitea.test", testTokenSource("token"),
 		WithBaseURL(server.URL, true),
 		WithServerVersion(testGiteaServerVersion),
-		WithTransport(ghsync.WrapSyncBudgetTransport(http.DefaultTransport, budget)), WithClock(time.Now),
-	)
+		WithTransport(ghsync.WrapSyncBudgetTransport(http.DefaultTransport, budget)))
 	require.NoError(err)
 	ctx := ghsync.WithArchiveAttemptAllowance(ghsync.WithArchiveSyncBudget(t.Context()), 2)
 	threads, err := client.ListMergeRequestReviewThreads(ctx, platform.RepoRef{

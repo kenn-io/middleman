@@ -24,9 +24,6 @@ const (
 	ErrCodePermissionDenied          PlatformErrorCode = "permission_denied"
 	ErrCodeNotFound                  PlatformErrorCode = "not_found"
 	ErrCodeRateLimited               PlatformErrorCode = "rate_limited"
-	ErrCodeCredentialRejected        PlatformErrorCode = "credential_rejected"
-	ErrCodeInstallationSuspended     PlatformErrorCode = "installation_suspended"
-	ErrCodeInstallationDeleted       PlatformErrorCode = "installation_deleted"
 	// ErrCodeStaleState marks mutations rejected because the target moved
 	// past the state the caller acted on (for example an MR head SHA that
 	// advanced after review).
@@ -53,9 +50,6 @@ var (
 	ErrPermissionDenied          = &Error{Code: ErrCodePermissionDenied}
 	ErrNotFound                  = &Error{Code: ErrCodeNotFound}
 	ErrRateLimited               = &Error{Code: ErrCodeRateLimited}
-	ErrCredentialRejected        = &Error{Code: ErrCodeCredentialRejected}
-	ErrInstallationSuspended     = &Error{Code: ErrCodeInstallationSuspended}
-	ErrInstallationDeleted       = &Error{Code: ErrCodeInstallationDeleted}
 	ErrStaleState                = &Error{Code: ErrCodeStaleState}
 	ErrPageLimit                 = &Error{Code: ErrCodePageLimit}
 )

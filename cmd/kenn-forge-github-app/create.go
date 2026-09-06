@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	appfiles "go.kenn.io/forge/internal/githubapp"
 	"io"
 	"net"
 	"net/http"
@@ -19,9 +20,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	appfiles "go.kenn.io/forge/internal/githubapp"
-	"go.kenn.io/forge/platform"
 
 	"go.kenn.io/forge/githubapp"
 	"go.kenn.io/forge/internal/config"
@@ -341,12 +339,8 @@ func (f *flowServer) handleCallback(w http.ResponseWriter, r *http.Request) {
 func (env *appEnv) runManifestFlow(
 	ctx context.Context, flow *flowServer, opts manifestFlowOptions,
 ) (*githubapp.AppCredentials, error) {
-	if opts.homepage == "" {
-		opts.homepage = appfiles.DefaultHomepageURL
-	}
-	manifest, err := githubapp.NewManifest(
+	manifest, err := appfiles.NewManifest(
 		opts.name, opts.homepage, flow.localBase+flow.callbackPath,
-		appfiles.DefaultPermissions(), []string{},
 	)
 	if err != nil {
 		return nil, err
@@ -384,9 +378,7 @@ func (env *appEnv) runManifestFlow(
 		return nil, fmt.Errorf("timed out after %s waiting for app creation", opts.timeout)
 	}
 
-	creds, err := appRequest(ctx, func(requestCtx context.Context, meter *platform.Meter) (*githubapp.AppCredentials, error) {
-		return env.apiClient(opts.host).ConvertManifest(requestCtx, code, meter)
-	})
+	creds, err := env.apiClient(opts.host).ConvertManifest(ctx, code)
 	if err != nil {
 		return nil, err
 	}
@@ -420,7 +412,7 @@ func (env *appEnv) runInstallFlow(
 		if err != nil {
 			return err
 		}
-		installs, err := discoverInstallations(ctx, client, jwt, app.AppID)
+		installs, err := client.ListInstallations(ctx, jwt)
 		if err != nil {
 			return err
 		}
@@ -457,7 +449,7 @@ func (env *appEnv) runInstallFlow(
 			if err != nil {
 				return err
 			}
-			installs, err := discoverInstallations(ctx, client, jwt, app.AppID)
+			installs, err := client.ListInstallations(ctx, jwt)
 			if err != nil {
 				return err
 			}
@@ -476,7 +468,7 @@ func (env *appEnv) runInstallFlow(
 			if err != nil {
 				return false, err
 			}
-			installs, err := discoverInstallations(ctx, client, jwt, app.AppID)
+			installs, err := client.ListInstallations(ctx, jwt)
 			if err != nil {
 				return false, err
 			}
@@ -568,7 +560,7 @@ func (env *appEnv) adoptSoleInstallation(
 	if err != nil {
 		return false, err
 	}
-	installs, err := discoverInstallations(ctx, env.apiClient(app.Host), jwt, app.AppID)
+	installs, err := env.apiClient(app.Host).ListInstallations(ctx, jwt)
 	if err != nil {
 		return false, err
 	}
@@ -615,9 +607,7 @@ func (env *appEnv) refreshAppMetadata(
 	if err != nil {
 		return app, err
 	}
-	live, err := appRequest(ctx, func(requestCtx context.Context, meter *platform.Meter) (*githubapp.App, error) {
-		return client.GetApp(requestCtx, jwt, meter)
-	})
+	live, err := client.GetApp(ctx, jwt)
 	if err != nil {
 		return app, fmt.Errorf("refreshing GitHub App metadata: %w", err)
 	}
@@ -644,13 +634,11 @@ func (env *appEnv) verifySelectedInstallationCoverage(
 	if err != nil {
 		return nil, err
 	}
-	token, err := appRequest(ctx, func(requestCtx context.Context, meter *platform.Meter) (*githubapp.InstallationToken, error) {
-		return client.CreateInstallationToken(requestCtx, jwt, picked.ID, githubapp.TokenScope{AllRepositories: true}, meter)
-	})
+	token, err := client.CreateInstallationToken(ctx, jwt, picked.ID)
 	if err != nil {
 		return nil, fmt.Errorf("verifying selected-repository installation: %w", err)
 	}
-	names, err := discoverRepositoryNames(ctx, client, token.Token, picked.ID)
+	names, err := client.ListInstallationRepositories(ctx, token.Token)
 	if err != nil {
 		return nil, fmt.Errorf("verifying selected-repository installation: %w", err)
 	}

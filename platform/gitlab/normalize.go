@@ -184,16 +184,13 @@ func normalizeMergeRequest(
 		Title:              mr.Title,
 		Author:             basicUsername(mr.Author),
 		AuthorDisplayName:  sanitizeDisplayName(basicName(mr.Author)),
-		AuthorAccount:      normalizeBasicAccount(mr.Author),
-		MergerAccount:      normalizeBasicAccount(mr.MergeUser),
 		State:              normalizeMergeRequestState(mr.State),
 		IsDraft:            mr.Draft || workInProgress,
 		Body:               mr.Description,
 		HeadBranch:         mr.SourceBranch,
 		BaseBranch:         mr.TargetBranch,
 		HeadSHA:            mr.SHA,
-		MergeCommitSHA:     mr.MergeCommitSHA,
-		SquashCommitSHA:    mr.SquashCommitSHA,
+		MergeCommitSHA:     firstNonEmpty(mr.MergeCommitSHA, mr.SquashCommitSHA),
 		CommentCount:       int(mr.UserNotesCount),
 		MergeableState:     normalizeMergeableState(mr.DetailedMergeStatus, mr.HasConflicts),
 		CIStatus:           pipelineStatusFromInfo(pipeline),
@@ -208,8 +205,6 @@ func normalizeMergeRequest(
 	if out.MergedBy == "" {
 		//nolint:staticcheck // GitLab < 14.7 can populate merged_by without merge_user.
 		out.MergedBy = basicUsername(mr.MergedBy)
-		//nolint:staticcheck // Same provider field as the display projection.
-		out.MergerAccount = normalizeBasicAccount(mr.MergedBy)
 	}
 	if mr.MergedAt != nil {
 		t := mr.MergedAt.UTC()
@@ -220,13 +215,6 @@ func normalizeMergeRequest(
 		out.ClosedAt = &t
 	}
 	return out
-}
-
-func normalizeBasicAccount(user *gitlab.BasicUser) *platform.Account {
-	if user == nil || user.ID <= 0 {
-		return nil
-	}
-	return &platform.Account{ID: strconv.FormatInt(user.ID, 10), Login: user.Username, DisplayName: user.Name, Type: platform.AccountUnknown}
 }
 
 func normalizeMergeableState(detailedStatus string, hasConflicts bool) string {

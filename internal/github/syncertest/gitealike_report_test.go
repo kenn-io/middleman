@@ -48,16 +48,14 @@ func TestGiteaLikeProviderMergeMetricsReachArchiveReport(t *testing.T) {
 				return gitea.NewClient(
 					host, source,
 					gitea.WithBaseURL(baseURL, true),
-					gitea.WithServerVersion("1.26.0"), gitea.WithTransport(http.DefaultTransport), gitea.WithClock(time.Now),
-				)
+					gitea.WithServerVersion("1.26.0"), gitea.WithTransport(http.DefaultTransport))
 			},
 		},
 		{
 			name: "forgejo", kind: platform.KindForgejo, host: "forgejo.example.com",
 			newClient: func(host string, source tokenauth.Source, baseURL string) (platform.MergeRequestReader, error) {
 				return forgejo.NewClient(
-					host, source, forgejo.WithBaseURLForTesting(baseURL), forgejo.WithTransport(http.DefaultTransport), forgejo.WithClock(time.Now),
-				)
+					host, source, forgejo.WithBaseURLForTesting(baseURL), forgejo.WithTransport(http.DefaultTransport))
 			},
 		},
 	}

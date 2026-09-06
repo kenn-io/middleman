@@ -302,7 +302,7 @@ func TestProviderMapsHTTPStatusErrorsToTypedPlatformErrors(t *testing.T) {
 		target     error
 		code       platform.PlatformErrorCode
 	}{
-		{"unauthorized", 401, platform.ErrCredentialRejected, platform.ErrCodeCredentialRejected},
+		{"unauthorized", 401, platform.ErrPermissionDenied, platform.ErrCodePermissionDenied},
 		{"forbidden", 403, platform.ErrPermissionDenied, platform.ErrCodePermissionDenied},
 		{"not found", 404, platform.ErrNotFound, platform.ErrCodeNotFound},
 	}

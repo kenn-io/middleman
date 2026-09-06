@@ -2,8 +2,39 @@ package gitclone
 
 import (
 	"bytes"
-	"go.kenn.io/forge/landedwork"
+	"path/filepath"
+	"strings"
 )
+
+var generatedBasenames = map[string]bool{
+	"bun.lock":            true,
+	"bun.lockb":           true,
+	"cargo.lock":          true,
+	"composer.lock":       true,
+	"deno.lock":           true,
+	"flake.lock":          true,
+	"gemfile.lock":        true,
+	"go.sum":              true,
+	"gradle.lockfile":     true,
+	"mix.lock":            true,
+	"npm-shrinkwrap.json": true,
+	"package-lock.json":   true,
+	"pipfile.lock":        true,
+	"pnpm-lock.yaml":      true,
+	"poetry.lock":         true,
+	"pubspec.lock":        true,
+	".terraform.lock.hcl": true,
+	"terraform.lock.hcl":  true,
+	"uv.lock":             true,
+	"yarn.lock":           true,
+}
+
+var generatedSuffixes = []string{
+	".lock",
+	".lock.json",
+	".lock.yaml",
+	".lock.yml",
+}
 
 // GeneratedAttributeInput returns NUL-delimited paths for git check-attr.
 func GeneratedAttributeInput(files []DiffFile) []byte {
@@ -47,6 +78,21 @@ func MarkGeneratedFiles(files []DiffFile, linguistGenerated map[string]bool) {
 			files[i].IsGenerated = generated
 			continue
 		}
-		files[i].IsGenerated = landedwork.IsGeneratedPath(files[i].Path)
+		files[i].IsGenerated = IsGeneratedPath(files[i].Path)
 	}
+}
+
+// IsGeneratedPath recognizes generated artifacts that are useful even without
+// repository-specific Linguist attributes.
+func IsGeneratedPath(path string) bool {
+	base := strings.ToLower(filepath.Base(filepath.ToSlash(path)))
+	if generatedBasenames[base] {
+		return true
+	}
+	for _, suffix := range generatedSuffixes {
+		if strings.HasSuffix(base, suffix) {
+			return true
+		}
+	}
+	return false
 }

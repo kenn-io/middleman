@@ -363,9 +363,7 @@ func mapTransportError(kind platform.Kind, host string, err error) error {
 	}
 	var code platform.PlatformErrorCode
 	switch httpErr.StatusCode {
-	case http.StatusUnauthorized:
-		code = platform.ErrCodeCredentialRejected
-	case http.StatusForbidden:
+	case 401, 403:
 		code = platform.ErrCodePermissionDenied
 	case 404:
 		code = platform.ErrCodeNotFound

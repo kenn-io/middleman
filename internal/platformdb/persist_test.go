@@ -42,21 +42,6 @@ func TestDBMergeRequestCarriesProviderMergeableState(t *testing.T) {
 	assert.Equal(t, "dirty", mr.MergeableState)
 }
 
-func TestDBMergeRequestRetainsGitLabReportSHASelection(t *testing.T) {
-	for _, tc := range []struct{ merge, squash, want string }{
-		{"merge-sha", "squash-sha", "merge-sha"},
-		{"", "squash-sha", "squash-sha"},
-	} {
-		t.Run(tc.want, func(t *testing.T) {
-			row := DBMergeRequest(42, platform.MergeRequest{
-				Repo:           platform.RepoRef{Platform: platform.KindGitLab},
-				MergeCommitSHA: tc.merge, SquashCommitSHA: tc.squash,
-			})
-			assert.Equal(t, tc.want, row.MergeCommitSHA)
-		})
-	}
-}
-
 func TestDBReviewThreadsCarriesCommentMetadataToReplies(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)

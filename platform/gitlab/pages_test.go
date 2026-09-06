@@ -105,8 +105,7 @@ func TestGitLabUpdatedInventoryBindsCursorToQueryShape(t *testing.T) {
 	// different GitLab instance must refuse the cursor.
 	otherHostClient, err := NewClient(
 		"other.gitlab.example.com", testTokenSource("token"),
-		WithBaseURLForTesting(server.URL+"/api/v4"), WithoutRetriesForTesting(), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithBaseURLForTesting(server.URL+"/api/v4"), WithoutRetriesForTesting(), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	otherHostRef := ref
 	otherHostRef.Host = "other.gitlab.example.com"

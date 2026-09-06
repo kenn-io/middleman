@@ -622,8 +622,7 @@ func TestGitLabSyncBudgetExhaustionIncludesWindowE2E(t *testing.T) {
 		staticTokenSource("token"),
 		platformgitlab.WithBaseURLForTesting(gitlabAPI.URL+"/api/v4"),
 		platformgitlab.WithoutRetriesForTesting(),
-		platformgitlab.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)), platformgitlab.WithClock(time.Now),
-	)
+		platformgitlab.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)))
 	require.NoError(err)
 	registry, err := ghclient.NewProviderRegistry(nil, client)
 	require.NoError(err)

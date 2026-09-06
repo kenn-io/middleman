@@ -27,8 +27,7 @@ func TestGetMarkdownImageUsesAuthenticatedProjectUploadAPI(t *testing.T) {
 	client, err := NewClient(
 		server.Listener.Addr().String(),
 		testTokenSource("gitlab-token"),
-		WithBaseURLForTesting(server.URL+"/api/v4"), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithBaseURLForTesting(server.URL+"/api/v4"), WithTransport(http.DefaultTransport))
 	require.NoError(t, err)
 	image, err := client.GetMarkdownImage(t.Context(), platform.RepoRef{
 		Platform: platform.KindGitLab, Host: server.Listener.Addr().String(),
@@ -50,8 +49,7 @@ func TestGetMarkdownImageUsesForegroundTimeout(t *testing.T) {
 		server.Listener.Addr().String(),
 		testTokenSource("gitlab-token"),
 		WithBaseURLForTesting(server.URL+"/api/v4"),
-		WithForegroundTimeoutForTesting(time.Nanosecond), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithForegroundTimeoutForTesting(time.Nanosecond), WithTransport(http.DefaultTransport))
 	require.NoError(t, err)
 	_, err = client.GetMarkdownImage(t.Context(), platform.RepoRef{
 		Platform: platform.KindGitLab, RepoPath: "group/project", PlatformID: 42,
@@ -81,8 +79,7 @@ func TestGetMarkdownImageRejectsUntrustedSourcesAndActiveContent(t *testing.T) {
 			t.Cleanup(server.Close)
 			client, err := NewClient(
 				server.Listener.Addr().String(), testTokenSource("token"),
-				WithBaseURLForTesting(server.URL+"/api/v4"), WithTransport(http.DefaultTransport), WithClock(time.Now),
-			)
+				WithBaseURLForTesting(server.URL+"/api/v4"), WithTransport(http.DefaultTransport))
 			require.NoError(err)
 			_, err = client.GetMarkdownImage(context.Background(), platform.RepoRef{
 				Platform: platform.KindGitLab, RepoPath: "group/project", PlatformID: 42,

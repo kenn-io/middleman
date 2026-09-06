@@ -305,7 +305,6 @@ func defaultProviderFactories() map[string]providerFactory {
 		string(platform.KindGitLab): func(ctx context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 			client, err := gitlabclient.NewClient(
 				input.host, input.tokenSource,
-				gitlabclient.WithClock(time.Now),
 				gitlabclient.WithRateTracker(input.rateObserver()),
 				gitlabclient.WithOptionalRequestContext(github.WithoutEssentialSyncBudget),
 				gitlabclient.WithTransport(github.WrapSyncBudgetTransport(http.DefaultTransport, input.budget)),
@@ -317,7 +316,6 @@ func defaultProviderFactories() map[string]providerFactory {
 		},
 		string(platform.KindForgejo): func(ctx context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 			options := []forgejoclient.ClientOption{
-				forgejoclient.WithClock(time.Now),
 				forgejoclient.WithRateTracker(input.rateObserver()),
 				forgejoclient.WithTransport(github.WrapSyncBudgetTransport(http.DefaultTransport, input.budget)),
 			}
@@ -340,7 +338,6 @@ func defaultProviderFactories() map[string]providerFactory {
 		},
 		string(platform.KindGitea): func(ctx context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 			options := []giteaclient.ClientOption{
-				giteaclient.WithClock(time.Now),
 				giteaclient.WithBaseURL(input.baseURL, input.allowInsecure),
 				giteaclient.WithRateTracker(input.rateObserver()),
 				giteaclient.WithTransport(github.WrapSyncBudgetTransport(http.DefaultTransport, input.budget)),

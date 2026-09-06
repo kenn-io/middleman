@@ -9,11 +9,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"go.kenn.io/forge/githubapp"
 	"strings"
 	"testing"
 	"time"
-
-	"go.kenn.io/forge/githubapp"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -117,13 +116,13 @@ func TestParsePrivateKeyFormats(t *testing.T) {
 func TestNewManifestValidation(t *testing.T) {
 	t.Parallel()
 	require := require.New(t)
-	_, err := githubapp.NewManifest("", DefaultHomepageURL, "http://127.0.0.1:1/callback", DefaultPermissions(), []string{})
+	_, err := NewManifest("", "", "http://127.0.0.1:1/callback")
 	require.ErrorContains(err, "name is required")
 
-	_, err = githubapp.NewManifest(strings.Repeat("x", 35), DefaultHomepageURL, "http://127.0.0.1:1/callback", DefaultPermissions(), []string{})
+	_, err = NewManifest(strings.Repeat("x", 35), "", "http://127.0.0.1:1/callback")
 	require.ErrorContains(err, "34 character limit")
 
-	m, err := githubapp.NewManifest("kenn-forge-test", DefaultHomepageURL, "http://127.0.0.1:9/callback", DefaultPermissions(), []string{})
+	m, err := NewManifest("kenn-forge-test", "", "http://127.0.0.1:9/callback")
 	require.NoError(err)
 	assert := assert.New(t)
 	assert.False(m.Public)
@@ -162,7 +161,7 @@ func TestRandomAppNameFitsGitHubLimit(t *testing.T) {
 	assert := assert.New(t)
 	name, err := RandomAppName()
 	require.NoError(err)
-	assert.LessOrEqual(len(name), 34)
+	assert.LessOrEqual(len(name), maxAppNameLength)
 	other, err := RandomAppName()
 	require.NoError(err)
 	assert.NotEqual(name, other)

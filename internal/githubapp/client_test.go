@@ -3,6 +3,7 @@ package githubapp
 import (
 	"context"
 	"fmt"
+	"go.kenn.io/forge/githubapp"
 	"net/http"
 	"net/url"
 	"os"
@@ -10,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"go.kenn.io/forge/githubapp"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,12 +49,12 @@ func TestConvertManifest(t *testing.T) {
 	require := require.New(t)
 	fake := githubapptest.NewFake()
 	t.Cleanup(fake.Close)
-	manifest, err := githubapp.NewManifest("kenn-forge-conv", DefaultHomepageURL, "http://127.0.0.1:1/callback", DefaultPermissions(), []string{})
+	manifest, err := NewManifest("kenn-forge-conv", "", "http://127.0.0.1:1/callback")
 	require.NoError(err)
 	code := submitManifest(t, fake, manifest)
 
-	client := githubapp.NewClient("github.com", &http.Client{}, githubapp.WithAPIBase(fake.APIBase()))
-	creds, err := client.ConvertManifest(appTestContext(t), code, appTestMeter(t))
+	client := githubapp.NewClientWithBase(fake.APIBase())
+	creds, err := client.ConvertManifest(context.Background(), code)
 	require.NoError(err)
 
 	assert := assert.New(t)
@@ -68,7 +67,7 @@ func TestConvertManifest(t *testing.T) {
 
 	// Conversion codes are single use; replay must fail loudly so the
 	// CLI reports a stale callback instead of silently re-creating.
-	_, err = client.ConvertManifest(appTestContext(t), code, appTestMeter(t))
+	_, err = client.ConvertManifest(context.Background(), code)
 	assert.True(githubapp.IsStatus(err, http.StatusNotFound), "got %v", err)
 }
 
@@ -77,11 +76,11 @@ func TestMintInstallationToken(t *testing.T) {
 	require := require.New(t)
 	fake := githubapptest.NewFake()
 	t.Cleanup(fake.Close)
-	manifest, err := githubapp.NewManifest("kenn-forge-mint", DefaultHomepageURL, "http://127.0.0.1:1/callback", DefaultPermissions(), []string{})
+	manifest, err := NewManifest("kenn-forge-mint", "", "http://127.0.0.1:1/callback")
 	require.NoError(err)
 	code := submitManifest(t, fake, manifest)
-	client := githubapp.NewClient("github.com", &http.Client{}, githubapp.WithAPIBase(fake.APIBase()))
-	creds, err := client.ConvertManifest(appTestContext(t), code, appTestMeter(t))
+	client := githubapp.NewClientWithBase(fake.APIBase())
+	creds, err := client.ConvertManifest(context.Background(), code)
 	require.NoError(err)
 	installID, err := fake.Install(creds.ID, "kenn-io")
 	require.NoError(err)
@@ -90,7 +89,7 @@ func TestMintInstallationToken(t *testing.T) {
 	require.NoError(os.WriteFile(keyPath, []byte(creds.PEM), 0o600))
 
 	token, expires, err := mintInstallationToken(
-		context.Background(), "github.com", fake.APIBase(), creds.ID, keyPath, installID,
+		context.Background(), fake.APIBase(), creds.ID, keyPath, installID,
 	)
 	require.NoError(err)
 	assert := assert.New(t)
@@ -98,7 +97,7 @@ func TestMintInstallationToken(t *testing.T) {
 	assert.Greater(time.Until(expires), 50*time.Minute)
 
 	// The minted token must be usable as a plain bearer credential.
-	rate, err := client.CoreRateLimit(appTestContext(t), token, appTestMeter(t))
+	rate, err := client.CoreRateLimit(context.Background(), token)
 	require.NoError(err)
 	assert.Equal(5000, rate.Limit)
 }
@@ -108,10 +107,12 @@ func TestMintInstallationTokenRejectsWrongKey(t *testing.T) {
 	require := require.New(t)
 	fake := githubapptest.NewFake()
 	t.Cleanup(fake.Close)
-	manifest, err := githubapp.NewManifest("kenn-forge-badkey", DefaultHomepageURL, "http://127.0.0.1:1/callback", DefaultPermissions(), []string{})
+	manifest, err := NewManifest("kenn-forge-badkey", "", "http://127.0.0.1:1/callback")
 	require.NoError(err)
-	client := githubapp.NewClient("github.com", &http.Client{}, githubapp.WithAPIBase(fake.APIBase()))
-	creds, err := client.ConvertManifest(appTestContext(t), submitManifest(t, fake, manifest), appTestMeter(t))
+	client := githubapp.NewClientWithBase(fake.APIBase())
+	creds, err := client.ConvertManifest(
+		context.Background(), submitManifest(t, fake, manifest),
+	)
 	require.NoError(err)
 	installID, err := fake.Install(creds.ID, "kenn-io")
 	require.NoError(err)
@@ -121,7 +122,7 @@ func TestMintInstallationTokenRejectsWrongKey(t *testing.T) {
 	otherKey := generateTestKey(t)
 	wrongJWT, err := githubapp.SignAppJWT(creds.ID, otherKey, time.Now())
 	require.NoError(err)
-	_, err = client.CreateInstallationToken(appTestContext(t), wrongJWT, installID, githubapp.TokenScope{AllRepositories: true}, appTestMeter(t))
+	_, err = client.CreateInstallationToken(context.Background(), wrongJWT, installID)
 	assert.True(t, githubapp.IsStatus(err, http.StatusUnauthorized), "got %v", err)
 }
 

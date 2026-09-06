@@ -5362,8 +5362,7 @@ func TestAPIGitLabSyncReadsTokenFileAfterRotation(t *testing.T) {
 		"gitlab.example.com",
 		source,
 		platformgitlab.WithBaseURLForTesting(gitlabAPI.URL+"/api/v4"), platformgitlab.
-			WithTransport(http.DefaultTransport), platformgitlab.
-			WithClock(time.Now),
+			WithTransport(http.DefaultTransport),
 	)
 	require.NoError(err)
 	registry, err := platform.NewRegistry(client)
@@ -8847,8 +8846,7 @@ func TestAPIGitLabDisabledIssueCooldownPersistsThroughHTTPAndSQLite(t *testing.T
 		testTokenSource("token"),
 		platformgitlab.WithBaseURLForTesting(providerServer.URL+"/api/v4"),
 		platformgitlab.WithoutRetriesForTesting(), platformgitlab.
-			WithTransport(http.DefaultTransport), platformgitlab.
-			WithClock(time.Now),
+			WithTransport(http.DefaultTransport),
 	)
 	require.NoError(err)
 	registry, err := platform.NewRegistry(provider)
@@ -8938,8 +8936,7 @@ func TestAPIGiteaDisabledIssueCooldownPersistsThroughHTTPAndSQLite(t *testing.T)
 		"gitea.test",
 		testTokenSource("token"),
 		giteaplatform.WithBaseURL(providerServer.URL, true),
-		giteaplatform.WithServerVersion("1.26.0"), giteaplatform.WithTransport(http.DefaultTransport), giteaplatform.WithClock(time.Now),
-	)
+		giteaplatform.WithServerVersion("1.26.0"), giteaplatform.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := platform.NewRegistry(provider)
 	require.NoError(err)
@@ -17381,8 +17378,7 @@ func TestAPIGitLabPublishReviewDraftSurfacesCleanupFailureAsPartial(t *testing.T
 		"gitlab.example.com",
 		testTokenSource("token"),
 		platformgitlab.WithBaseURLForTesting(gitlabServer.URL+"/api/v4"), platformgitlab.
-			WithTransport(http.DefaultTransport), platformgitlab.
-			WithClock(time.Now),
+			WithTransport(http.DefaultTransport),
 	)
 	require.NoError(err)
 	registry, err := platform.NewRegistry(client)
@@ -17629,8 +17625,7 @@ func setupActualGitLabReviewServer(
 		testTokenSource("token"),
 		platformgitlab.WithBaseURLForTesting(gitlabServerURL+"/api/v4"),
 		platformgitlab.WithoutRetriesForTesting(), platformgitlab.
-			WithTransport(http.DefaultTransport), platformgitlab.
-			WithClock(time.Now),
+			WithTransport(http.DefaultTransport),
 	)
 	require.NoError(err)
 	registry, err := platform.NewRegistry(client)
@@ -19680,7 +19675,8 @@ func TestAPIGitealikeHTTPMergeabilityPersistsThroughServer(t *testing.T) {
 					host,
 					testTokenSource(token),
 					giteaplatform.WithBaseURL(baseURL, true),
-					giteaplatform.WithServerVersion("1.26.0"), giteaplatform.WithTransport(http.DefaultTransport), giteaplatform.WithClock(time.Now),
+					giteaplatform.WithServerVersion("1.26.0"),
+					giteaplatform.WithTransport(http.DefaultTransport),
 				)
 			},
 		},
@@ -19691,9 +19687,10 @@ func TestAPIGitealikeHTTPMergeabilityPersistsThroughServer(t *testing.T) {
 			token: "forgejo-token",
 			newClient: func(host, token, baseURL string) (platform.Provider, error) {
 				return forgejoplatform.NewClient(
-					host, testTokenSource(token), forgejoplatform.WithBaseURLForTesting(baseURL), forgejoplatform.
-						WithTransport(http.DefaultTransport), forgejoplatform.
-						WithClock(time.Now),
+					host,
+					testTokenSource(token),
+					forgejoplatform.WithBaseURLForTesting(baseURL),
+					forgejoplatform.WithTransport(http.DefaultTransport),
 				)
 			},
 		},

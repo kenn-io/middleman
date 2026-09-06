@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"testing"
-	"time"
 
 	ghsync "go.kenn.io/forge/internal/github"
 
@@ -29,7 +28,7 @@ func TestGiteaLikeAdapterContract(t *testing.T) {
 			token string,
 			options gitealiketest.ClientOptions,
 		) gitealiketest.TestClient {
-			clientOptions := []ClientOption{WithBaseURLForTesting(baseURL), WithTransport(http.DefaultTransport), WithClock(time.Now)}
+			clientOptions := []ClientOption{WithBaseURLForTesting(baseURL), WithTransport(http.DefaultTransport)}
 			if options.ForegroundTimeout > 0 {
 				clientOptions = append(clientOptions, WithForegroundTimeoutForTesting(options.ForegroundTimeout))
 			}

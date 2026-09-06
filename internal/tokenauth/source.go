@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"go.kenn.io/forge/githubapp"
 )
 
 var ErrMissingToken = errors.New("missing provider token")
@@ -44,41 +42,29 @@ type ManagedSource struct {
 	appTokens *githubAppTokenStore
 }
 
-type githubAppMintFailure struct {
-	err     error
-	retryAt time.Time
+type githubAppTokenCache struct {
+	token       string
+	exp         time.Time
+	err         error
+	retryAt     time.Time
+	mintDone    chan struct{}
+	invalidated bool
 }
 
-// githubAppTokenStore owns application cooldown and credential generations.
-// Token reuse and in-flight ownership live only in the public App cache.
+// githubAppTokenStore is shared by every managed source in one SourceSet.
+// Repository-exact authorization routes can therefore reuse the one-hour token
+// minted for their common App installation without weakening route selection.
 type githubAppTokenStore struct {
-	mu             sync.Mutex
-	cache          *githubapp.TokenCache
-	failures       map[Candidate]githubAppMintFailure
-	generations    map[Candidate]uint64
-	nextGeneration uint64
-	now            func() time.Time
+	mu     sync.Mutex
+	tokens map[Candidate]*githubAppTokenCache
+	now    func() time.Time
 }
 
 func newGitHubAppTokenStore() *githubAppTokenStore {
-	store := &githubAppTokenStore{
-		failures:    make(map[Candidate]githubAppMintFailure),
-		generations: make(map[Candidate]uint64),
-		now:         time.Now,
+	return &githubAppTokenStore{
+		tokens: make(map[Candidate]*githubAppTokenCache),
+		now:    time.Now,
 	}
-	store.cache = githubapp.NewTokenCache(func() time.Time { return store.now() }, githubapp.WithRefreshSkew(githubAppTokenRefreshSkew))
-	return store
-}
-
-func (s *githubAppTokenStore) cacheKey(candidate Candidate) githubapp.CacheKey {
-	key := canonicalCandidate(candidate)
-	generation := s.generations[key]
-	if generation == 0 {
-		s.nextGeneration++
-		generation = s.nextGeneration
-		s.generations[key] = generation
-	}
-	return githubapp.CacheKey{Host: key.Host, AppID: key.AppID, InstallationID: key.InstallationID, Generation: generation, Scope: githubapp.TokenScope{AllRepositories: true}}
 }
 
 const (
@@ -115,30 +101,65 @@ func (s *githubAppTokenStore) resolve(
 	minter GitHubAppMinter,
 ) (string, time.Time, error) {
 	key := canonicalCandidate(candidate)
-	s.mu.Lock()
-	if failure, ok := s.failures[key]; ok && s.now().Before(failure.retryAt) {
-		s.mu.Unlock()
-		return "", time.Time{}, failure.err
-	}
-	cacheKey := s.cacheKey(key)
-	s.mu.Unlock()
-	// This is the application's existing HTTP mint timeout. Public primitives
-	// require a deadline and do not choose one for the hosting application.
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	token, err := s.cache.Token(ctx, cacheKey, func(mintCtx context.Context) (githubapp.InstallationToken, error) {
-		token, expiry, err := minter(mintCtx, candidate)
+	for {
+		now := s.now()
 		s.mu.Lock()
-		defer s.mu.Unlock()
-		retryAt := githubAppMintRetryDeadline(err, mintCtx.Err(), s.now())
-		if err != nil && !retryAt.IsZero() {
-			s.failures[key] = githubAppMintFailure{err: err, retryAt: retryAt}
-		} else {
-			delete(s.failures, key)
+		cached := s.tokens[key]
+		if cached != nil && cached.err != nil && now.Before(cached.retryAt) {
+			err := cached.err
+			s.mu.Unlock()
+			return "", time.Time{}, err
 		}
-		return githubapp.InstallationToken{Token: token, ExpiresAt: expiry}, err
-	})
-	return token.Token, token.ExpiresAt, err
+		if cached != nil && cached.token != "" &&
+			now.Add(githubAppTokenRefreshSkew).Before(cached.exp) {
+			token, exp := cached.token, cached.exp
+			s.mu.Unlock()
+			return token, exp, nil
+		}
+		if cached != nil && cached.mintDone != nil {
+			done := cached.mintDone
+			s.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return "", time.Time{}, ctx.Err()
+			case <-done:
+				s.mu.Lock()
+				if cached.invalidated {
+					s.mu.Unlock()
+					continue
+				}
+				token, exp, err := cached.token, cached.exp, cached.err
+				s.mu.Unlock()
+				return token, exp, err
+			}
+		}
+
+		cached = &githubAppTokenCache{mintDone: make(chan struct{})}
+		s.tokens[key] = cached
+		s.mu.Unlock()
+
+		token, exp, err := minter(ctx, candidate)
+		now = s.now()
+		s.mu.Lock()
+		cached.token = token
+		cached.exp = exp
+		cached.err = err
+		cached.retryAt = githubAppMintRetryDeadline(err, ctx.Err(), now)
+		if err != nil && cached.retryAt.IsZero() {
+			// Cancellation and deadline failures come from the winning
+			// caller's context, not from GitHub: mark the entry so
+			// waiters loop and re-mint with their own live contexts
+			// instead of inheriting the error.
+			cached.invalidated = true
+		}
+		close(cached.mintDone)
+		cached.mintDone = nil
+		if s.tokens[key] == cached && cached.invalidated {
+			delete(s.tokens, key)
+		}
+		s.mu.Unlock()
+		return token, exp, err
+	}
 }
 
 func (s *githubAppTokenStore) evictCompleted(candidates []Candidate) {
@@ -146,27 +167,49 @@ func (s *githubAppTokenStore) evictCompleted(candidates []Candidate) {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	now := s.now()
 	for _, candidate := range candidates {
 		if candidate.Kind != SourceKindGitHubApp {
 			continue
 		}
-		s.cache.EvictCompleted(s.cacheKey(candidate))
+		key := canonicalCandidate(candidate)
+		cached := s.tokens[key]
+		if cached == nil {
+			continue
+		}
+		// Other routes may share the same canonical candidate. Preserve
+		// in-flight mints and active failure cooldowns because neither
+		// contains a completed token from the replaced descriptor.
+		if cached.mintDone != nil ||
+			cached.err != nil && now.Before(cached.retryAt) {
+			continue
+		}
+		cached.invalidated = true
+		delete(s.tokens, key)
 	}
+	s.mu.Unlock()
 }
 
-func (s *githubAppTokenStore) invalidateToken(candidates []Candidate, rejectedToken string) {
+func (s *githubAppTokenStore) invalidateToken(
+	candidates []Candidate, rejectedToken string,
+) {
 	if s == nil || rejectedToken == "" {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	for _, candidate := range candidates {
 		if candidate.Kind != SourceKindGitHubApp {
 			continue
 		}
-		s.cache.RejectToken(s.cacheKey(candidate), rejectedToken)
+		key := canonicalCandidate(candidate)
+		cached := s.tokens[key]
+		if cached == nil || cached.token != rejectedToken {
+			continue
+		}
+		cached.invalidated = true
+		delete(s.tokens, key)
 	}
+	s.mu.Unlock()
 }
 
 func NewManagedSource(desc Descriptor, options Options) *ManagedSource {

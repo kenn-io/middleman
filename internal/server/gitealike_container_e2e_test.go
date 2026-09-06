@@ -106,8 +106,7 @@ func TestForgejoContainerSync(t *testing.T) {
 		platformforgejo.WithBaseURLForTesting(manifest.BaseURL),
 		platformforgejo.WithForegroundTimeoutForTesting(time.Minute),
 		platformforgejo.WithRateTracker(tracker),
-		platformforgejo.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)), platformforgejo.
-			WithClock(time.Now),
+		platformforgejo.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)),
 	)
 	require.NoError(t, err)
 	assertGiteaLikeContainerSync(
@@ -147,8 +146,7 @@ func TestGiteaContainerSync(t *testing.T) {
 		platformgitea.WithBaseURL(manifest.BaseURL, true),
 		platformgitea.WithForegroundTimeoutForTesting(time.Minute),
 		platformgitea.WithRateTracker(tracker),
-		platformgitea.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)), platformgitea.WithClock(time.Now),
-	)
+		platformgitea.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)))
 	require.NoError(t, err)
 	assertGiteaLikeContainerSync(
 		t, ctx, platform.KindGitea, manifest, client, budget,

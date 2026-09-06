@@ -85,9 +85,9 @@ func normalizeImportPlatform(provider, host string) (platform.Kind, string, erro
 	if err != nil {
 		return "", "", err
 	}
-	normalizedHost, err := platform.NormalizeHost(kind, host)
+	normalizedHost, err := config.NormalizePlatformHost(string(kind), host)
 	if err != nil {
-		return "", "", fmt.Errorf("platform_host: %w", err)
+		return "", "", err
 	}
 	return kind, normalizedHost, nil
 }

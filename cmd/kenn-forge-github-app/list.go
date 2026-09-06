@@ -9,9 +9,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"go.kenn.io/forge/githubapp"
 	"go.kenn.io/forge/internal/config"
-	"go.kenn.io/forge/platform"
 )
 
 type appStatus struct {
@@ -119,23 +117,17 @@ func (env *appEnv) fillLiveStatus(
 	if err != nil {
 		return err
 	}
-	if _, err := appRequest(ctx, func(requestCtx context.Context, meter *platform.Meter) (*githubapp.App, error) {
-		return client.GetApp(requestCtx, jwt, meter)
-	}); err != nil {
+	if _, err := client.GetApp(ctx, jwt); err != nil {
 		return err
 	}
 	if app.InstallationID == 0 {
 		return nil
 	}
-	token, err := appRequest(ctx, func(requestCtx context.Context, meter *platform.Meter) (*githubapp.InstallationToken, error) {
-		return client.CreateInstallationToken(requestCtx, jwt, app.InstallationID, githubapp.TokenScope{AllRepositories: true}, meter)
-	})
+	token, err := client.CreateInstallationToken(ctx, jwt, app.InstallationID)
 	if err != nil {
 		return err
 	}
-	rate, err := appRequest(ctx, func(requestCtx context.Context, meter *platform.Meter) (*githubapp.RateLimit, error) {
-		return client.CoreRateLimit(requestCtx, token.Token, meter)
-	})
+	rate, err := client.CoreRateLimit(ctx, token.Token)
 	if err != nil {
 		return err
 	}
@@ -143,7 +135,7 @@ func (env *appEnv) fillLiveStatus(
 	status.RateRemaining = rate.Remaining
 	status.RateResetsAt = time.Unix(rate.Reset, 0).UTC().Format(time.RFC3339)
 
-	installs, err := discoverInstallations(ctx, client, jwt, app.AppID)
+	installs, err := client.ListInstallations(ctx, jwt)
 	if err != nil {
 		return err
 	}
@@ -152,7 +144,7 @@ func (env *appEnv) fillLiveStatus(
 			strings.EqualFold(install.RepositorySelection, "all") {
 			continue
 		}
-		accessible, err := discoverRepositoryNames(ctx, client, token.Token, app.InstallationID)
+		accessible, err := client.ListInstallationRepositories(ctx, token.Token)
 		if err != nil {
 			return err
 		}

@@ -168,7 +168,7 @@ func (s *Syncer) SyncNotifications(ctx context.Context) error {
 	var errs []error
 	for _, entry := range clients {
 		providerWork := s.beginNotificationProviderWork(
-			ctx, entry.platform, entry.host, tracked,
+			entry.platform, entry.host, tracked,
 		)
 		err := s.syncNotificationsForHost(
 			ctx, entry.platform, entry.host, entry.client, tracked, providerWork,
@@ -185,7 +185,6 @@ func (s *Syncer) SyncNotifications(ctx context.Context) error {
 }
 
 func (s *Syncer) beginNotificationProviderWork(
-	ctx context.Context,
 	kind platform.Kind,
 	host string,
 	tracked map[string]RepoRef,
@@ -200,7 +199,7 @@ func (s *Syncer) beginNotificationProviderWork(
 	// would block healthy siblings from syncing and advancing their
 	// watermarks — the exact coupling per-repository watermarks remove.
 	for _, repo := range notificationTrackedRepos(string(kind), host, tracked) {
-		work.addRepo(ctx, repo)
+		work.addRepo(repo)
 	}
 	return work
 }
@@ -211,7 +210,7 @@ type notificationProviderWork struct {
 	releases []func()
 }
 
-func (w *notificationProviderWork) addRepo(ctx context.Context, repo RepoRef) {
+func (w *notificationProviderWork) addRepo(repo RepoRef) {
 	identityRoutes := []bool{false}
 	if repoPlatform(repo) == platform.KindGitHub {
 		identityRoutes = append(identityRoutes, true)
@@ -226,7 +225,7 @@ func (w *notificationProviderWork) addRepo(ctx context.Context, repo RepoRef) {
 		}
 		w.seen[bucket] = struct{}{}
 		w.releases = append(w.releases, w.syncer.beginProviderWork(
-			ctx, bucket, archive.PriorityNotificationRefresh,
+			bucket, archive.PriorityNotificationRefresh,
 		))
 	}
 }
@@ -382,7 +381,7 @@ func (s *Syncer) syncNotificationsForRepoAttempt(
 	if !found {
 		return true, nil
 	}
-	providerWork.addRepo(ctx, repo)
+	providerWork.addRepo(repo)
 	if s.afterNotificationRepoIdentityReconciled != nil {
 		s.afterNotificationRepoIdentityReconciled()
 	}
@@ -788,7 +787,7 @@ func (s *Syncer) ProcessQueuedNotificationReads(ctx context.Context, kind platfo
 			continue
 		}
 		seenBuckets[bucket] = struct{}{}
-		defer s.beginProviderWork(ctx, bucket, archive.PriorityNotificationRefresh)()
+		defer s.beginProviderWork(bucket, archive.PriorityNotificationRefresh)()
 	}
 	// A rate limit stops only the credential that hit it. Its remaining rows
 	// are already deferred in the database, so skipping them here avoids

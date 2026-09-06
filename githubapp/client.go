@@ -3,7 +3,7 @@ package githubapp
 import (
 	"bytes"
 	"context"
-	"encoding/json/v2"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -38,28 +38,21 @@ func WebBaseForHost(host string) string {
 // installation token minter need; repository data access stays on the
 // main provider clients.
 type Client struct {
-	host       string
 	apiBase    string
 	httpClient *http.Client
-	initErr    error
 }
 
-type ClientOption func(*Client)
-
-// WithAPIBase separates transport configuration from provider instance identity.
-func WithAPIBase(apiBase string) ClientOption {
-	return func(c *Client) { c.apiBase = strings.TrimRight(apiBase, "/") }
+func NewClient(host string) *Client {
+	return NewClientWithBase(APIBaseForHost(host))
 }
 
-// NewClient performs no I/O and uses only the caller's transport. Authentication
-// is explicit on each operation; there is no credential discovery or fallback.
-func NewClient(host string, httpClient *http.Client, options ...ClientOption) *Client {
-	normalized, err := platform.NormalizeHost(platform.KindGitHub, host)
-	c := &Client{host: normalized, apiBase: APIBaseForHost(normalized), httpClient: httpClient, initErr: err}
-	for _, option := range options {
-		option(c)
+// NewClientWithBase constructs a client against an explicit API base
+// URL. Tests point this at a local fake server.
+func NewClientWithBase(apiBase string) *Client {
+	return &Client{
+		apiBase:    strings.TrimRight(apiBase, "/"),
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
-	return c
 }
 
 // AppCredentials is the manifest conversion response: everything the
@@ -77,7 +70,6 @@ type AppCredentials struct {
 }
 
 type Account struct {
-	ID    int64  `json:"id"`
 	Login string `json:"login"`
 	Type  string `json:"type"`
 }
@@ -93,11 +85,9 @@ type App struct {
 
 // Installation is one account the app is installed on.
 type Installation struct {
-	ID                  int64      `json:"id"`
-	AppID               int64      `json:"app_id"`
-	Account             Account    `json:"account"`
-	RepositorySelection string     `json:"repository_selection"`
-	SuspendedAt         *time.Time `json:"suspended_at"`
+	ID                  int64   `json:"id"`
+	Account             Account `json:"account"`
+	RepositorySelection string  `json:"repository_selection"`
 }
 
 // InstallationToken is a minted installation access token.
@@ -116,13 +106,13 @@ type RateLimit struct {
 // ConvertManifest exchanges a manifest flow code for the new app's
 // credentials. The exchange needs no authentication and each code
 // works exactly once, expiring after one hour.
-func (c *Client) ConvertManifest(ctx context.Context, code string, meter *platform.Meter) (*AppCredentials, error) {
+func (c *Client) ConvertManifest(ctx context.Context, code string) (*AppCredentials, error) {
 	if code == "" {
 		return nil, fmt.Errorf("manifest conversion code is required")
 	}
 	var creds AppCredentials
 	err := c.do(ctx, http.MethodPost,
-		"/app-manifests/"+code+"/conversions", "", nil, &creds, meter)
+		"/app-manifests/"+code+"/conversions", "", nil, &creds)
 	if err != nil {
 		return nil, fmt.Errorf("converting app manifest code: %w", err)
 	}
@@ -130,31 +120,34 @@ func (c *Client) ConvertManifest(ctx context.Context, code string, meter *platfo
 }
 
 // GetApp returns the authenticated app for an app JWT.
-func (c *Client) GetApp(ctx context.Context, appJWT string, meter *platform.Meter) (*App, error) {
+func (c *Client) GetApp(ctx context.Context, appJWT string) (*App, error) {
 	var app App
-	if err := c.do(ctx, http.MethodGet, "/app", appJWT, nil, &app, meter); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/app", appJWT, nil, &app); err != nil {
 		return nil, fmt.Errorf("getting app: %w", err)
 	}
 	return &app, nil
+}
+
+// ListInstallations lists the accounts the app is installed on.
+func (c *Client) ListInstallations(ctx context.Context, appJWT string) ([]Installation, error) {
+	var installs []Installation
+	err := c.do(ctx, http.MethodGet,
+		"/app/installations?per_page=100", appJWT, nil, &installs)
+	if err != nil {
+		return nil, fmt.Errorf("listing app installations: %w", err)
+	}
+	return installs, nil
 }
 
 // CreateInstallationToken mints an installation access token. Tokens
 // expire after one hour.
 func (c *Client) CreateInstallationToken(
 	ctx context.Context, appJWT string, installationID int64,
-	scope TokenScope, meter *platform.Meter,
 ) (*InstallationToken, error) {
-	body, err := scope.request()
-	if err != nil {
-		return nil, err
-	}
-	if installationID <= 0 {
-		return nil, fmt.Errorf("installation ID must be positive")
-	}
 	var token InstallationToken
-	err = c.do(ctx, http.MethodPost,
+	err := c.do(ctx, http.MethodPost,
 		fmt.Sprintf("/app/installations/%d/access_tokens", installationID),
-		appJWT, body, &token, meter)
+		appJWT, nil, &token)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"creating installation token for installation %d: %w", installationID, err,
@@ -163,15 +156,41 @@ func (c *Client) CreateInstallationToken(
 	return &token, nil
 }
 
+// ListInstallationRepositories lists the full names ("owner/name") of
+// every repository an installation token can reach. Authenticated
+// with the installation token itself, not an app JWT. Used to verify
+// that a "selected repositories" installation actually covers the
+// repos kenn-forge is configured to sync.
+func (c *Client) ListInstallationRepositories(
+	ctx context.Context, installationToken string,
+) ([]string, error) {
+	var names []string
+	for page := 1; ; page++ {
+		var out struct {
+			TotalCount   int `json:"total_count"`
+			Repositories []struct {
+				FullName string `json:"full_name"`
+			} `json:"repositories"`
+		}
+		path := fmt.Sprintf("/installation/repositories?per_page=100&page=%d", page)
+		if err := c.do(ctx, http.MethodGet, path, installationToken, nil, &out); err != nil {
+			return nil, fmt.Errorf("listing installation repositories: %w", err)
+		}
+		for _, repo := range out.Repositories {
+			names = append(names, repo.FullName)
+		}
+		if len(out.Repositories) == 0 || len(names) >= out.TotalCount {
+			return names, nil
+		}
+	}
+}
+
 // DeleteInstallation uninstalls the app from an account.
 func (c *Client) DeleteInstallation(
-	ctx context.Context, appJWT string, installationID int64, meter *platform.Meter,
+	ctx context.Context, appJWT string, installationID int64,
 ) error {
-	if c.httpClient == nil {
-		return &platform.Error{Code: platform.ErrCodeInvalidArgument, Provider: platform.KindGitHub, PlatformHost: c.host, Field: "http_client"}
-	}
 	err := c.do(ctx, http.MethodDelete,
-		fmt.Sprintf("/app/installations/%d", installationID), appJWT, nil, nil, meter)
+		fmt.Sprintf("/app/installations/%d", installationID), appJWT, nil, nil)
 	if err != nil {
 		return fmt.Errorf("deleting installation %d: %w", installationID, err)
 	}
@@ -179,13 +198,13 @@ func (c *Client) DeleteInstallation(
 }
 
 // CoreRateLimit reports the core REST budget for a token.
-func (c *Client) CoreRateLimit(ctx context.Context, token string, meter *platform.Meter) (*RateLimit, error) {
+func (c *Client) CoreRateLimit(ctx context.Context, token string) (*RateLimit, error) {
 	var out struct {
 		Resources struct {
 			Core RateLimit `json:"core"`
 		} `json:"resources"`
 	}
-	if err := c.do(ctx, http.MethodGet, "/rate_limit", token, nil, &out, meter); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/rate_limit", token, nil, &out); err != nil {
 		return nil, fmt.Errorf("reading rate limit: %w", err)
 	}
 	return &out.Resources.Core, nil
@@ -242,51 +261,19 @@ func IsStatus(err error, code int) bool {
 }
 
 func (c *Client) do(
-	ctx context.Context, method, path, bearer string, body, out any, meter *platform.Meter,
+	ctx context.Context, method, path, bearer string, body, out any,
 ) error {
-	if meter == nil {
-		return c.pageError(platform.ErrCodeInvalidArgument, "budget")
-	}
-	if err := meter.Records(1); err != nil {
-		return err
-	}
-	_, data, err := c.request(ctx, method, path, bearer, body, meter)
-	if err != nil {
-		return err
-	}
-	if out == nil {
-		return nil
-	}
-	if err := json.Unmarshal(data, out); err != nil {
-		return fmt.Errorf("decoding response: %w", err)
-	}
-	return meter.CheckOutput(out)
-}
-
-func (c *Client) request(ctx context.Context, method, path, bearer string, body any, meter *platform.Meter) (http.Header, []byte, error) {
-	if c.initErr != nil {
-		return nil, nil, c.initErr
-	}
-	if c.httpClient == nil || meter == nil {
-		return nil, nil, c.pageError(platform.ErrCodeInvalidArgument, "client_or_budget")
-	}
-	if _, ok := ctx.Deadline(); !ok {
-		return nil, nil, c.pageError(platform.ErrCodeInvalidArgument, "deadline")
-	}
 	var reqBody io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
-			return nil, nil, fmt.Errorf("encoding request body: %w", err)
-		}
-		if err := meter.Bytes(int64(len(data))); err != nil {
-			return nil, nil, err
+			return fmt.Errorf("encoding request body: %w", err)
 		}
 		reqBody = bytes.NewReader(data)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.apiBase+path, reqBody)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
@@ -296,37 +283,27 @@ func (c *Client) request(ctx context.Context, method, path, bearer string, body 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, data, err := meter.ReadHTTP(ctx, c.httpClient, req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, nil, err
+		return err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		failure := &StatusError{
+		return &StatusError{
 			StatusCode: resp.StatusCode,
 			Header:     resp.Header.Clone(),
 			Body:       string(data),
 		}
-		var code platform.PlatformErrorCode
-		switch {
-		case resp.StatusCode == http.StatusUnauthorized && bearer != "":
-			code = platform.ErrCodeCredentialRejected
-		case resp.StatusCode == http.StatusTooManyRequests || (resp.StatusCode == http.StatusForbidden && (resp.Header.Get("X-RateLimit-Remaining") == "0" || resp.Header.Get("Retry-After") != "")):
-			code = platform.ErrCodeRateLimited
-		case resp.StatusCode == http.StatusForbidden:
-			code = platform.ErrCodePermissionDenied
-		case resp.StatusCode == http.StatusNotFound:
-			code = platform.ErrCodeNotFound
-		default:
-			return nil, nil, failure
-		}
-		scope := "installation_token"
-		if path == "/app" || strings.HasPrefix(path, "/app/") {
-			scope = "app"
-		}
-		if bearer == "" {
-			scope = "none"
-		}
-		return nil, nil, &platform.Error{Code: code, Provider: platform.KindGitHub, PlatformHost: c.host, Details: map[string]string{"credential_scope": scope}, Err: failure}
 	}
-	return resp.Header, data, nil
+	if out == nil {
+		return nil
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return fmt.Errorf("decoding response: %w", err)
+	}
+	return nil
 }

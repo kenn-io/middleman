@@ -221,7 +221,7 @@ func (c *Client) getAttachmentImage(
 	req.Header.Set("Authorization", "Bearer "+token)
 	client := c.markdownImageHTTPClient
 	if client == nil {
-		return platform.MarkdownImage{}, platform.UnsupportedCapability(platform.KindGitHub, c.platformHost, "read_markdown_images")
+		client = http.DefaultClient
 	}
 	resp, err := client.Do(req)
 	if err != nil {

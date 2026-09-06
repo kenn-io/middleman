@@ -198,7 +198,7 @@ func TestArchiveLoopWakesOnlyHostsThatDeniedArchiveWork(t *testing.T) {
 		// A normal stream of live work on a host that never turned archive
 		// work away must not wake the worker, or every sync would trigger a
 		// denied pass and a deferral write per release.
-		release := syncer.beginProviderWork(t.Context(), key, archive.PriorityNormalIndex)
+		release := syncer.beginProviderWork(key, archive.PriorityNormalIndex)
 		release()
 		synctest.Wait()
 		require.Empty(runner.offsetsFrom(backedOff), "releasing a host that denied nothing must stay quiet")
@@ -210,13 +210,13 @@ func TestArchiveLoopWakesOnlyHostsThatDeniedArchiveWork(t *testing.T) {
 		started := make(chan struct{})
 		var releaseFirst func()
 		go func() {
-			releaseFirst = syncer.beginProviderWork(t.Context(), key, archive.PriorityActiveDetail)
+			releaseFirst = syncer.beginProviderWork(key, archive.PriorityActiveDetail)
 			close(started)
 		}()
 		synctest.Wait()
 		releaseArchive()
 		<-started
-		releaseSecond := syncer.beginProviderWork(t.Context(), key, archive.PriorityNotificationRefresh)
+		releaseSecond := syncer.beginProviderWork(key, archive.PriorityNotificationRefresh)
 		releaseFirst()
 		synctest.Wait()
 		require.Empty(runner.offsetsFrom(backedOff), "a host still busy must not wake the worker")
@@ -227,7 +227,7 @@ func TestArchiveLoopWakesOnlyHostsThatDeniedArchiveWork(t *testing.T) {
 
 		// The mark is consumed by the wake: the next quiet release stays quiet.
 		quiet := runner.reset()
-		release = syncer.beginProviderWork(t.Context(), key, archive.PriorityNormalIndex)
+		release = syncer.beginProviderWork(key, archive.PriorityNormalIndex)
 		release()
 		synctest.Wait()
 		require.Empty(runner.offsetsFrom(quiet))

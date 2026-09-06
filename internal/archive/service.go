@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.kenn.io/forge/internal/platformdb"
 	"log/slog"
 	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
-
-	"go.kenn.io/forge/internal/platformdb"
 
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/platform"
@@ -691,8 +690,7 @@ func defaultArchiveRetryDecision(err error, attempt int, now time.Time) RetryDec
 		delay := time.Minute << min(attempt, 6)
 		retryAt := now.Add(delay)
 		return RetryDecision{Code: db.ArchiveErrorCodeTransient, RetryAt: &retryAt}
-	case errors.Is(err, platform.ErrMissingToken), errors.Is(err, platform.ErrPermissionDenied),
-		errors.Is(err, platform.ErrCredentialRejected), errors.Is(err, platform.ErrInstallationSuspended), errors.Is(err, platform.ErrInstallationDeleted):
+	case errors.Is(err, platform.ErrMissingToken), errors.Is(err, platform.ErrPermissionDenied):
 		return RetryDecision{Code: db.ArchiveErrorCodeAuthentication}
 	case errors.Is(err, platform.ErrUnsupportedCapability), errors.Is(err, platform.ErrProviderContract),
 		errors.Is(err, platform.ErrPageLimit),

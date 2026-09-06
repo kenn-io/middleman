@@ -14,7 +14,6 @@ import (
 type ClientOption func(*clientOptions)
 
 type clientOptions struct {
-	clock             func() time.Time
 	baseURL           string
 	foregroundTimeout time.Duration
 	rateTracker       platform.RateObserver
@@ -25,11 +24,9 @@ type clientOptions struct {
 type provider = gitealike.Provider
 
 type Client struct {
-	clock        func() time.Time
-	evidenceHTTP *http.Client
-	host         string
-	baseURL      string
-	transport    *transport
+	host      string
+	baseURL   string
+	transport *transport
 	*provider
 	api               *forgejosdk.Client
 	foregroundTimeout time.Duration
@@ -63,17 +60,7 @@ func WithTransport(transport http.RoundTripper) ClientOption {
 	return func(opts *clientOptions) { opts.transport = transport }
 }
 
-// WithClock supplies observation time for foreground evidence collection.
-func WithClock(clock func() time.Time) ClientOption {
-	return func(opts *clientOptions) { opts.clock = clock }
-}
-
 func NewClient(host string, source platform.CredentialSource, options ...ClientOption) (*Client, error) {
-	var err error
-	host, err = platform.NormalizeHost(platform.KindForgejo, host)
-	if err != nil {
-		return nil, err
-	}
 	opts := clientOptions{
 		baseURL:           "https://" + strings.TrimRight(host, "/"),
 		foregroundTimeout: 20 * time.Second,
@@ -81,8 +68,8 @@ func NewClient(host string, source platform.CredentialSource, options ...ClientO
 	for _, option := range options {
 		option(&opts)
 	}
-	if opts.transport == nil || opts.clock == nil {
-		return nil, &platform.Error{Code: platform.ErrCodeInvalidArgument, Field: "transport_and_clock"}
+	if opts.transport == nil {
+		return nil, &platform.Error{Code: platform.ErrCodeInvalidArgument, Field: "transport"}
 	}
 
 	clientOptions := []forgejosdk.ClientOption{
@@ -96,7 +83,6 @@ func NewClient(host string, source platform.CredentialSource, options ...ClientO
 			rateTracker: opts.rateTracker,
 		}
 	}
-	evidenceTransport := httpTransport
 	mergeability := gitealike.NewMergeableCache()
 	httpTransport = &gitealike.MergeableCaptureTransport{
 		Base:  httpTransport,
@@ -115,10 +101,9 @@ func NewClient(host string, source platform.CredentialSource, options ...ClientO
 		AllowedOrigin:       opts.baseURL,
 	}
 	apiHTTPClient := &http.Client{
+		Timeout:   opts.foregroundTimeout,
 		Transport: authRT,
 	}
-	evidenceAuth := authRT
-	evidenceAuth.Base = evidenceTransport
 	clientOptions = append(clientOptions, forgejosdk.SetHTTPClient(apiHTTPClient))
 
 	api, err := forgejosdk.NewClient(opts.baseURL, clientOptions...)
@@ -134,12 +119,10 @@ func NewClient(host string, source platform.CredentialSource, options ...ClientO
 		requestContextLock: make(chan struct{}, 1),
 	}
 	return &Client{
-		clock:        opts.clock,
-		evidenceHTTP: &http.Client{Transport: evidenceAuth},
-		host:         host,
-		baseURL:      opts.baseURL,
-		api:          api,
-		transport:    transport,
+		host:      host,
+		baseURL:   opts.baseURL,
+		api:       api,
+		transport: transport,
 		provider: gitealike.NewProvider(
 			platform.KindForgejo,
 			host,

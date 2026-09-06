@@ -79,7 +79,7 @@ func TestRepositoryFeatureError(t *testing.T) {
 		{
 			name: "unauthorized", feature: platform.RepositoryFeatureIssues,
 			operationErr: &gitlab.ErrorResponse{StatusCode: http.StatusUnauthorized, Message: "feature failed"},
-			wantTarget:   platform.ErrCredentialRejected,
+			wantTarget:   platform.ErrPermissionDenied,
 		},
 		{
 			name: "rate limited", feature: platform.RepositoryFeatureIssues,

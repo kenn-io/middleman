@@ -23,7 +23,6 @@ const (
 type ClientOption func(*clientOptions)
 
 type clientOptions struct {
-	clock             func() time.Time
 	baseURL           string
 	foregroundTimeout time.Duration
 	rateTracker       platform.RateObserver
@@ -33,7 +32,6 @@ type clientOptions struct {
 }
 
 type Client struct {
-	clock             func() time.Time
 	host              string
 	baseURL           string
 	api               *gitlab.Client
@@ -99,11 +97,6 @@ func WithTransport(transport http.RoundTripper) ClientOption {
 	return func(opts *clientOptions) { opts.transport = transport }
 }
 
-// WithClock supplies observation time for foreground evidence collection.
-func WithClock(clock func() time.Time) ClientOption {
-	return func(opts *clientOptions) { opts.clock = clock }
-}
-
 // WithOptionalRequestContext lets the caller demote optional enrichment work.
 func WithOptionalRequestContext(adapt func(context.Context) context.Context) ClientOption {
 	return func(opts *clientOptions) { opts.optionalContext = adapt }
@@ -116,11 +109,6 @@ func WithoutRetriesForTesting() ClientOption {
 }
 
 func NewClient(host string, source platform.CredentialSource, options ...ClientOption) (*Client, error) {
-	var err error
-	host, err = platform.NormalizeHost(platform.KindGitLab, host)
-	if err != nil {
-		return nil, err
-	}
 	opts := clientOptions{
 		baseURL:           "https://" + strings.TrimRight(host, "/") + "/api/v4",
 		foregroundTimeout: 20 * time.Second,
@@ -128,8 +116,8 @@ func NewClient(host string, source platform.CredentialSource, options ...ClientO
 	for _, option := range options {
 		option(&opts)
 	}
-	if opts.transport == nil || opts.clock == nil {
-		return nil, &platform.Error{Code: platform.ErrCodeInvalidArgument, Field: "transport_and_clock"}
+	if opts.transport == nil {
+		return nil, &platform.Error{Code: platform.ErrCodeInvalidArgument, Field: "transport"}
 	}
 
 	clientOptions := []gitlab.ClientOptionFunc{gitlab.WithBaseURL(opts.baseURL)}
@@ -160,7 +148,6 @@ func NewClient(host string, source platform.CredentialSource, options ...ClientO
 		return nil, err
 	}
 	return &Client{
-		clock:             opts.clock,
 		host:              host,
 		baseURL:           opts.baseURL,
 		api:               api,
@@ -992,9 +979,7 @@ func mapGitLabErrorForHost(platformHost, capability string, err error) error {
 		code = platform.ErrCodeNotFound
 	} else if gitlabErr, ok := errors.AsType[*gitlab.ErrorResponse](err); ok {
 		switch {
-		case gitlabErr.HasStatusCode(http.StatusUnauthorized):
-			code = platform.ErrCodeCredentialRejected
-		case gitlabErr.HasStatusCode(http.StatusForbidden):
+		case gitlabErr.HasStatusCode(http.StatusUnauthorized), gitlabErr.HasStatusCode(http.StatusForbidden):
 			code = platform.ErrCodePermissionDenied
 		case gitlabErr.HasStatusCode(http.StatusNotFound):
 			code = platform.ErrCodeNotFound

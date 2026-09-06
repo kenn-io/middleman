@@ -157,7 +157,7 @@ func TestGitHubArchiveRESTErrorsCarryProviderClassification(t *testing.T) {
 		want      error
 		wantReset *time.Time
 	}{
-		{name: "authentication", status: http.StatusUnauthorized, want: platform.ErrCredentialRejected},
+		{name: "authentication", status: http.StatusUnauthorized, want: platform.ErrPermissionDenied},
 		{name: "rate limit", status: http.StatusForbidden, headers: http.Header{
 			"X-Ratelimit-Remaining": []string{"0"},
 			"X-Ratelimit-Limit":     []string{"5000"},
@@ -203,7 +203,7 @@ func TestGitHubArchiveGraphQLErrorsCarryProviderClassification(t *testing.T) {
 		want      error
 		wantReset *time.Time
 	}{
-		{name: "authentication", status: http.StatusUnauthorized, body: `{"message":"bad credentials"}`, want: platform.ErrCredentialRejected},
+		{name: "authentication", status: http.StatusUnauthorized, body: `{"message":"bad credentials"}`, want: platform.ErrPermissionDenied},
 		{name: "rate limit response", status: http.StatusOK, body: `{"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}`, headers: http.Header{
 			"X-Ratelimit-Remaining": []string{"0"},
 			"X-Ratelimit-Limit":     []string{"5000"},

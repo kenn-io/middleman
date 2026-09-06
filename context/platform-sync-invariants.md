@@ -325,25 +325,9 @@ registry helpers return typed errors for missing providers or capabilities.
   empty forever, which silently degrades the worktree diff sampler to a bare
   HEAD diff (0/0 sidebar stats).
 - Child datasets and detail/CI/diff freshness writes are fenced to the parent snapshot revision. Complete comments and inline review sets replace; submitted reviews remain additive. (`internal/db/queries_snapshot_children.go::CommitMergeRequestChildSnapshot`)
-- Merge-request assignee omission remains unknown; only a provider-confirmed empty set counts as unassigned, so incomplete snapshots cannot claim that an item has no owner. (`internal/platform/persist.go::MarshalUserNamesJSON`, `internal/db/queries_assignees.go::unassignedCondition`)
+- Merge-request assignee omission remains unknown; only a provider-confirmed empty set counts as unassigned, so incomplete snapshots cannot claim that an item has no owner. (`internal/platformdb/persist.go::MarshalUserNamesJSON`, `internal/db/queries_assignees.go::unassignedCondition`)
 
 ## Historical Archive
-
-- Landed-work reports are explicit opt-in; provider collection stays on the hub and
-  Git analysis stays with the caller. Ordinary reports stay database-only
-  (`cmd/kenn-forge/archive_landed.go::collectArchiveLanded`).
-- A provider descriptor owns identity; shared fork objects cannot identify a repository.
-  Remote route mismatches warn, while host or ancestry contradictions reject
-  (`landedwork/correspondence.go::Git.CheckCorrespondence`).
-- Resolve all landing candidates before direct pushes; any unbounded candidate blocks
-  the interval. Later proven facts never advance certification past an earlier gap
-  (`landedwork/analyze.go::Analyze`).
-- Code policy, analyzer and evidence encoding have independent versions; never change
-  a published version's meaning. Git claims stay unverified even when noreply encodes
-  a provider ID (`landedwork/claims.go::GitClaims`).
-- Provider-time totals never borrow Git or observation time for direct pushes; unknown
-  shares remain null and partial work stays separate from activity totals
-  (`internal/archive/report/landed.go::BuildLandedSection`).
 
 - Archive is a scheduling and progress mode over normal sync, not a second sync engine; completeness is repository and item progress scoped by full repository identity. (`internal/db/queries_archive.go::GetArchiveProgress`)
 - Created-order inventory calls require the historical capability; updated-order maintenance traversal does not. Each returns one bounded identity page with an advancing opaque cursor or explicit exhaustion. (`platform/reader_validation.go::pageReaderValidation.prepare`)
@@ -447,9 +431,7 @@ GitLab historical merge-request inventory is unsupported because project merge r
 
 GitLab maintenance inventories walk mutable `updated_at` results newest-first. Updates then move toward the consumed prefix; rows that move ahead before consumption remain eligible under the next scan's inclusive watermark. (`platform/gitlab/pages.go::listInventoryIssuesPage`, `platform/gitlab/pages.go::listInventoryMergeRequestsPage`)
 
-GitLab evidence keeps merge and squash SHAs separate; only the existing interactive
-SQL projection falls back to squash when no merge SHA exists
-(`internal/platformdb/persist.go::DBMergeRequest`).
+GitLab merge reports use `merge_commit_sha`, falling back to `squash_commit_sha` when no merge commit exists. (`platform/gitlab/normalize.go::normalizeMergeRequest`)
 
 ## Forgejo And Gitea Shape
 

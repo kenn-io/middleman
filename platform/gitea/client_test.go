@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	giteasdk "code.gitea.io/sdk/gitea"
 	"github.com/stretchr/testify/assert"
@@ -56,8 +55,7 @@ func TestClientReviewThreadCapabilitiesUseValidatedVersionFloor(t *testing.T) {
 				"gitea.test",
 				testTokenSource("token"),
 				WithBaseURL(server.URL, true),
-				WithServerVersion(tt.version), WithTransport(http.DefaultTransport), WithClock(time.Now),
-			)
+				WithServerVersion(tt.version), WithTransport(http.DefaultTransport))
 			require.NoError(err)
 
 			caps := client.Capabilities()
@@ -88,15 +86,14 @@ func TestClientDiscoversVersionOnlyOnExplicitRead(t *testing.T) {
 	client, err := NewClient(
 		"gitea.test",
 		testTokenSource("token"),
-		WithBaseURL(server.URL, true), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithBaseURL(server.URL, true), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	assert.False(versionRequested)
 	version, err := client.ServerVersion(t.Context())
 	require.NoError(err)
 	assert.Equal("1.24.6", version)
 	assert.True(versionRequested)
-	client, err = NewClient("gitea.test", testTokenSource("token"), WithBaseURL(server.URL, true), WithServerVersion(version), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err = NewClient("gitea.test", testTokenSource("token"), WithBaseURL(server.URL, true), WithServerVersion(version), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	assert.True(client.Capabilities().ReadReviewThreads)
 	assert.True(client.Capabilities().Archive.InlineReviewComments)
@@ -106,8 +103,7 @@ func TestClientDefaultsToHTTPSForConfiguredHost(t *testing.T) {
 	client, err := NewClient(
 		"gitea.test:3000",
 		testTokenSource("token"),
-		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	Require.NoError(t, err)
 	assert.Equal(t, "https://gitea.test:3000", client.baseURL)
 }
@@ -136,8 +132,7 @@ func TestClientUsesExplicitHTTPBaseURLAndScopesTokenToItsOrigin(t *testing.T) {
 	client, err := NewClient(
 		"gitea.test", testTokenSource("gitea-token"),
 		WithBaseURL(server.URL+"/", true),
-		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	assert.Equal(server.URL, client.baseURL)
 
@@ -173,8 +168,7 @@ func TestClientRejectsUnsafeExplicitBaseURL(t *testing.T) {
 			_, err := NewClient(
 				"gitea.test", testTokenSource("token"),
 				WithBaseURL(tt.baseURL, tt.allowInsecure),
-				WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now),
-			)
+				WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 			Require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.want)
 		})
@@ -204,8 +198,7 @@ func TestClientRejectsIncompatibleAdvertisedCloneTransport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, err := NewClient(
 				"gitea.test", testTokenSource("token"),
-				WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now),
-			)
+				WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 			Require.NoError(t, err)
 			client.allowInsecureHTTP = tt.allowInsecure
 			err = client.validateRepositoryCloneURL(platform.Repository{
@@ -250,8 +243,7 @@ func TestClientReadsGiteaActionsChecks(t *testing.T) {
 
 	client, err := NewClient(
 		"gitea.test", testTokenSource("gitea-token"),
-		WithBaseURL(server.URL, true), WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now),
-	)
+		WithBaseURL(server.URL, true), WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	checks, err := client.ListCIChecks(context.Background(), platform.RepoRef{Owner: "owner", Name: "repo"}, "abc")
 	require.NoError(err)
@@ -307,7 +299,7 @@ func TestClientReadsTimelineAssignmentAndTitleEvents(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient("gitea.test", testTokenSource("gitea-token"), WithBaseURL(server.URL, true), WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("gitea.test", testTokenSource("gitea-token"), WithBaseURL(server.URL, true), WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	ref := platform.RepoRef{Host: "gitea.test", Owner: "owner", Name: "repo", RepoPath: "owner/repo"}
 
@@ -420,7 +412,7 @@ func TestClientRequestChangesSubmitsReview(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient("gitea.test", testTokenSource("gitea-token"), WithBaseURL(server.URL, true), WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("gitea.test", testTokenSource("gitea-token"), WithBaseURL(server.URL, true), WithServerVersion(testGiteaServerVersion), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	require.NoError(client.RequestChanges(
 		context.Background(), platform.RepoRef{Owner: "owner", Name: "repo"},

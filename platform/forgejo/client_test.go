@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	Require "github.com/stretchr/testify/require"
@@ -74,7 +73,7 @@ func TestClientReadsIssuePullReferenceTimelineEvents(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient("codeberg.test", testTokenSource("forgejo-token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("codeberg.test", testTokenSource("forgejo-token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	events, err := client.ListIssueEvents(context.Background(), platform.RepoRef{
 		Host: "codeberg.test", Owner: "owner", Name: "repo", RepoPath: "owner/repo",
@@ -118,7 +117,7 @@ func TestClientReadsForgejoActionsChecks(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient("forgejo.test", testTokenSource("forgejo-token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("forgejo.test", testTokenSource("forgejo-token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	checks, err := client.ListCIChecks(context.Background(), platform.RepoRef{Owner: "owner", Name: "repo"}, "abc")
 	require.NoError(err)
@@ -161,7 +160,7 @@ func TestClientReadsCommitStatusesWhenActionsEndpointUnavailable(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewClient("codeberg.test", testTokenSource("forgejo-token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport), WithClock(time.Now))
+			client, err := NewClient("codeberg.test", testTokenSource("forgejo-token"), WithBaseURLForTesting(server.URL), WithTransport(http.DefaultTransport))
 			require.NoError(err)
 			ref := platform.RepoRef{Owner: "owner", Name: "repo"}
 

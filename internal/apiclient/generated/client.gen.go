@@ -587,63 +587,6 @@ func (e KataWorkspaceTargetResponseResolutionStatus) Valid() bool {
 	}
 }
 
-// Defines values for LandedWorkClaimAssurance.
-const (
-	Unverified LandedWorkClaimAssurance = "unverified"
-	Verified   LandedWorkClaimAssurance = "verified"
-)
-
-// Valid indicates whether the value is a known member of the LandedWorkClaimAssurance enum.
-func (e LandedWorkClaimAssurance) Valid() bool {
-	switch e {
-	case Unverified:
-		return true
-	case Verified:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for LandedWorkClaimKind.
-const (
-	GitEmail             LandedWorkClaimKind = "git_email"
-	SourceProviderUserId LandedWorkClaimKind = "source_provider_user_id"
-)
-
-// Valid indicates whether the value is a known member of the LandedWorkClaimKind enum.
-func (e LandedWorkClaimKind) Valid() bool {
-	switch e {
-	case GitEmail:
-		return true
-	case SourceProviderUserId:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for LandedWorkClaimRole.
-const (
-	Author   LandedWorkClaimRole = "author"
-	Coauthor LandedWorkClaimRole = "coauthor"
-	Merger   LandedWorkClaimRole = "merger"
-)
-
-// Valid indicates whether the value is a known member of the LandedWorkClaimRole enum.
-func (e LandedWorkClaimRole) Valid() bool {
-	switch e {
-	case Author:
-		return true
-	case Coauthor:
-		return true
-	case Merger:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for MergeRequestKanbanStatus.
 const (
 	MergeRequestKanbanStatusAwaitingMerge MergeRequestKanbanStatus = "awaiting_merge"
@@ -728,30 +671,6 @@ func (e MergeRequestResponseState) Valid() bool {
 	case MergeRequestResponseStateMerged:
 		return true
 	case MergeRequestResponseStateOpen:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for PlatformAccountType.
-const (
-	PlatformAccountTypeBot          PlatformAccountType = "bot"
-	PlatformAccountTypeOrganization PlatformAccountType = "organization"
-	PlatformAccountTypeUnknown      PlatformAccountType = "unknown"
-	PlatformAccountTypeUser         PlatformAccountType = "user"
-)
-
-// Valid indicates whether the value is a known member of the PlatformAccountType enum.
-func (e PlatformAccountType) Valid() bool {
-	switch e {
-	case PlatformAccountTypeBot:
-		return true
-	case PlatformAccountTypeOrganization:
-		return true
-	case PlatformAccountTypeUnknown:
-		return true
-	case PlatformAccountTypeUser:
 		return true
 	default:
 		return false
@@ -1564,21 +1483,6 @@ type ArchiveFailureResponse struct {
 	NextRetryAt *time.Time `json:"next_retry_at,omitempty"`
 }
 
-// ArchiveLandingResponse defines model for ArchiveLandingResponse.
-type ArchiveLandingResponse struct {
-	// Schema A URL to the JSON Schema for this object.
-	//
-	// Example: /api/v1/schemas/ArchiveLandingResponse.json
-	Schema         *string                     `json:"$schema,omitempty"`
-	Candidates     []PlatformLandingCandidate  `json:"candidates"`
-	Capabilities   PlatformLandingCapabilities `json:"capabilities"`
-	CompletedAt    time.Time                   `json:"completed_at"`
-	Coverage       PlatformLandingCoverage     `json:"coverage"`
-	Repository     PlatformLandingRepository   `json:"repository"`
-	SnapshotSchema string                      `json:"schema"`
-	StartedAt      time.Time                   `json:"started_at"`
-}
-
 // ArchiveMutationBody defines model for ArchiveMutationBody.
 type ArchiveMutationBody struct {
 	// Schema A URL to the JSON Schema for this object.
@@ -1716,7 +1620,6 @@ type ArchiveReportResponse struct {
 	Activity     *[]ArchiveReportActivityResponse   `json:"activity,omitempty"`
 	Contributors []ArchiveReportContributorResponse `json:"contributors"`
 	End          time.Time                          `json:"end"`
-	LandedWork   *LandedSection                     `json:"landed_work,omitempty"`
 	Repositories []ArchiveReportRepositoryResponse  `json:"repositories"`
 	ReportSchema string                             `json:"schema"`
 	Start        time.Time                          `json:"start"`
@@ -3245,171 +3148,6 @@ type Label struct {
 	Name        string  `json:"name"`
 }
 
-// LandedMeasures defines model for LandedMeasures.
-type LandedMeasures struct {
-	ChangeLandings           int64                 `json:"change_landings"`
-	CodeChurn                *LandedWorkLineCounts `json:"code_churn"`
-	Complete                 bool                  `json:"complete"`
-	DirectPushCodeChurnShare *float64              `json:"direct_push_code_churn_share"`
-	DirectPushLandingShare   *float64              `json:"direct_push_landing_share"`
-	DirectPushLandings       int64                 `json:"direct_push_landings"`
-	DirectPushRawChurnShare  *float64              `json:"direct_push_raw_churn_share"`
-	IntroducedCommits        int64                 `json:"introduced_commits"`
-	RawChurn                 *LandedWorkLineCounts `json:"raw_churn"`
-}
-
-// LandedSection defines model for LandedSection.
-type LandedSection struct {
-	Correspondence LandedWorkCorrespondence `json:"correspondence"`
-	Evidence       LandedWorkResult         `json:"evidence"`
-	GitTime        LandedTimeView           `json:"git_time"`
-	Graph          LandedMeasures           `json:"graph"`
-	ProviderTime   LandedTimeView           `json:"provider_time"`
-	Schema         string                   `json:"schema"`
-	Snapshot       PlatformLandingSnapshot  `json:"snapshot"`
-}
-
-// LandedTimeView defines model for LandedTimeView.
-type LandedTimeView struct {
-	Assurance           string         `json:"assurance"`
-	End                 time.Time      `json:"end"`
-	Measures            LandedMeasures `json:"measures"`
-	Start               time.Time      `json:"start"`
-	UnknownTimeLandings int64          `json:"unknown_time_landings"`
-}
-
-// LandedWorkChurn defines model for LandedWorkChurn.
-type LandedWorkChurn struct {
-	Code       *LandedWorkLineCounts    `json:"code"`
-	Exclusions []LandedWorkExcludedFile `json:"exclusions"`
-	Files      []LandedWorkFileChange   `json:"files"`
-	Raw        *LandedWorkLineCounts    `json:"raw"`
-}
-
-// LandedWorkClaim defines model for LandedWorkClaim.
-type LandedWorkClaim struct {
-	AccountType    *string                  `json:"account_type,omitempty"`
-	Assurance      LandedWorkClaimAssurance `json:"assurance"`
-	Derivation     string                   `json:"derivation"`
-	Email          PlatformRawBytes         `json:"email"`
-	Instance       *string                  `json:"instance,omitempty"`
-	Kind           LandedWorkClaimKind      `json:"kind"`
-	Provider       *string                  `json:"provider,omitempty"`
-	ProviderUserId *string                  `json:"provider_user_id,omitempty"`
-	RawByline      PlatformRawBytes         `json:"raw_byline"`
-	RawEmail       PlatformRawBytes         `json:"raw_email"`
-	Role           LandedWorkClaimRole      `json:"role"`
-}
-
-// LandedWorkClaimAssurance defines model for LandedWorkClaim.Assurance.
-type LandedWorkClaimAssurance string
-
-// LandedWorkClaimKind defines model for LandedWorkClaim.Kind.
-type LandedWorkClaimKind string
-
-// LandedWorkClaimRole defines model for LandedWorkClaim.Role.
-type LandedWorkClaimRole string
-
-// LandedWorkCommitEvidence defines model for LandedWorkCommitEvidence.
-type LandedWorkCommitEvidence struct {
-	AuthorTime      time.Time         `json:"author_time"`
-	Claims          []LandedWorkClaim `json:"claims"`
-	CommitterTime   time.Time         `json:"committer_time"`
-	DeclaredReverts []string          `json:"declared_reverts"`
-	Id              string            `json:"id"`
-}
-
-// LandedWorkCorrespondence defines model for LandedWorkCorrespondence.
-type LandedWorkCorrespondence struct {
-	AnalysisHead string                   `json:"analysis_head"`
-	Complete     bool                     `json:"complete"`
-	ProviderHead string                   `json:"provider_head"`
-	Reason       string                   `json:"reason"`
-	Warnings     []LandedWorkRouteWarning `json:"warnings"`
-}
-
-// LandedWorkExcludedFile defines model for LandedWorkExcludedFile.
-type LandedWorkExcludedFile struct {
-	Path   PlatformRawBytes `json:"path"`
-	Reason string           `json:"reason"`
-	Side   string           `json:"side"`
-}
-
-// LandedWorkFileChange defines model for LandedWorkFileChange.
-type LandedWorkFileChange struct {
-	Additions *int64           `json:"additions"`
-	Binary    bool             `json:"binary"`
-	Deletions *int64           `json:"deletions"`
-	NewBlob   string           `json:"new_blob"`
-	NewMode   string           `json:"new_mode"`
-	NewPath   PlatformRawBytes `json:"new_path"`
-	OldBlob   string           `json:"old_blob"`
-	OldMode   string           `json:"old_mode"`
-	OldPath   PlatformRawBytes `json:"old_path"`
-	Renamed   bool             `json:"renamed"`
-}
-
-// LandedWorkGap defines model for LandedWorkGap.
-type LandedWorkGap struct {
-	ChangeId string `json:"change_id"`
-	FirstSha string `json:"first_sha"`
-	LastSha  string `json:"last_sha"`
-	Reason   string `json:"reason"`
-}
-
-// LandedWorkLanding defines model for LandedWorkLanding.
-type LandedWorkLanding struct {
-	ChangeId         string                     `json:"change_id"`
-	Churn            LandedWorkChurn            `json:"churn"`
-	Claims           []LandedWorkClaim          `json:"claims"`
-	Introduced       []LandedWorkCommitEvidence `json:"introduced"`
-	MergedAt         *time.Time                 `json:"merged_at"`
-	Method           string                     `json:"method"`
-	Origin           string                     `json:"origin"`
-	Parent           string                     `json:"parent"`
-	ProviderEvidence *PlatformLandingCandidate  `json:"provider_evidence"`
-	Sources          []LandedWorkCommitEvidence `json:"sources"`
-	Spine            []string                   `json:"spine"`
-	Terminal         string                     `json:"terminal"`
-	TerminalCommit   LandedWorkCommitEvidence   `json:"terminal_commit"`
-}
-
-// LandedWorkLineCounts defines model for LandedWorkLineCounts.
-type LandedWorkLineCounts struct {
-	Additions int64 `json:"additions"`
-	Deletions int64 `json:"deletions"`
-}
-
-// LandedWorkPresence defines model for LandedWorkPresence.
-type LandedWorkPresence struct {
-	Id      string `json:"id"`
-	Present bool   `json:"present"`
-}
-
-// LandedWorkResult defines model for LandedWorkResult.
-type LandedWorkResult struct {
-	Analyzer      string                     `json:"analyzer"`
-	BaseSha       string                     `json:"base_sha"`
-	CertifiedHead string                     `json:"certified_head"`
-	Complete      bool                       `json:"complete"`
-	Digest        string                     `json:"digest"`
-	Diverged      bool                       `json:"diverged"`
-	Gaps          []LandedWorkGap            `json:"gaps"`
-	HeadSha       string                     `json:"head_sha"`
-	Landings      []LandedWorkLanding        `json:"landings"`
-	Policy        string                     `json:"policy"`
-	Presence      []LandedWorkPresence       `json:"presence"`
-	Repository    PlatformRepositoryIdentity `json:"repository"`
-	Schema        string                     `json:"schema"`
-}
-
-// LandedWorkRouteWarning defines model for LandedWorkRouteWarning.
-type LandedWorkRouteWarning struct {
-	ProviderRoute string `json:"provider_route"`
-	Reason        string `json:"reason"`
-	RemoteRoute   string `json:"remote_route"`
-}
-
 // LaunchHostRuntimeSessionInputBody defines model for LaunchHostRuntimeSessionInputBody.
 type LaunchHostRuntimeSessionInputBody struct {
 	// Schema A URL to the JSON Schema for this object.
@@ -3993,112 +3731,12 @@ type OperationAvailability struct {
 	UnavailableReason  *string `json:"unavailable_reason,omitempty"`
 }
 
-// PlatformAccount defines model for PlatformAccount.
-type PlatformAccount struct {
-	DisplayName string              `json:"display_name"`
-	Id          string              `json:"id"`
-	Login       string              `json:"login"`
-	Type        PlatformAccountType `json:"type"`
-}
-
-// PlatformAccountType defines model for PlatformAccount.Type.
-type PlatformAccountType string
-
 // PlatformIdentityPayload defines model for PlatformIdentityPayload.
 type PlatformIdentityPayload struct {
 	Name         string `json:"name"`
 	Owner        string `json:"owner"`
 	Platform     string `json:"platform"`
 	PlatformHost string `json:"platform_host"`
-}
-
-// PlatformLandingCandidate defines model for PlatformLandingCandidate.
-type PlatformLandingCandidate struct {
-	Additions        *int64                      `json:"additions"`
-	Author           *PlatformAccount            `json:"author"`
-	BaseRepository   *PlatformRepositoryIdentity `json:"base_repository"`
-	Deletions        *int64                      `json:"deletions"`
-	FilesChanged     *int64                      `json:"files_changed"`
-	Id               string                      `json:"id"`
-	MergeSha         PlatformSHAField            `json:"merge_sha"`
-	MergedAt         *time.Time                  `json:"merged_at"`
-	Merger           *PlatformAccount            `json:"merger"`
-	Method           string                      `json:"method"`
-	MethodProof      string                      `json:"method_proof"`
-	Number           int64                       `json:"number"`
-	OpenedAt         *time.Time                  `json:"opened_at"`
-	PossibleSpan     *PlatformLandingSpan        `json:"possible_span"`
-	SourceCommits    []string                    `json:"source_commits"`
-	SourceComplete   bool                        `json:"source_complete"`
-	SourceHeadSha    PlatformSHAField            `json:"source_head_sha"`
-	SourceRepository *PlatformRepositoryIdentity `json:"source_repository"`
-	SquashSha        PlatformSHAField            `json:"squash_sha"`
-	TargetBranch     string                      `json:"target_branch"`
-	TerminalProof    string                      `json:"terminal_proof"`
-	TerminalSha      string                      `json:"terminal_sha"`
-}
-
-// PlatformLandingCapabilities defines model for PlatformLandingCapabilities.
-type PlatformLandingCapabilities struct {
-	AccountType                bool `json:"account_type"`
-	CompleteCandidateInventory bool `json:"complete_candidate_inventory"`
-	FastForwardRange           bool `json:"fast_forward_range"`
-	OrdinaryMerge              bool `json:"ordinary_merge"`
-	RebaseRange                bool `json:"rebase_range"`
-	Squash                     bool `json:"squash"`
-	TrustedRefUpdateTime       bool `json:"trusted_ref_update_time"`
-}
-
-// PlatformLandingCoverage defines model for PlatformLandingCoverage.
-type PlatformLandingCoverage struct {
-	Complete   bool   `json:"complete"`
-	NextCursor string `json:"next_cursor"`
-	Reason     string `json:"reason"`
-}
-
-// PlatformLandingRepository defines model for PlatformLandingRepository.
-type PlatformLandingRepository struct {
-	CloneUrl      string                     `json:"clone_url"`
-	DefaultBranch string                     `json:"default_branch"`
-	HeadSha       string                     `json:"head_sha"`
-	Identity      PlatformRepositoryIdentity `json:"identity"`
-	Name          string                     `json:"name"`
-	Owner         string                     `json:"owner"`
-}
-
-// PlatformLandingSnapshot defines model for PlatformLandingSnapshot.
-type PlatformLandingSnapshot struct {
-	Candidates   []PlatformLandingCandidate  `json:"candidates"`
-	Capabilities PlatformLandingCapabilities `json:"capabilities"`
-	CompletedAt  time.Time                   `json:"completed_at"`
-	Coverage     PlatformLandingCoverage     `json:"coverage"`
-	Repository   PlatformLandingRepository   `json:"repository"`
-	Schema       string                      `json:"schema"`
-	StartedAt    time.Time                   `json:"started_at"`
-}
-
-// PlatformLandingSpan defines model for PlatformLandingSpan.
-type PlatformLandingSpan struct {
-	FirstSha string `json:"first_sha"`
-	LastSha  string `json:"last_sha"`
-}
-
-// PlatformRawBytes defines model for PlatformRawBytes.
-type PlatformRawBytes struct {
-	Base64 string `json:"base64"`
-}
-
-// PlatformRepositoryIdentity defines model for PlatformRepositoryIdentity.
-type PlatformRepositoryIdentity struct {
-	Id       string `json:"id"`
-	Instance string `json:"instance"`
-	Provider string `json:"provider"`
-}
-
-// PlatformSHAField defines model for PlatformSHAField.
-type PlatformSHAField struct {
-	Present bool   `json:"present"`
-	Value   string `json:"value"`
 }
 
 // PostCommentHostInputBody defines model for PostCommentHostInputBody.
@@ -6170,12 +5808,6 @@ type ReceiveAgentHookParams struct {
 	XKennForgeRuntimeSessionKey *string `json:"X-Kenn-Forge-Runtime-Session-Key,omitempty"`
 }
 
-// GetArchiveLandingEvidenceParams defines parameters for GetArchiveLandingEvidence.
-type GetArchiveLandingEvidenceParams struct {
-	// Repo One canonical provider|platform_host/repo_path selector.
-	Repo string `form:"repo" json:"repo"`
-}
-
 // GetArchiveReportParams defines parameters for GetArchiveReport.
 type GetArchiveReportParams struct {
 	// Start Inclusive UTC RFC3339 boundary.
@@ -7515,11 +7147,6 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /agent-hooks/{agent} (the `ReceiveAgentHook` operationId).
 	ReceiveAgentHook(ctx context.Context, agent string, params *ReceiveAgentHookParams, body ReceiveAgentHookJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetArchiveLandingEvidence Collect bounded landed-work provider evidence
-	//
-	// Corresponds with GET /archive/landing-evidence (the `GetArchiveLandingEvidence` operationId).
-	GetArchiveLandingEvidence(ctx context.Context, params *GetArchiveLandingEvidenceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListArchivePacing List archive hydration pacing per provider credential
 	//
@@ -10467,21 +10094,6 @@ func (c *Client) ReceiveAgentHookWithBody(ctx context.Context, agent string, par
 // Corresponds with POST /agent-hooks/{agent} (the `ReceiveAgentHook` operationId).
 func (c *Client) ReceiveAgentHook(ctx context.Context, agent string, params *ReceiveAgentHookParams, body ReceiveAgentHookJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReceiveAgentHookRequest(c.Server, agent, params, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetArchiveLandingEvidence Collect bounded landed-work provider evidence
-//
-// Corresponds with GET /archive/landing-evidence (the `GetArchiveLandingEvidence` operationId).
-func (c *Client) GetArchiveLandingEvidence(ctx context.Context, params *GetArchiveLandingEvidenceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetArchiveLandingEvidenceRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -18627,56 +18239,6 @@ func NewReceiveAgentHookRequestWithBody(server string, agent string, params *Rec
 			req.Header.Set("X-Kenn-Forge-Runtime-Session-Key", headerParam0)
 		}
 
-	}
-
-	return req, nil
-}
-
-// NewGetArchiveLandingEvidenceRequest constructs an http.Request for the GetArchiveLandingEvidence method
-func NewGetArchiveLandingEvidenceRequest(server string, params *GetArchiveLandingEvidenceParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/archive/landing-evidence")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if queryFrag, err := runtime.StyleParamWithOptions("form", false, "repo", params.Repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-			return nil, err
-		} else {
-			for _, qp := range strings.Split(queryFrag, "&") {
-				rawQueryFragments = append(rawQueryFragments, qp)
-			}
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
 	}
 
 	return req, nil
@@ -38820,9 +38382,6 @@ type ClientWithResponsesInterface interface {
 
 	ReceiveAgentHookWithResponse(ctx context.Context, agent string, params *ReceiveAgentHookParams, body ReceiveAgentHookJSONRequestBody, reqEditors ...RequestEditorFn) (*ReceiveAgentHookResponse, error)
 
-	// GetArchiveLandingEvidenceWithResponse request
-	GetArchiveLandingEvidenceWithResponse(ctx context.Context, params *GetArchiveLandingEvidenceParams, reqEditors ...RequestEditorFn) (*GetArchiveLandingEvidenceResponse, error)
-
 	// ListArchivePacingWithResponse request
 	ListArchivePacingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListArchivePacingResponse, error)
 
@@ -40178,29 +39737,6 @@ func (r ReceiveAgentHookResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ReceiveAgentHookResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetArchiveLandingEvidenceResponse struct {
-	Body                          []byte
-	HTTPResponse                  *http.Response
-	JSON200                       *ArchiveLandingResponse
-	ApplicationproblemJSONDefault *ProblemError
-}
-
-// Status returns HTTPResponse.Status
-func (r GetArchiveLandingEvidenceResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetArchiveLandingEvidenceResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -47882,15 +47418,6 @@ func (c *ClientWithResponses) ReceiveAgentHookWithResponse(ctx context.Context, 
 	return ParseReceiveAgentHookResponse(rsp)
 }
 
-// GetArchiveLandingEvidenceWithResponse request returning *GetArchiveLandingEvidenceResponse
-func (c *ClientWithResponses) GetArchiveLandingEvidenceWithResponse(ctx context.Context, params *GetArchiveLandingEvidenceParams, reqEditors ...RequestEditorFn) (*GetArchiveLandingEvidenceResponse, error) {
-	rsp, err := c.GetArchiveLandingEvidence(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetArchiveLandingEvidenceResponse(rsp)
-}
-
 // ListArchivePacingWithResponse request returning *ListArchivePacingResponse
 func (c *ClientWithResponses) ListArchivePacingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListArchivePacingResponse, error) {
 	rsp, err := c.ListArchivePacing(ctx, reqEditors...)
@@ -52076,39 +51603,6 @@ func ParseReceiveAgentHookResponse(rsp *http.Response) (*ReceiveAgentHookRespons
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest AgentHookResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest ProblemError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetArchiveLandingEvidenceResponse parses an HTTP response from a GetArchiveLandingEvidenceWithResponse call
-func ParseGetArchiveLandingEvidenceResponse(rsp *http.Response) (*GetArchiveLandingEvidenceResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetArchiveLandingEvidenceResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ArchiveLandingResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

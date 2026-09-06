@@ -3,7 +3,6 @@ package gitlab
 import (
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	Require "github.com/stretchr/testify/require"
@@ -14,7 +13,7 @@ import (
 // capability error instead of silently behaving GitHub-only; pin
 // both the error shape and the undeclared capability flags.
 func TestNotificationStubsReturnUnsupportedCapability(t *testing.T) {
-	client, err := NewClient("gitlab.example.com", testTokenSource("token"), WithTransport(http.DefaultTransport), WithClock(time.Now))
+	client, err := NewClient("gitlab.example.com", testTokenSource("token"), WithTransport(http.DefaultTransport))
 	require := Require.New(t)
 	require.NoError(err)
 

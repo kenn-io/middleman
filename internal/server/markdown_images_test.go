@@ -165,8 +165,7 @@ func TestMarkdownImageRouteMapsGitLabServerErrorToUpstreamError(t *testing.T) {
 		testTokenSource("gitlab-token"),
 		platformgitlab.WithBaseURLForTesting(gitlabServer.URL+"/api/v4"),
 		platformgitlab.WithoutRetriesForTesting(), platformgitlab.
-			WithTransport(http.DefaultTransport), platformgitlab.
-			WithClock(time.Now),
+			WithTransport(http.DefaultTransport),
 	)
 	require.NoError(err)
 	registry, err := platform.NewRegistry(provider)
@@ -231,8 +230,7 @@ func TestMarkdownImageRouteResolvesOpaqueGitLabProjectID(t *testing.T) {
 		testTokenSource("gitlab-token"),
 		platformgitlab.WithBaseURLForTesting(gitlabServer.URL+"/api/v4"),
 		platformgitlab.WithoutRetriesForTesting(), platformgitlab.
-			WithTransport(http.DefaultTransport), platformgitlab.
-			WithClock(time.Now),
+			WithTransport(http.DefaultTransport),
 	)
 	require.NoError(err)
 	registry, err := platform.NewRegistry(provider)

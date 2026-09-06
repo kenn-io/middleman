@@ -80,8 +80,7 @@ func TestEssentialReserveKeepsDiscoveryAliveAfterOptionalExhaustion(t *testing.T
 			"gitlab.example.com", staticGitLabToken("token"),
 			gitlab.WithBaseURLForTesting(server.URL+"/api/v4"),
 			gitlab.WithoutRetriesForTesting(),
-			gitlab.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)), gitlab.WithClock(time.Now),
-		)
+			gitlab.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)))
 		require.NoError(err)
 		registry, err := ghclient.NewProviderRegistry(nil, client)
 		require.NoError(err)

@@ -130,8 +130,7 @@ func TestGitLabContainerE2E(t *testing.T) {
 		testTokenSource(manifest.Token),
 		platformgitlab.WithBaseURLForTesting(manifest.APIURL),
 		platformgitlab.WithForegroundTimeoutForTesting(time.Minute), platformgitlab.
-			WithTransport(http.DefaultTransport), platformgitlab.
-			WithClock(time.Now),
+			WithTransport(http.DefaultTransport),
 	)
 	require.NoError(err)
 

@@ -178,10 +178,6 @@ type archiveReportOptions struct {
 	verbose      bool
 	output       string
 	repositories archiveStringList
-	landedWork   bool
-	gitDirectory string
-	baseSHA      string
-	headSHA      string
 }
 
 func newArchiveReportCommand(stdout io.Writer, now func() time.Time) *cobra.Command {
@@ -191,11 +187,6 @@ func newArchiveReportCommand(stdout io.Writer, now func() time.Time) *cobra.Comm
 		Short: "Render repository archive activity",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			for _, flag := range []string{"git-dir", "base-sha", "head-sha"} {
-				if cmd.Flags().Changed(flag) && !opts.landedWork {
-					return fmt.Errorf("--%s requires --landed-work", flag)
-				}
-			}
 			return runArchiveReport(opts, cmd.Flags().Changed("days"), stdout, now)
 		},
 	}
@@ -207,17 +198,10 @@ func newArchiveReportCommand(stdout io.Writer, now func() time.Time) *cobra.Comm
 	cmd.Flags().BoolVar(&opts.verbose, "verbose", false, "include bounded activity details")
 	cmd.Flags().StringVar(&opts.output, "output", "", "write output atomically to this file")
 	cmd.Flags().Var(&opts.repositories, "repo", "provider|host/repo_path; repeat for multiple repositories")
-	cmd.Flags().BoolVar(&opts.landedWork, "landed-work", false, "append landed-work evidence from an explicit local Git interval")
-	cmd.Flags().StringVar(&opts.gitDirectory, "git-dir", "", "local repository used by --landed-work (never fetched)")
-	cmd.Flags().StringVar(&opts.baseSHA, "base-sha", "", "exclusive full commit SHA for --landed-work")
-	cmd.Flags().StringVar(&opts.headSHA, "head-sha", "", "inclusive full commit SHA for --landed-work")
 	return cmd
 }
 
 func runArchiveReport(opts archiveReportOptions, daysSet bool, stdout io.Writer, now func() time.Time) error {
-	if err := validateArchiveLandedOptions(opts); err != nil {
-		return err
-	}
 	if daysSet && opts.days <= 0 {
 		return errors.New("--days must be positive")
 	}
@@ -259,19 +243,9 @@ func runArchiveReport(opts archiveReportOptions, daysSet bool, stdout io.Writer,
 	if err != nil {
 		return fmt.Errorf("decode archive report: %w", err)
 	}
-	if opts.landedWork {
-		section, err := collectArchiveLanded(ctx, client, opts, refs[0], start, end)
-		if err != nil {
-			return err
-		}
-		model.LandedWork = &section
-	}
 	rendered, err := renderArchiveReport(model, opts.format)
 	if err != nil {
 		return err
-	}
-	if opts.landedWork && len(rendered) > report.MaxDetailedTextBytes {
-		return errors.New("landed-work report is too large; narrow the Git interval")
 	}
 	if opts.output != "" {
 		return writeArchiveOutput(opts.output, rendered)
@@ -390,13 +364,6 @@ func archiveReportFromAPI(input generated.ArchiveReportResponse) (report.Model, 
 		Schema: input.ReportSchema,
 		Start:  input.Start.UTC(),
 		End:    input.End.UTC(),
-	}
-	if input.LandedWork != nil {
-		section, err := archiveLandedSectionFromAPI(*input.LandedWork)
-		if err != nil {
-			return report.Model{}, err
-		}
-		model.LandedWork = &section
 	}
 	if input.Repositories != nil {
 		model.Repositories = make([]report.Repository, len(input.Repositories))
@@ -518,7 +485,11 @@ func renderArchiveReport(model report.Model, format string) (string, error) {
 	if format == "markdown" {
 		return report.RenderMarkdown(model)
 	}
-	return report.RenderJSON(model)
+	data, err := json.MarshalIndent(model, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("render archive report JSON: %w", err)
+	}
+	return string(data) + "\n", nil
 }
 
 func writeArchiveJSON(output io.Writer, value any) error {

@@ -130,7 +130,6 @@ var providerRouteDeclarations = []ProviderRouteRule{
 	{OperationID: "federation-set-workflow-state", Owner: ProviderHubOnly, PeerScope: federationauth.ScopeProviderWrite},
 	{OperationID: "federation-update-provider-settings", Owner: ProviderHubOnly, PeerScope: federationauth.ScopeProviderWrite},
 	{OperationID: "get-archive-report", Owner: ProviderHubOnly, PeerScope: federationauth.ScopeProviderRead},
-	{OperationID: "get-archive-landing-evidence", Owner: ProviderHubOnly, PeerScope: federationauth.ScopeProviderRead},
 	{OperationID: "get-comment-autocomplete", Owner: ProviderHubOnly, PeerScope: federationauth.ScopeProviderRead},
 	{OperationID: "get-comment-autocomplete-on-host", Owner: ProviderHubOnly, PeerScope: federationauth.ScopeProviderRead},
 	{OperationID: "get-docs-git-changes", Owner: NodeLocal},

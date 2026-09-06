@@ -437,21 +437,12 @@ func mapGitHubReadError(host string, now func() time.Time, capability platform.A
 			PlatformHost: host, Capability: string(capability), ResetAt: resetAt, Err: err}
 	}
 	status := StatusCode(err)
-	if capability == "read_account" && status == http.StatusNotFound {
-		return &platform.Error{Code: platform.ErrCodeNotFound, Provider: platform.KindGitHub, PlatformHost: host, Capability: string(capability), Err: err}
-	}
 	if status == http.StatusTooManyRequests ||
 		status == http.StatusForbidden && response != nil && response.Header.Get("X-RateLimit-Remaining") == "0" {
 		return &platform.Error{Code: platform.ErrCodeRateLimited, Provider: platform.KindGitHub,
 			PlatformHost: host, Capability: string(capability), ResetAt: resetAt, Err: err}
 	}
-	if status == http.StatusUnauthorized {
-		// This proves rejection of the request token, not of an App private key.
-		// App-key and installation lifecycle proofs belong to githubapp.
-		return &platform.Error{Code: platform.ErrCodeCredentialRejected, Provider: platform.KindGitHub,
-			PlatformHost: host, Capability: string(capability), Details: map[string]string{"credential_scope": "request_token"}, Err: err}
-	}
-	if status == http.StatusForbidden {
+	if status == http.StatusForbidden || status == http.StatusUnauthorized {
 		return &platform.Error{Code: platform.ErrCodePermissionDenied, Provider: platform.KindGitHub,
 			PlatformHost: host, Capability: string(capability), Err: err}
 	}
