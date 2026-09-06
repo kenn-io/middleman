@@ -451,9 +451,9 @@ type cancelDuringSyncMockClient struct {
 	entered chan struct{}
 }
 
-func (c *cancelDuringSyncMockClient) ListOpenPullRequests(
+func (c *cancelDuringSyncMockClient) GetRepository(
 	ctx context.Context, _, _ string,
-) ([]*gh.PullRequest, error) {
+) (*gh.Repository, error) {
 	select {
 	case c.entered <- struct{}{}:
 	default:
@@ -491,7 +491,7 @@ func TestRunOnceCancelDuringSyncRepoDoesNotReportSuccess(t *testing.T) {
 	select {
 	case <-mc.entered:
 	case <-time.After(2 * time.Second):
-		require.Fail("worker did not enter ListOpenPullRequests")
+		require.Fail("worker did not enter GetRepository")
 	}
 
 	cancel()

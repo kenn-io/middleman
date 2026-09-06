@@ -39,3 +39,31 @@ func TestPublicClientKeepsReadAndViewerTransportsSeparate(t *testing.T) {
 	assert.Equal(int64(17), repo.GetID())
 	assert.False(repo.Permissions.GetPush())
 }
+
+func TestPublicClientEmptyHostUsesGitHubDotCom(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
+	requests := 0
+	transport := platform.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		assert.Equal("https://api.github.com/repos/team-a/project-a", req.URL.String())
+		return &http.Response{
+			StatusCode: 200,
+			Header:     make(http.Header),
+			Body: io.NopCloser(strings.NewReader(
+				`{"id":17,"name":"project-a","owner":{"login":"team-a"}}`,
+			)),
+			Request: req,
+		}, nil
+	})
+	httpClient := &http.Client{Transport: transport}
+	client, err := github.NewClient(github.ClientConfig{
+		Read: httpClient, Write: httpClient, Notifications: httpClient, Clock: time.Now,
+	})
+	require.NoError(err)
+
+	repo, err := client.GetRepository(t.Context(), "team-a", "project-a")
+	require.NoError(err)
+	assert.Equal(int64(17), repo.GetID())
+	assert.Equal(1, requests)
+}

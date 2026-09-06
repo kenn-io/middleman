@@ -59,6 +59,9 @@ type ClientConfig struct {
 
 func NewClient(config ClientConfig) (*Client, error) {
 	host := config.Host
+	if host == "" {
+		host = platform.DefaultGitHubHost
+	}
 	if config.Read == nil || config.Write == nil || config.Notifications == nil || config.Clock == nil {
 		return nil, &platform.Error{Code: platform.ErrCodeInvalidArgument, Provider: platform.KindGitHub,
 			PlatformHost: host, Err: errors.New("read, write and notification clients and a clock are required")}
