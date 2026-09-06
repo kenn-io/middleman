@@ -11,13 +11,14 @@
 
 <script lang="ts">
   import { Button, Checkbox, SelectDropdown, type SelectDropdownOption } from "@kenn-io/kit-ui";
-  import type { components } from "../../api/generated/schema.js";
+  import type { WorkflowDefinitionResponse } from "../../api/generated/models/workflowDefinitionResponse.js";
+  import type { WorkflowEnvironmentResponse } from "../../api/generated/models/workflowEnvironmentResponse.js";
   import type { OperationAvailability } from "../../api/types.js";
   import { isSafeExternalHTTPURL } from "../../utils/safe-external-url.js";
   import { untrack } from "svelte";
   import type { Attachment } from "svelte/attachments";
-  type Workflow = components["schemas"]["WorkflowDefinitionResponse"];
-  type Environment = components["schemas"]["WorkflowEnvironmentResponse"];
+  type Workflow = WorkflowDefinitionResponse;
+  type Environment = WorkflowEnvironmentResponse;
 
   interface Props {
     workflow: Workflow;

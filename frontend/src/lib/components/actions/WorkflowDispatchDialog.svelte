@@ -1,15 +1,16 @@
 <script lang="ts">
   import { tick } from "svelte";
   import type { Attachment } from "svelte/attachments";
-  import type { components } from "../../api/generated/schema.js";
+  import type { WorkflowDefinitionResponse } from "../../api/generated/models/workflowDefinitionResponse.js";
+  import type { WorkflowEnvironmentResponse } from "../../api/generated/models/workflowEnvironmentResponse.js";
   import type { OperationAvailability } from "../../api/types.js";
   import DialogButton from "../shared/DialogButton.svelte";
   import Modal from "../shared/Modal.svelte";
   import WorkflowDispatchForm, { type WorkflowDispatchRequest } from "./WorkflowDispatchForm.svelte";
   import type { WorkflowDispatchPresentationState } from "./workflow-dispatch-presentation.js";
 
-  type Workflow = components["schemas"]["WorkflowDefinitionResponse"];
-  type Environment = components["schemas"]["WorkflowEnvironmentResponse"];
+  type Workflow = WorkflowDefinitionResponse;
+  type Environment = WorkflowEnvironmentResponse;
 
   interface Props {
     open: boolean;

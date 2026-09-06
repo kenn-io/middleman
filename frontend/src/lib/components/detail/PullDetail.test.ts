@@ -643,7 +643,7 @@ async function openReleaseWorkflow(detail: PullDetail, options: Parameters<typeo
   await waitFor(() => {
     expect(api.GET.mock.calls.some(([path]) => String(path).endsWith("/workflows"))).toBe(true);
   });
-  await fireEvent.click(screen.getByRole("button", { name: "Run workflow" }));
+  await fireEvent.click(await screen.findByRole("button", { name: "Run workflow" }));
   const release = await screen.findByRole("button", { name: "Release" });
   await fireEvent.click(release);
   return { ...rendered, api };
@@ -730,7 +730,7 @@ describe("PullDetail provider workflow actions", () => {
         }),
       );
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Run workflow" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Run workflow" }));
 
     expect(await screen.findByText("GitLab Actions")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Release" })).toBeTruthy();
@@ -751,7 +751,7 @@ describe("PullDetail provider workflow actions", () => {
       expect(api.GET.mock.calls.some(([path]) => String(path).endsWith("/workflows"))).toBe(true);
     });
     const grid = screen.getByRole("group", { name: "Pull request actions" });
-    await fireEvent.click(within(grid).getByRole("button", { name: "Run workflow" }));
+    await fireEvent.click(await within(grid).findByRole("button", { name: "Run workflow" }));
 
     expect(await screen.findByRole("region", { name: "GitHub Actions" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Release" })).toBeTruthy();
@@ -807,7 +807,7 @@ describe("PullDetail provider workflow actions", () => {
       expect(api.GET.mock.calls.some(([path]) => String(path).endsWith("/workflows"))).toBe(true);
     });
 
-    expect(screen.getByRole("button", { name: "Run workflow" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Run workflow" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
     expect(screen.queryByRole("button", { name: /merge/i })).toBeNull();
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();

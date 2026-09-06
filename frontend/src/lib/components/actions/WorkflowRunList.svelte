@@ -3,10 +3,11 @@
   import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import { isSafeExternalHTTPURL } from "../../utils/safe-external-url.js";
-  import type { components } from "../../api/generated/schema.js";
+  import type { WorkflowRunJobResponse } from "../../api/generated/models/workflowRunJobResponse.js";
+  import type { WorkflowRunResponse } from "../../api/generated/models/workflowRunResponse.js";
 
-  type Run = components["schemas"]["WorkflowRunResponse"];
-  type Job = components["schemas"]["WorkflowRunJobResponse"];
+  type Run = WorkflowRunResponse;
+  type Job = WorkflowRunJobResponse;
 
   interface Props {
     runs: readonly Run[];

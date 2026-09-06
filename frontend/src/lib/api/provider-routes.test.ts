@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { paths } from "./generated/schema.js";
 import { providerActionsPath, type ProviderRouteRef } from "./provider-routes.js";
 
 const github: ProviderRouteRef = {
@@ -20,7 +19,7 @@ const enterprise: ProviderRouteRef = {
 
 describe("providerActionsPath", () => {
   it("uses the provider-default route for the default host", () => {
-    const routes: ReadonlyArray<keyof paths> = [
+    const routes = [
       providerActionsPath(github, "/workflows"),
       providerActionsPath(github, "/runs"),
       providerActionsPath(github, "/runs/{run_id}/jobs"),

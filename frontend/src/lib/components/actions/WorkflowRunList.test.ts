@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { expect, it, vi } from "vitest";
-import type { components } from "../../api/generated/schema.js";
+import type { WorkflowRunJobResponse } from "../../api/generated/models/workflowRunJobResponse.js";
+import type { WorkflowRunResponse } from "../../api/generated/models/workflowRunResponse.js";
 import WorkflowRunList from "./WorkflowRunList.svelte";
 
-type Run = components["schemas"]["WorkflowRunResponse"];
-type Job = components["schemas"]["WorkflowRunJobResponse"];
+type Run = WorkflowRunResponse;
+type Job = WorkflowRunJobResponse;
 
 const runs: Run[] = [
   {

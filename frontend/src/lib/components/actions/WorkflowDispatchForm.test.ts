@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
-import type { components } from "../../api/generated/schema.js";
+import type { WorkflowDefinitionResponse } from "../../api/generated/models/workflowDefinitionResponse.js";
+import type { WorkflowEnvironmentResponse } from "../../api/generated/models/workflowEnvironmentResponse.js";
 import type { OperationAvailability } from "../../api/types.js";
 import WorkflowDispatchForm from "./WorkflowDispatchForm.svelte";
 
-type Workflow = components["schemas"]["WorkflowDefinitionResponse"];
-type Environment = components["schemas"]["WorkflowEnvironmentResponse"];
+type Workflow = WorkflowDefinitionResponse;
+type Environment = WorkflowEnvironmentResponse;
 
 const environments: Environment[] = [{ name: "staging" }, { name: "production" }];
 const available: OperationAvailability = { available: true };

@@ -1,11 +1,16 @@
 import { Effect } from "effect";
 
-import type { components } from "../api/generated/schema.js";
+import type { WorkflowCatalogResponse } from "../api/generated/models/workflowCatalogResponse.js";
+import type { WorkflowDefinitionResponse } from "../api/generated/models/workflowDefinitionResponse.js";
+import type { WorkflowEnvironmentResponse } from "../api/generated/models/workflowEnvironmentResponse.js";
+import type { WorkflowRunJobResponse } from "../api/generated/models/workflowRunJobResponse.js";
+import type { WorkflowRunResponse } from "../api/generated/models/workflowRunResponse.js";
 import { GeneratedApi, type GeneratedClient, type executeGeneratedRequest } from "../api/generated-api.js";
 import type { ApiProblemError, TransientTransportError } from "../api/effect-errors.js";
 import {
   canonicalProvider,
-  providerActionsPath,
+  providerUsesHostRoute,
+  providerHostRouteParams,
   providerRouteParams,
   resolvedPlatformHost,
   type ProviderRouteRef,
@@ -13,11 +18,11 @@ import {
 import type { AppExecution, AppRuntime } from "../app/runtime.js";
 import type { WorkflowDispatchProgressEvent } from "./provider-events-workflow.js";
 
-export type WorkflowCatalog = components["schemas"]["WorkflowCatalogResponse"];
-export type WorkflowDefinition = components["schemas"]["WorkflowDefinitionResponse"];
-export type WorkflowEnvironment = components["schemas"]["WorkflowEnvironmentResponse"];
-export type WorkflowRun = components["schemas"]["WorkflowRunResponse"];
-export type WorkflowRunJob = components["schemas"]["WorkflowRunJobResponse"];
+export type WorkflowCatalog = WorkflowCatalogResponse;
+export type WorkflowDefinition = WorkflowDefinitionResponse;
+export type WorkflowEnvironment = WorkflowEnvironmentResponse;
+export type WorkflowRun = WorkflowRunResponse;
+export type WorkflowRunJob = WorkflowRunJobResponse;
 export type WorkflowActionsError = ApiProblemError | TransientTransportError;
 
 export interface WorkflowDispatchInput {
@@ -230,10 +235,9 @@ export function createWorkflowActionsStore(options: WorkflowActionsStoreOptions)
       ref,
       (api) =>
         api.execute("GET workflow catalog", (signal) =>
-          api.client.GET(providerActionsPath(ref, "/workflows"), {
-            params: { path: providerRouteParams(ref) },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? api.client.WorkflowsService.listWorkflowsOnHost(providerHostRouteParams(ref), { signal })
+            : api.client.WorkflowsService.listWorkflows(providerRouteParams(ref), { signal }),
         ),
       {
         onFailure: (error) => {
@@ -294,13 +298,17 @@ export function createWorkflowActionsStore(options: WorkflowActionsStoreOptions)
       ref,
       (api) =>
         api.execute("GET workflow runs", (signal) =>
-          api.client.GET(providerActionsPath(ref, "/runs"), {
-            params: {
-              path: providerRouteParams(ref),
-              query: { workflow_id: workflowId, per_page: runsPageSize, ...(cursor !== undefined && { cursor }) },
-            },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? api.client.WorkflowsService.listWorkflowRunsOnHost(
+                providerHostRouteParams(ref),
+                { workflow_id: workflowId, per_page: runsPageSize, ...(cursor !== undefined && { cursor }) },
+                { signal },
+              )
+            : api.client.WorkflowsService.listWorkflowRuns(
+                providerRouteParams(ref),
+                { workflow_id: workflowId, per_page: runsPageSize, ...(cursor !== undefined && { cursor }) },
+                { signal },
+              ),
         ),
       {
         onFailure: (error) => {
@@ -377,10 +385,12 @@ export function createWorkflowActionsStore(options: WorkflowActionsStoreOptions)
       ref,
       (api) =>
         api.execute("GET workflow run jobs", (signal) =>
-          api.client.GET(providerActionsPath(ref, "/runs/{run_id}/jobs"), {
-            params: { path: { ...providerRouteParams(ref), run_id: runId } },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? api.client.WorkflowsService.listWorkflowRunJobsOnHost(
+                { ...providerHostRouteParams(ref), runId },
+                { signal },
+              )
+            : api.client.WorkflowsService.listWorkflowRunJobs({ ...providerRouteParams(ref), runId }, { signal }),
         ),
       {
         onFailure: (error) =>
@@ -417,15 +427,17 @@ export function createWorkflowActionsStore(options: WorkflowActionsStoreOptions)
       ref,
       (api) =>
         api.execute("POST workflow dispatch", (signal) =>
-          api.client.POST(providerActionsPath(ref, "/workflows/{workflow_id}/dispatch"), {
-            params: { path: { ...providerRouteParams(ref), workflow_id: workflowId } },
-            body: {
-              expected_definition_sha: input.expectedDefinitionSha,
-              inputs: input.inputs,
-              ref: input.dispatchRef,
-            },
-            signal,
-          }),
+          providerUsesHostRoute(ref)
+            ? api.client.WorkflowsService.dispatchWorkflowOnHost(
+                { ...providerHostRouteParams(ref), workflowId },
+                { expected_definition_sha: input.expectedDefinitionSha, inputs: input.inputs, ref: input.dispatchRef },
+                { signal },
+              )
+            : api.client.WorkflowsService.dispatchWorkflow(
+                { ...providerRouteParams(ref), workflowId },
+                { expected_definition_sha: input.expectedDefinitionSha, inputs: input.inputs, ref: input.dispatchRef },
+                { signal },
+              ),
         ),
       {
         onFailure: (error) =>

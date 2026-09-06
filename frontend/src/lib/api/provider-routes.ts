@@ -141,7 +141,7 @@ type ActionsPath<S extends ActionsSuffix> =
   | `/host/{platform_host}/actions/{provider}/{owner}/{name}${S}`;
 
 export function providerActionsPath<S extends ActionsSuffix>(ref: ProviderRouteRef, suffix: S): ActionsPath<S> {
-  if (shouldUseHostRoute(ref)) {
+  if (providerUsesHostRoute(ref)) {
     return `/host/{platform_host}/actions/{provider}/{owner}/{name}${suffix}`;
   }
   return `/actions/{provider}/{owner}/{name}${suffix}`;
