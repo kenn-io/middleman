@@ -5215,6 +5215,17 @@ type Terminal struct {
 	TmuxMouse        bool    `json:"tmux_mouse"`
 }
 
+// TerminalPasteImageOutputBody defines model for TerminalPasteImageOutputBody.
+type TerminalPasteImageOutputBody struct {
+	// Schema A URL to the JSON Schema for this object.
+	//
+	// Example: /api/v1/schemas/TerminalPasteImageOutputBody.json
+	Schema *string `json:"$schema,omitempty"`
+
+	// Path Absolute path to the cached image on the terminal host
+	Path string `json:"path"`
+}
+
 // TmuxSessionInfo defines model for TmuxSessionInfo.
 type TmuxSessionInfo struct {
 	CreatedAt        *string          `json:"createdAt,omitempty"`
@@ -6400,6 +6411,11 @@ type TriggerSyncParams struct {
 
 	// OnlyRepo Optional repository filters to sync exclusively. Accepts repeated provider|platform_host/repo_path values or comma-separated values.
 	OnlyRepo *[]string `form:"only_repo,omitempty" json:"only_repo,omitempty"`
+}
+
+// StoreTerminalPasteImageParams defines parameters for StoreTerminalPasteImage.
+type StoreTerminalPasteImageParams struct {
+	ContentType *string `json:"Content-Type,omitempty"`
 }
 
 // DeleteWorkspaceParams defines parameters for DeleteWorkspace.
@@ -7841,6 +7857,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /fleet/hosts/{host_key}/runtime/sessions/{session_key}/attach-spec (the `GetFleetHostRuntimeSessionAttachSpec` operationId).
 	GetFleetHostRuntimeSessionAttachSpec(ctx context.Context, hostKey string, sessionKey string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StoreFleetTerminalPasteImageWithBody Store a browser clipboard image on a fleet host
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /fleet/hosts/{host_key}/terminal/paste-image (the `StoreFleetTerminalPasteImage` operationId).
+	StoreFleetTerminalPasteImageWithBody(ctx context.Context, hostKey string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListFleetWorkspaces List workspaces on fleet host
 	//
@@ -9815,6 +9838,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /telemetry/events (the `CaptureTelemetryEvent` operationId).
 	CaptureTelemetryEvent(ctx context.Context, body CaptureTelemetryEventJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StoreTerminalPasteImageWithBody Store a browser clipboard image for terminal paste
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /terminal/paste-image (the `StoreTerminalPasteImage` operationId).
+	StoreTerminalPasteImageWithBody(ctx context.Context, params *StoreTerminalPasteImageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetToolingStatus Report git/gh/glab CLI availability and auth
 	//
@@ -11888,6 +11918,23 @@ func (c *Client) StopFleetHostRuntimeSession(ctx context.Context, hostKey string
 // Corresponds with GET /fleet/hosts/{host_key}/runtime/sessions/{session_key}/attach-spec (the `GetFleetHostRuntimeSessionAttachSpec` operationId).
 func (c *Client) GetFleetHostRuntimeSessionAttachSpec(ctx context.Context, hostKey string, sessionKey string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetFleetHostRuntimeSessionAttachSpecRequest(c.Server, hostKey, sessionKey)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StoreFleetTerminalPasteImageWithBody Store a browser clipboard image on a fleet host
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /fleet/hosts/{host_key}/terminal/paste-image (the `StoreFleetTerminalPasteImage` operationId).
+func (c *Client) StoreFleetTerminalPasteImageWithBody(ctx context.Context, hostKey string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStoreFleetTerminalPasteImageRequestWithBody(c.Server, hostKey, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -17092,6 +17139,23 @@ func (c *Client) CaptureTelemetryEvent(ctx context.Context, body CaptureTelemetr
 	return c.Client.Do(req)
 }
 
+// StoreTerminalPasteImageWithBody Store a browser clipboard image for terminal paste
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /terminal/paste-image (the `StoreTerminalPasteImage` operationId).
+func (c *Client) StoreTerminalPasteImageWithBody(ctx context.Context, params *StoreTerminalPasteImageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStoreTerminalPasteImageRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetToolingStatus Report git/gh/glab CLI availability and auth
 //
 // Corresponds with GET /tooling-status (the `GetToolingStatus` operationId).
@@ -21870,6 +21934,42 @@ func NewGetFleetHostRuntimeSessionAttachSpecRequest(server string, hostKey strin
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewStoreFleetTerminalPasteImageRequestWithBody constructs an http.Request for the StoreFleetTerminalPasteImage method, with any body, and a specified content type
+func NewStoreFleetTerminalPasteImageRequestWithBody(server string, hostKey string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "host_key", hostKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/fleet/hosts/%s/terminal/paste-image", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -36909,6 +37009,50 @@ func NewCaptureTelemetryEventRequestWithBody(server string, contentType string, 
 	return req, nil
 }
 
+// NewStoreTerminalPasteImageRequestWithBody constructs an http.Request for the StoreTerminalPasteImage method, with any body, and a specified content type
+func NewStoreTerminalPasteImageRequestWithBody(server string, params *StoreTerminalPasteImageParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/terminal/paste-image")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.ContentType != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Content-Type", *params.ContentType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Content-Type", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetToolingStatusRequest constructs an http.Request for the GetToolingStatus method
 func NewGetToolingStatusRequest(server string) (*http.Request, error) {
 	var err error
@@ -38673,6 +38817,9 @@ type ClientWithResponsesInterface interface {
 	// GetFleetHostRuntimeSessionAttachSpecWithResponse request
 	GetFleetHostRuntimeSessionAttachSpecWithResponse(ctx context.Context, hostKey string, sessionKey string, reqEditors ...RequestEditorFn) (*GetFleetHostRuntimeSessionAttachSpecResponse, error)
 
+	// StoreFleetTerminalPasteImageWithBodyWithResponse request with any body
+	StoreFleetTerminalPasteImageWithBodyWithResponse(ctx context.Context, hostKey string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StoreFleetTerminalPasteImageResponse, error)
+
 	// ListFleetWorkspacesWithResponse request
 	ListFleetWorkspacesWithResponse(ctx context.Context, hostKey string, reqEditors ...RequestEditorFn) (*ListFleetWorkspacesResponse, error)
 
@@ -39548,6 +39695,9 @@ type ClientWithResponsesInterface interface {
 	CaptureTelemetryEventWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CaptureTelemetryEventResponse, error)
 
 	CaptureTelemetryEventWithResponse(ctx context.Context, body CaptureTelemetryEventJSONRequestBody, reqEditors ...RequestEditorFn) (*CaptureTelemetryEventResponse, error)
+
+	// StoreTerminalPasteImageWithBodyWithResponse request with any body
+	StoreTerminalPasteImageWithBodyWithResponse(ctx context.Context, params *StoreTerminalPasteImageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StoreTerminalPasteImageResponse, error)
 
 	// GetToolingStatusWithResponse request
 	GetToolingStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetToolingStatusResponse, error)
@@ -41409,6 +41559,29 @@ func (r GetFleetHostRuntimeSessionAttachSpecResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetFleetHostRuntimeSessionAttachSpecResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type StoreFleetTerminalPasteImageResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSONDefault                   *map[string]interface{}
+	ApplicationproblemJSONDefault *ProblemError
+}
+
+// Status returns HTTPResponse.Status
+func (r StoreFleetTerminalPasteImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StoreFleetTerminalPasteImageResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -46712,6 +46885,29 @@ func (r CaptureTelemetryEventResponse) StatusCode() int {
 	return 0
 }
 
+type StoreTerminalPasteImageResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON201                       *TerminalPasteImageOutputBody
+	ApplicationproblemJSONDefault *ProblemError
+}
+
+// Status returns HTTPResponse.Status
+func (r StoreTerminalPasteImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StoreTerminalPasteImageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetToolingStatusResponse struct {
 	Body                          []byte
 	HTTPResponse                  *http.Response
@@ -48361,6 +48557,15 @@ func (c *ClientWithResponses) GetFleetHostRuntimeSessionAttachSpecWithResponse(c
 		return nil, err
 	}
 	return ParseGetFleetHostRuntimeSessionAttachSpecResponse(rsp)
+}
+
+// StoreFleetTerminalPasteImageWithBodyWithResponse request with arbitrary body returning *StoreFleetTerminalPasteImageResponse
+func (c *ClientWithResponses) StoreFleetTerminalPasteImageWithBodyWithResponse(ctx context.Context, hostKey string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StoreFleetTerminalPasteImageResponse, error) {
+	rsp, err := c.StoreFleetTerminalPasteImageWithBody(ctx, hostKey, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStoreFleetTerminalPasteImageResponse(rsp)
 }
 
 // ListFleetWorkspacesWithResponse request returning *ListFleetWorkspacesResponse
@@ -51171,6 +51376,15 @@ func (c *ClientWithResponses) CaptureTelemetryEventWithResponse(ctx context.Cont
 	return ParseCaptureTelemetryEventResponse(rsp)
 }
 
+// StoreTerminalPasteImageWithBodyWithResponse request with arbitrary body returning *StoreTerminalPasteImageResponse
+func (c *ClientWithResponses) StoreTerminalPasteImageWithBodyWithResponse(ctx context.Context, params *StoreTerminalPasteImageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StoreTerminalPasteImageResponse, error) {
+	rsp, err := c.StoreTerminalPasteImageWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStoreTerminalPasteImageResponse(rsp)
+}
+
 // GetToolingStatusWithResponse request returning *GetToolingStatusResponse
 func (c *ClientWithResponses) GetToolingStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetToolingStatusResponse, error) {
 	rsp, err := c.GetToolingStatus(ctx, reqEditors...)
@@ -53971,6 +54185,39 @@ func ParseGetFleetHostRuntimeSessionAttachSpecResponse(rsp *http.Response) (*Get
 	}
 
 	response := &GetFleetHostRuntimeSessionAttachSpecResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.Header.Get("Content-Type") == "application/json" && true:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	case rsp.Header.Get("Content-Type") == "application/problem+json" && true:
+		var dest ProblemError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStoreFleetTerminalPasteImageResponse parses an HTTP response from a StoreFleetTerminalPasteImageWithResponse call
+func ParseStoreFleetTerminalPasteImageResponse(rsp *http.Response) (*StoreFleetTerminalPasteImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StoreFleetTerminalPasteImageResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -61470,6 +61717,39 @@ func ParseCaptureTelemetryEventResponse(rsp *http.Response) (*CaptureTelemetryEv
 			return nil, err
 		}
 		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ProblemError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStoreTerminalPasteImageResponse parses an HTTP response from a StoreTerminalPasteImageWithResponse call
+func ParseStoreTerminalPasteImageResponse(rsp *http.Response) (*StoreTerminalPasteImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StoreTerminalPasteImageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest TerminalPasteImageOutputBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest ProblemError

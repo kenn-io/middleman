@@ -21,19 +21,22 @@ import (
 	"go.kenn.io/forge/internal/federation"
 	"go.kenn.io/forge/internal/federationauth"
 	"go.kenn.io/forge/internal/server/httpapi"
+	"go.kenn.io/forge/internal/terminalpaste"
 	"go.kenn.io/forge/internal/terminalwebsocket"
 	"go.kenn.io/forge/internal/tracing"
 )
 
 type fleetRESTProxyRoute struct {
-	operationID string
-	method      string
-	path        string
-	summary     string
-	pathParams  []string
-	queryParams []*huma.Param
-	body        bool
-	targetPath  func(*http.Request) string
+	operationID  string
+	method       string
+	path         string
+	summary      string
+	pathParams   []string
+	queryParams  []*huma.Param
+	body         bool
+	binaryBody   bool
+	maxBodyBytes int64
+	targetPath   func(*http.Request) string
 }
 
 const fleetProxyMaxBodyBytes int64 = 1 << 20
@@ -53,6 +56,18 @@ type federationMemberClients struct {
 
 func (s *Handler) registerFleetOperationRoutes(api huma.API) {
 	routes := []fleetRESTProxyRoute{
+		{
+			operationID:  "store-fleet-terminal-paste-image",
+			method:       http.MethodPost,
+			path:         "/fleet/hosts/{host_key}/terminal/paste-image",
+			summary:      "Store a browser clipboard image on a fleet host",
+			pathParams:   []string{"host_key"},
+			binaryBody:   true,
+			maxBodyBytes: terminalpaste.MaxImageBytes,
+			targetPath: func(*http.Request) string {
+				return "/api/v1/terminal/paste-image"
+			},
+		},
 		{
 			operationID: "list-fleet-workspaces",
 			method:      http.MethodGet,
@@ -572,6 +587,10 @@ func (s *Handler) registerFleetOperationRoutes(api huma.API) {
 	}
 
 	for _, route := range routes {
+		maxBodyBytes := route.maxBodyBytes
+		if maxBodyBytes == 0 {
+			maxBodyBytes = fleetProxyMaxBodyBytes
+		}
 		op := &huma.Operation{
 			OperationID:  route.operationID,
 			Method:       route.method,
@@ -580,15 +599,17 @@ func (s *Handler) registerFleetOperationRoutes(api huma.API) {
 			Tags:         []string{"Fleet"},
 			Parameters:   fleetProxyParams(route.pathParams, route.queryParams...),
 			Responses:    fleetProxyResponses(),
-			MaxBodyBytes: fleetProxyMaxBodyBytes,
+			MaxBodyBytes: maxBodyBytes,
 		}
-		if route.body {
+		if route.binaryBody {
+			op.RequestBody = fleetProxyBinaryRequestBody()
+		} else if route.body {
 			op.RequestBody = fleetProxyRequestBody()
 		}
 		api.OpenAPI().AddOperation(op)
 		api.Adapter().Handle(op, func(ctx huma.Context) {
 			r, w := humago.Unwrap(ctx)
-			if !bufferFleetProxyRequestBody(w, r) {
+			if !bufferFleetProxyRequestBody(w, r, maxBodyBytes) {
 				return
 			}
 			s.serveFleetRESTProxy(w, r, route.targetPath(r))
@@ -725,18 +746,18 @@ func fleetProxyRequestBody() *huma.RequestBody {
 // bufferFleetProxyRequestBody bounds and consumes any browser request body
 // before the hub resolves or dials a fleet member. The fleet adapter handles
 // raw requests, so Huma's MaxBodyBytes metadata is not enforced automatically.
-func bufferFleetProxyRequestBody(w http.ResponseWriter, r *http.Request) bool {
-	if r.ContentLength > fleetProxyMaxBodyBytes {
+func bufferFleetProxyRequestBody(w http.ResponseWriter, r *http.Request, maxBodyBytes int64) bool {
+	if r.ContentLength > maxBodyBytes {
 		writeProblemResponse(w, httpapi.NewProblem(
 			http.StatusRequestEntityTooLarge,
 			httpapi.CodePayloadTooLarge,
 			"fleet proxy request body is too large",
-			map[string]any{"maxBytes": fleetProxyMaxBodyBytes},
+			map[string]any{"maxBytes": maxBodyBytes},
 		))
 		return false
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, fleetProxyMaxBodyBytes+1))
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes+1))
 	if err != nil {
 		writeProblemResponse(w, httpapi.NewProblem(
 			http.StatusBadRequest,
@@ -746,12 +767,12 @@ func bufferFleetProxyRequestBody(w http.ResponseWriter, r *http.Request) bool {
 		))
 		return false
 	}
-	if int64(len(body)) > fleetProxyMaxBodyBytes {
+	if int64(len(body)) > maxBodyBytes {
 		writeProblemResponse(w, httpapi.NewProblem(
 			http.StatusRequestEntityTooLarge,
 			httpapi.CodePayloadTooLarge,
 			"fleet proxy request body is too large",
-			map[string]any{"maxBytes": fleetProxyMaxBodyBytes},
+			map[string]any{"maxBytes": maxBodyBytes},
 		))
 		return false
 	}
@@ -760,6 +781,18 @@ func bufferFleetProxyRequestBody(w http.ResponseWriter, r *http.Request) bool {
 	r.Body = io.NopCloser(bytes.NewReader(body))
 	r.ContentLength = int64(len(body))
 	return true
+}
+
+func fleetProxyBinaryRequestBody() *huma.RequestBody {
+	return &huma.RequestBody{
+		Description: "Browser clipboard image forwarded to the owning host.",
+		Required:    true,
+		Content: map[string]*huma.MediaType{
+			"application/octet-stream": {
+				Schema: &huma.Schema{Type: "string", Format: "binary"},
+			},
+		},
+	}
 }
 
 func fleetProxyResponses() map[string]*huma.Response {

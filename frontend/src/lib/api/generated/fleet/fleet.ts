@@ -154,6 +154,8 @@ import type {
   StopFleetProjectWorktreeRuntimeSessionPathParameters,
   StopFleetWorkspaceRuntimeSessionDefaultOne,
   StopFleetWorkspaceRuntimeSessionPathParameters,
+  StoreFleetTerminalPasteImageDefaultOne,
+  StoreFleetTerminalPasteImagePathParameters,
   StreamFederationProviderEventsHeaders,
   StreamFederationProviderEventsParams,
   ValidateFleetFilesystemRepoDefaultOne,
@@ -1414,6 +1416,32 @@ export const getFleetHostRuntimeSessionAttachSpec = async (
       method: "GET",
     },
   );
+};
+
+export const getStoreFleetTerminalPasteImageUrl = ({ hostKey }: StoreFleetTerminalPasteImagePathParameters) => {
+  return `/fleet/hosts/${encodeURIComponent(String(hostKey))}/terminal/paste-image`;
+};
+
+/**
+ * @summary Store a browser clipboard image on a fleet host
+ */
+export const storeFleetTerminalPasteImage = async (
+  { hostKey }: StoreFleetTerminalPasteImagePathParameters,
+  storeFleetTerminalPasteImageBody: Blob,
+  options?: Parameters<typeof orvalFetch>[1],
+): Promise<StoreFleetTerminalPasteImageDefaultOne> => {
+  const getHeaders = (h?: NonNullable<RequestInit["headers"]>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return orvalFetch<StoreFleetTerminalPasteImageDefaultOne>(getStoreFleetTerminalPasteImageUrl({ hostKey }), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", ...getHeaders(options?.headers) },
+    body: storeFleetTerminalPasteImageBody,
+  });
 };
 
 export const getListFleetWorkspacesUrl = ({ hostKey }: ListFleetWorkspacesPathParameters) => {

@@ -46,6 +46,7 @@ export function sessionHostPrefix(workspaceId: string, hostKey: string | undefin
 /** What the pool needs to render one session's terminal. */
 export interface MountedSession {
   hostKey: SessionHostKey;
+  fleetHostKey?: string;
   websocketPath: string;
   status: string;
   cursorWheelInput?: boolean;
@@ -182,6 +183,7 @@ export function noteSessionMounted(session: MountedSession): void {
   if (existing) {
     if (
       existing.websocketPath === session.websocketPath &&
+      existing.fleetHostKey === session.fleetHostKey &&
       existing.status === session.status &&
       (existing.cursorWheelInput ?? false) === (session.cursorWheelInput ?? false) &&
       (existing.disabled ?? false) === (session.disabled ?? false)

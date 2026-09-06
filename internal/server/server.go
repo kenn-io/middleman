@@ -48,6 +48,7 @@ import (
 	"go.kenn.io/forge/internal/server/workspaceapi"
 	"go.kenn.io/forge/internal/systemclipboard"
 	"go.kenn.io/forge/internal/telemetry"
+	"go.kenn.io/forge/internal/terminalpaste"
 	"go.kenn.io/forge/internal/tokenauth"
 	"go.kenn.io/forge/internal/workspace"
 	"go.kenn.io/forge/internal/workspace/localruntime"
@@ -831,6 +832,18 @@ func newServer(
 	if cfg != nil {
 		markdownImageDataDir = cfg.DataDir
 	}
+	var terminalPasteImages *terminalpaste.Store
+	if markdownImageDataDir != "" {
+		var err error
+		terminalPasteImages, err = terminalpaste.NewStore(filepath.Join(
+			markdownImageDataDir,
+			"cache",
+			"terminal-paste-images",
+		))
+		if err != nil {
+			slog.Warn("initialize terminal paste image cache", "err", err)
+		}
+	}
 	repoResolver := httpapi.NewRepositoryResolver(httpapi.RepositoryResolverDeps{
 		DB: database,
 		ProviderCapabilities: func(kind platform.Kind, host string) (platform.Capabilities, error) {
@@ -1153,13 +1166,14 @@ func newServer(
 		}
 	}
 	s.workspaceAPI = workspaceapi.New(workspaceapi.Deps{
-		DB:                database,
-		Resolver:          repoResolver,
-		Syncer:            syncer,
-		Config:            workspaceConfigSnapshot(cfg, tmuxCmd),
-		Workspaces:        s.workspaces,
-		Runtime:           s.runtime,
-		TerminalClipboard: terminalClipboard,
+		DB:                  database,
+		Resolver:            repoResolver,
+		Syncer:              syncer,
+		Config:              workspaceConfigSnapshot(cfg, tmuxCmd),
+		Workspaces:          s.workspaces,
+		Runtime:             s.runtime,
+		TerminalClipboard:   terminalClipboard,
+		TerminalPasteImages: terminalPasteImages,
 		AgentActivity: agentactivity.NewStore(filepath.Join(
 			filepath.Dir(options.WorktreeDir), "agent-activity",
 		)),

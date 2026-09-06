@@ -30,6 +30,8 @@ type ProviderRouteRule struct {
 // This table is intentionally exhaustive. A newly registered operation must
 // make an explicit ownership decision before the coverage gate passes.
 var providerRouteDeclarations = []ProviderRouteRule{
+	{OperationID: "store-terminal-paste-image", Owner: NodeLocal},
+	{OperationID: "store-fleet-terminal-paste-image", Owner: NodeLocal},
 	{OperationID: "activate-federation-enrollment", Owner: NodeLocal},
 	{OperationID: "add-repo", Owner: ProviderHubOnly, PeerScope: federationauth.ScopeProviderWrite},
 	{OperationID: "abort-federation-enrollment", Owner: NodeLocal},

@@ -8648,6 +8648,22 @@ components:
         - tmux_mouse
         - retained_sessions
       type: object
+    TerminalPasteImageOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/TerminalPasteImageOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        path:
+          description: Absolute path to the cached image on the terminal host
+          type: string
+      required:
+        - path
+      type: object
     TmuxSessionInfo:
       additionalProperties: false
       properties:
@@ -12317,6 +12333,38 @@ paths:
                 $ref: "#/components/schemas/ProblemError"
           description: Response returned by the owning fleet host.
       summary: Get host runtime session attach spec on fleet host
+      tags:
+        - Fleet
+  /fleet/hosts/{host_key}/terminal/paste-image:
+    post:
+      operationId: store-fleet-terminal-paste-image
+      parameters:
+        - in: path
+          name: host_key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              contentMediaType: application/octet-stream
+              format: binary
+              type: string
+        description: Browser clipboard image forwarded to the owning host.
+        required: true
+      responses:
+        default:
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemError"
+          description: Response returned by the owning fleet host.
+      summary: Store a browser clipboard image on a fleet host
       tags:
         - Fleet
   /fleet/hosts/{host_key}/workspaces:
@@ -22105,6 +22153,38 @@ paths:
                 $ref: "#/components/schemas/ProblemError"
           description: Error
       summary: Capture telemetry event
+      tags:
+        - System
+  /terminal/paste-image:
+    post:
+      operationId: store-terminal-paste-image
+      parameters:
+        - in: header
+          name: Content-Type
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              contentMediaType: application/octet-stream
+              format: binary
+              type: string
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerminalPasteImageOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemError"
+          description: Error
+      summary: Store a browser clipboard image for terminal paste
       tags:
         - System
   /tooling-status:

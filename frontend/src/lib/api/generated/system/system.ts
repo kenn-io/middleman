@@ -8,9 +8,11 @@ import type {
   ListUserRepositoriesOutputBody,
   ListUserRepositoriesParams,
   ProblemError,
+  StoreTerminalPasteImageHeaders,
   StreamEventsParams,
   TelemetryEventInputBody,
   TelemetryEventResponse,
+  TerminalPasteImageOutputBody,
   ToolingStatusBody,
   ValidateFilesystemRepoParams,
   VersionOutputBody,
@@ -167,6 +169,32 @@ export const captureTelemetryEvent = async (
     method: "POST",
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(telemetryEventInputBody),
+  });
+};
+
+export const getStoreTerminalPasteImageUrl = () => {
+  return `/terminal/paste-image`;
+};
+
+/**
+ * @summary Store a browser clipboard image for terminal paste
+ */
+export const storeTerminalPasteImage = async (
+  storeTerminalPasteImageBody: Blob,
+  headers?: StoreTerminalPasteImageHeaders,
+  options?: Parameters<typeof orvalFetch>[1],
+): Promise<TerminalPasteImageOutputBody> => {
+  const getHeaders = (h?: NonNullable<RequestInit["headers"]>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return orvalFetch<TerminalPasteImageOutputBody>(getStoreTerminalPasteImageUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", ...headers, ...getHeaders(options?.headers) },
+    body: storeTerminalPasteImageBody,
   });
 };
 

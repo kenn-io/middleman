@@ -25,7 +25,7 @@ func (s *Handler) registerFleetProjectRoutes(api huma.API) {
 	api.OpenAPI().AddOperation(registerOp)
 	api.Adapter().Handle(registerOp, func(ctx huma.Context) {
 		r, w := humago.Unwrap(ctx)
-		if !bufferFleetProxyRequestBody(w, r) {
+		if !bufferFleetProxyRequestBody(w, r, fleetProxyMaxBodyBytes) {
 			return
 		}
 		s.serveFleetProjectWrite(w, r, "/api/v1/projects")
@@ -44,7 +44,7 @@ func (s *Handler) registerFleetProjectRoutes(api huma.API) {
 	api.OpenAPI().AddOperation(deleteOp)
 	api.Adapter().Handle(deleteOp, func(ctx huma.Context) {
 		r, w := humago.Unwrap(ctx)
-		if !bufferFleetProxyRequestBody(w, r) {
+		if !bufferFleetProxyRequestBody(w, r, fleetProxyMaxBodyBytes) {
 			return
 		}
 		projectID := r.PathValue("project_id")

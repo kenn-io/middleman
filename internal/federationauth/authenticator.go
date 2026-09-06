@@ -19,6 +19,7 @@ type authorizedRoute struct {
 // The inventory starts intentionally narrow. Later federation domains extend
 // it alongside the routes they make peer-callable; an unlisted route is denied.
 var authorizedRoutes = []authorizedRoute{
+	{method: http.MethodPost, path: "/api/v1/terminal/paste-image", scope: ScopeTerminalAttach},
 	{method: http.MethodGet, path: "/api/v1/snapshot", scope: ScopeSnapshotRead},
 	{method: http.MethodGet, path: "/api/v1/snapshot/raw", scope: ScopeSnapshotRead},
 	{method: http.MethodGet, path: "/api/v1/snapshot/aggregate", scope: ScopeSnapshotRead},

@@ -1718,6 +1718,7 @@
       const hostKey = sessionHostKeyFor(session);
       desired.set(hostKey, {
         hostKey,
+        ...(workspaceHostKey === undefined ? {} : { fleetHostKey: workspaceHostKey }),
         websocketPath: workspaceSessionWebSocketPath(
           workspaceId,
           session.key,

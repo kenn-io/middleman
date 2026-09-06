@@ -39,6 +39,7 @@ func TestSnapshotRoutesRegistered(t *testing.T) {
 		{http.MethodGet, "/snapshot"},
 		{http.MethodGet, "/snapshot/raw"},
 		{http.MethodPost, "/fleet/hosts/{host_key}/workspaces"},
+		{http.MethodPost, "/fleet/hosts/{host_key}/terminal/paste-image"},
 		{http.MethodPost, "/fleet/hosts/{host_key}/repo/{provider}/{owner}/{name}/workspaces"},
 		{http.MethodPost, "/fleet/hosts/{host_key}/host/{platform_host}/repo/{provider}/{owner}/{name}/workspaces"},
 		{http.MethodPost, "/fleet/hosts/{host_key}/issues/{provider}/{owner}/{name}/{number}/workspace"},
