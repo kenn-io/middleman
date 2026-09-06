@@ -3245,6 +3245,7 @@ name = "b"
 		assert.True(*cfg.Modes.Activity)
 		assert.True(*cfg.Modes.Repos)
 		assert.False(*cfg.Modes.Docs)
+		assert.False(*cfg.Modes.Actions)
 		assert.True(*cfg.Modes.Pulls)
 		assert.True(*cfg.Modes.Issues)
 		assert.True(*cfg.Modes.Reviews)
@@ -3260,6 +3261,7 @@ owner = "a"
 name = "b"
 
 [modes]
+actions = true
 activity = false
 repos = false
 docs = false
@@ -3278,6 +3280,7 @@ workspaces = false
 		cfg2, err := Load(savePath)
 		require.NoError(err)
 
+		assert.True(*cfg2.Modes.Actions)
 		assert.False(*cfg2.Modes.Activity)
 		assert.False(*cfg2.Modes.Repos)
 		assert.False(*cfg2.Modes.Docs)

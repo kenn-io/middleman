@@ -6,6 +6,7 @@ import type { RepoOperations } from "./repoOperations.ts";
 
 export interface RepoRefResponse {
   capabilities: ProviderCapabilitiesResponse;
+  default_branch?: string;
   name: string;
   operations?: RepoOperations;
   owner: string;

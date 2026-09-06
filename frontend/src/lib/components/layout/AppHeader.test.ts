@@ -7,7 +7,7 @@ const mockedContainerSize = vi.hoisted(() => ({
   value: "wide" as "narrow" | "medium" | "wide",
 }));
 
-type ModeKey = "activity" | "repos" | "docs" | "pulls" | "issues" | "reviews" | "workspaces";
+type ModeKey = "activity" | "repos" | "docs" | "actions" | "pulls" | "issues" | "reviews" | "workspaces";
 
 const mockedReviewsDaemonAvailable = vi.hoisted(() => ({ value: true }));
 
@@ -18,17 +18,14 @@ const mockedSync = vi.hoisted(() => ({
   triggerRepoSync: vi.fn((_repo: string) => Promise.resolve()),
 }));
 
-const mockedModeVisibility = vi.hoisted(() => ({
-  value: {
-    activity: true,
-    repos: true,
-    docs: false,
-    messages: false,
-    pulls: true,
-    issues: true,
-    reviews: true,
-    workspaces: true,
-  } as Record<ModeKey, boolean>,
+const mockedSettings = vi.hoisted(() => ({
+  value: undefined as
+    | {
+        isModeVisible: (mode: ModeKey) => boolean;
+        getModeVisibility: () => Record<ModeKey, boolean>;
+        setModeVisibility: (visibility: Record<ModeKey, boolean>) => void;
+      }
+    | undefined,
 }));
 
 // Prevent RepoTypeahead from making real API calls in the test environment.
@@ -59,9 +56,7 @@ vi.mock("../../context.js", async (importOriginal) => {
         triggerSync: mockedSync.triggerSync,
         triggerRepoSync: mockedSync.triggerRepoSync,
       },
-      settings: {
-        isModeVisible: (mode: ModeKey) => mockedModeVisibility.value[mode],
-      },
+      settings: mockedSettings.value,
       roborevDaemon: {
         isAvailable: () => mockedReviewsDaemonAvailable.value,
       },
@@ -74,6 +69,7 @@ import { initTheme, cleanupTheme } from "../../stores/theme.svelte.js";
 import { setGlobalRepo } from "../../stores/filter.svelte.js";
 import { setSidebarCollapsed } from "../../stores/sidebar.svelte.ts";
 import { navigate } from "../../stores/router.svelte.ts";
+import { createSettingsStore } from "../../stores/settings.svelte.js";
 import { isPaletteOpen, resetPaletteState } from "../../stores/keyboard/palette-state.svelte.js";
 
 function compiledStyle(source: string, selector: string): CSSStyleDeclaration {
@@ -113,10 +109,10 @@ function mockMatchMedia(matches: boolean, listeners?: MediaChangeCallback[]): vo
 }
 
 function showImportedModes(): void {
-  mockedModeVisibility.value = {
-    ...mockedModeVisibility.value,
+  mockedSettings.value?.setModeVisibility({
+    ...mockedSettings.value.getModeVisibility(),
     docs: true,
-  };
+  });
 }
 
 function expectReservedRepoSelectorSlot(container: HTMLElement): void {
@@ -141,15 +137,7 @@ describe("AppHeader", () => {
     setGlobalRepo(undefined);
     delete window.__kenn_forge_config;
     window.__kenn_forge_notify_config_changed?.();
-    mockedModeVisibility.value = {
-      activity: true,
-      repos: true,
-      docs: false,
-      pulls: true,
-      issues: true,
-      reviews: true,
-      workspaces: true,
-    };
+    mockedSettings.value = createSettingsStore();
     resetPaletteState();
   });
 
@@ -167,15 +155,7 @@ describe("AppHeader", () => {
     setGlobalRepo(undefined);
     delete window.__kenn_forge_config;
     window.__kenn_forge_notify_config_changed?.();
-    mockedModeVisibility.value = {
-      activity: true,
-      repos: true,
-      docs: false,
-      pulls: true,
-      issues: true,
-      reviews: true,
-      workspaces: true,
-    };
+    mockedSettings.value = undefined;
     resetPaletteState();
   });
 
@@ -367,7 +347,10 @@ describe("AppHeader", () => {
 
     cleanup();
     mockedReviewsDaemonAvailable.value = false;
-    mockedModeVisibility.value = { ...mockedModeVisibility.value, reviews: false };
+    mockedSettings.value?.setModeVisibility({
+      ...mockedSettings.value.getModeVisibility(),
+      reviews: false,
+    });
     render(AppHeader);
 
     expect(screen.queryByRole("img", { name: "Reviews daemon unavailable" })).toBeNull();
@@ -379,6 +362,44 @@ describe("AppHeader", () => {
     render(AppHeader);
 
     expect(screen.queryByRole("button", { name: "Board" })).toBeNull();
+  });
+
+  it("exposes Actions only while the opt-in mode is enabled", async () => {
+    initTheme();
+    const view = render(AppHeader);
+    expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
+
+    mockedSettings.value?.setModeVisibility({
+      ...mockedSettings.value.getModeVisibility(),
+      actions: true,
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Actions" })).toBeTruthy());
+
+    await fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    expect(window.location.pathname).toBe("/actions");
+    expect(screen.getByRole("button", { name: "Actions" }).getAttribute("aria-current")).toBe("page");
+
+    mockedSettings.value?.setModeVisibility({
+      ...mockedSettings.value.getModeVisibility(),
+      actions: false,
+    });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Actions" })).toBeNull());
+
+    view.unmount();
+  });
+
+  it("never exposes Actions navigation in an embedded shell", () => {
+    initTheme();
+    mockedSettings.value?.setModeVisibility({
+      ...mockedSettings.value.getModeVisibility(),
+      actions: true,
+    });
+    window.__kenn_forge_config = { embed: {} };
+    window.__kenn_forge_notify_config_changed?.();
+
+    render(AppHeader);
+
+    expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
   });
 
   it("marks the Workspaces tab current on terminal routes", () => {

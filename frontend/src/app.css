@@ -23,6 +23,8 @@
   --chrome-dock-resize-hit-outset: 4px;
   --chrome-dock-resize-stripe-offset: 2px;
   --z-flash: 1050;
+  --actions-repository-rail-width: 190px;
+  --actions-workflow-list-width: 220px;
   --budget-green: var(--accent-green);
   --budget-yellow: var(--accent-amber);
   --budget-red: var(--accent-red);

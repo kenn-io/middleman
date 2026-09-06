@@ -1243,6 +1243,10 @@ func cloneModeVisibility(modes config.ModeVisibility) config.ModeVisibility {
 		v := *modes.Docs
 		out.Docs = &v
 	}
+	if modes.Actions != nil {
+		v := *modes.Actions
+		out.Actions = &v
+	}
 	if modes.Pulls != nil {
 		v := *modes.Pulls
 		out.Pulls = &v

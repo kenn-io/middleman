@@ -63,6 +63,14 @@ type workflowApprovalResponse struct {
 	Count    int  `json:"count"`
 }
 
+type HeadRepoKind string
+
+const (
+	HeadRepoKindSameRepo HeadRepoKind = "same_repo"
+	HeadRepoKindFork     HeadRepoKind = "fork"
+	HeadRepoKindUnknown  HeadRepoKind = "unknown"
+)
+
 type MergeRequestDetailResponse struct {
 	MergeRequest     *db.MergeRequest            `json:"merge_request"`
 	Events           []mergeRequestEventResponse `json:"events"`
@@ -71,6 +79,7 @@ type MergeRequestDetailResponse struct {
 	RepoName         string                      `json:"repo_name"`
 	PlatformHost     string                      `json:"platform_host"`
 	PlatformHeadSHA  string                      `json:"platform_head_sha"`
+	HeadRepoKind     HeadRepoKind                `json:"head_repo_kind" enum:"same_repo,fork,unknown"`
 	PlatformBaseSHA  string                      `json:"platform_base_sha"`
 	ReviewedHeadSHA  string                      `json:"reviewed_head_sha"`
 	DiffHeadSHA      string                      `json:"diff_head_sha"`

@@ -35,6 +35,9 @@ combining repository-owned history
   exact ownership generation before snapshot, notification, or cache commits;
   same-identity freshness observations do not advance that generation
   (`internal/db/repository_catalog.go::RepositoryRouteFence`).
+- Workflow reads and dispatch fence route ownership after live provider work;
+  dispatch also re-reads definition state before its single write, so stale UI
+  authority cannot cross revisions (`internal/server/workflowapi/routes.go::Handler.dispatch`).
 - Hub descriptors are provider observations and use the same
   reconciliation path as sync, enrollment, and project discovery. Spokes must
   preserve stable provider identity and A-to-B-to-A route generations; they may

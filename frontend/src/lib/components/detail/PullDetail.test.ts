@@ -8,6 +8,8 @@ import { ACTIONS_KEY, NAVIGATE_KEY, STORES_KEY, UI_CONFIG_KEY } from "../../cont
 import { createDetailActivityViewStore } from "../../stores/detail-activity-view.svelte.js";
 import { createDetailStore } from "../../stores/detail.svelte.js";
 import { makeTestAppRuntime } from "../../testing/effect-layers.js";
+import { createSettingsStore } from "../../stores/settings.svelte.js";
+import { createWorkflowActionsStore } from "../../stores/workflow-actions.svelte.js";
 import { dismissFlash, getFlashes, showFlash } from "../../stores/flash.svelte.js";
 import {
   discardWorkspaceLaunch,
@@ -95,6 +97,9 @@ const capabilities = {
   read_comments: true,
   read_releases: true,
   read_ci: true,
+  read_workflows: false,
+  read_workflow_runs: false,
+  workflow_dispatch: false,
   read_labels: false,
   comment_mutation: false,
   state_mutation: true,
@@ -132,6 +137,7 @@ function pullDetail(): PullDetail {
     platform_base_sha: "base",
     platform_head_sha: "head",
     reviewed_head_sha: "head",
+    head_repo_kind: "same_repo",
     platform_host: "github.com",
     repo_owner: "acme",
     repo_name: "widget",
@@ -236,6 +242,8 @@ function renderPullDetail(
     inlineWorkspace?: InlineWorkspaceController | null;
     onDetailTabChange?: ((tab: "conversation" | "files") => void) | undefined;
     runtimeClient?: GeneratedClient;
+    actionsModeVisible?: boolean;
+    detailProps?: Partial<ComponentProps<typeof PullDetailComponent>>;
   } = {},
 ) {
   const actions = options.actions ?? { pull: [] };
@@ -354,6 +362,14 @@ function renderPullDetail(
   const runtime =
     detailRuntime ?? makeTestAppRuntime(options.runtimeClient ?? (apiClient as unknown as GeneratedClient));
   detailRuntime = runtime;
+  const settings = createSettingsStore();
+  settings.setLaunchTargets(launchTargets);
+  settings.setDetailSettings({ initial_timeline_entry_limit: 250 });
+  settings.setModeVisibility({
+    ...settings.getModeVisibility(),
+    actions: options.actionsModeVisible ?? false,
+  });
+  const workflowActions = createWorkflowActionsStore({ runtime });
   let detailProps: ComponentProps<typeof PullDetailComponent> = {
     owner: "acme",
     name: "widget",
@@ -367,6 +383,7 @@ function renderPullDetail(
     inlineWorkspace: options.inlineWorkspace ?? null,
     onDetailTabChange: options.onDetailTabChange,
     onOpenWorkspace: options.onOpenWorkspace,
+    ...options.detailProps,
   };
   const rendered = render(PullDetailTestHarness, {
     props: {
@@ -383,10 +400,8 @@ function renderPullDetail(
           pulls: { loadPulls: vi.fn() },
           activity: { loadActivity: vi.fn() },
           detailActivityView: createDetailActivityViewStore(),
-          settings: {
-            getLaunchTargets: () => launchTargets,
-            getDetailSettings: () => ({ initial_timeline_entry_limit: 250 }),
-          },
+          settings,
+          workflowActions,
         },
       ],
       [ACTIONS_KEY, actions],
@@ -402,6 +417,8 @@ function renderPullDetail(
     },
     detailStore,
     navigate,
+    settings,
+    workflowActions,
     settleRefresh: () => {
       options.detailSyncing = false;
       pendingRefreshCallbacks?.onSuccess?.(true);
@@ -538,6 +555,364 @@ function getActionMenuLabelsButton(): HTMLButtonElement {
   }
   return button;
 }
+
+const releaseWorkflow = {
+  available: true,
+  definition_sha: "release-definition",
+  id: "release.yml",
+  inputs: [],
+  name: "Release",
+  path: ".github/workflows/release.yml",
+  state: "active",
+  web_url: "https://github.com/acme/widget/actions/workflows/release.yml",
+} as const;
+
+function enableWorkflowActions(detail: PullDetail): void {
+  detail.repo.capabilities = {
+    ...detail.repo.capabilities,
+    read_workflows: true,
+    read_workflow_runs: true,
+    workflow_dispatch: true,
+  };
+  detail.repo.operations = {
+    ...detail.repo.operations,
+    dispatch_workflow: { available: true },
+  };
+}
+
+function workflowClient(detail: PullDetail) {
+  const repoSettings = {
+    AllowSquashMerge: true,
+    AllowMergeCommit: false,
+    AllowRebaseMerge: false,
+    ViewerCanMerge: true,
+    operations: detail.repo.operations,
+  };
+  const GET = vi.fn(
+    async (
+      path: string,
+      _options?: {
+        params?: {
+          path?: {
+            provider?: string;
+            platform_host?: string;
+            owner?: string;
+            name?: string;
+          };
+        };
+      },
+    ) => {
+      if (path.endsWith("/workflows")) {
+        return {
+          data: {
+            repo: detail.repo,
+            environments: [],
+            workflows: [releaseWorkflow],
+          },
+        };
+      }
+      if (path.endsWith("/runs")) {
+        return {
+          data: {
+            repo: detail.repo,
+            items: [],
+            exhausted: true,
+          },
+        };
+      }
+      return { data: repoSettings };
+    },
+  );
+  const POST = vi.fn(async () => ({ data: { accepted: true, dispatch_id: "dispatch-1" } }));
+  return {
+    client: { GET, POST } as unknown as GeneratedClient,
+    GET,
+    POST,
+    repoSettings,
+  };
+}
+
+async function openReleaseWorkflow(detail: PullDetail, options: Parameters<typeof renderPullDetail>[3] = {}) {
+  enableWorkflowActions(detail);
+  const api = workflowClient(detail);
+  const rendered = renderPullDetail(detail, api.repoSettings, api.client, {
+    actionsModeVisible: true,
+    runtimeClient: api.client,
+    ...options,
+  });
+  await waitFor(() => {
+    expect(api.GET.mock.calls.some(([path]) => String(path).endsWith("/workflows"))).toBe(true);
+  });
+  await fireEvent.click(await screen.findByRole("button", { name: "Run workflow" }));
+  const release = await screen.findByRole("button", { name: "Release" });
+  await fireEvent.click(release);
+  return { ...rendered, api };
+}
+
+describe("PullDetail provider workflow actions", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it.each(["open", "merged"] as const)(
+    "does not demand or render workflows for a %s pull request when Actions mode is disabled",
+    async (state) => {
+      const detail = pullDetail();
+      detail.merge_request.State = state;
+      enableWorkflowActions(detail);
+      const api = workflowClient(detail);
+
+      renderPullDetail(detail, api.repoSettings, api.client, {
+        actionsModeVisible: false,
+        runtimeClient: api.client,
+      });
+      await tick();
+
+      expect(api.GET.mock.calls.some(([path]) => String(path).includes("/actions/"))).toBe(false);
+      expect(screen.queryByRole("button", { name: "Release" })).toBeNull();
+      expect(screen.queryByText("GitHub Actions")).toBeNull();
+    },
+  );
+
+  it.each(["read_workflows", "workflow_dispatch"] as const)(
+    "does not demand workflows when %s is unavailable",
+    async (capability) => {
+      const detail = pullDetail();
+      enableWorkflowActions(detail);
+      detail.repo.capabilities[capability] = false;
+      const api = workflowClient(detail);
+
+      renderPullDetail(detail, api.repoSettings, api.client, {
+        actionsModeVisible: true,
+        runtimeClient: api.client,
+      });
+      await tick();
+
+      expect(api.GET.mock.calls.some(([path]) => String(path).includes("/actions/"))).toBe(false);
+      expect(screen.queryByText("GitHub Actions")).toBeNull();
+    },
+  );
+
+  it("demands the exact provider repository and labels its workflow section from provider metadata", async () => {
+    const detail = pullDetail();
+    enableWorkflowActions(detail);
+    detail.repo.provider = "gitlab";
+    detail.repo.platform_host = "gitlab.example.com";
+    detail.repo.repo_path = "group/widget";
+    detail.repo.owner = "group";
+    detail.repo.name = "widget";
+    const api = workflowClient(detail);
+
+    renderPullDetail(detail, api.repoSettings, api.client, {
+      actionsModeVisible: true,
+      runtimeClient: api.client,
+      detailProps: {
+        provider: "gitlab",
+        platformHost: "gitlab.example.com",
+        owner: "group",
+        name: "widget",
+        repoPath: "group/widget",
+      },
+    });
+
+    await waitFor(() => {
+      expect(api.GET).toHaveBeenCalledWith(
+        "/host/{platform_host}/actions/{provider}/{owner}/{name}/workflows",
+        expect.objectContaining({
+          params: {
+            path: {
+              provider: "gitlab",
+              platform_host: "gitlab.example.com",
+              owner: "group",
+              name: "widget",
+            },
+          },
+        }),
+      );
+    });
+    await fireEvent.click(await screen.findByRole("button", { name: "Run workflow" }));
+
+    expect(await screen.findByText("GitLab Actions")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Release" })).toBeTruthy();
+  });
+
+  it("keeps workflow dispatch available in the phone action grid", async () => {
+    const detail = pullDetail();
+    enableWorkflowActions(detail);
+    const api = workflowClient(detail);
+
+    renderPullDetail(detail, api.repoSettings, api.client, {
+      actionsModeVisible: true,
+      runtimeClient: api.client,
+      phonePresentation: true,
+    });
+
+    await waitFor(() => {
+      expect(api.GET.mock.calls.some(([path]) => String(path).endsWith("/workflows"))).toBe(true);
+    });
+    const grid = screen.getByRole("group", { name: "Pull request actions" });
+    await fireEvent.click(await within(grid).findByRole("button", { name: "Run workflow" }));
+
+    expect(await screen.findByRole("region", { name: "GitHub Actions" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Release" })).toBeTruthy();
+  });
+
+  it("opens the shared confirmation without dispatching when a workflow is selected", async () => {
+    const detail = pullDetail();
+    const { api } = await openReleaseWorkflow(detail);
+
+    expect(screen.getByRole("dialog", { name: "Run workflow" })).toBeTruthy();
+    expect(document.querySelector(".actions-menu-popover")).toBeNull();
+    expect(api.POST).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { state: "open", kind: "same_repo", expected: "feature" },
+    { state: "open", kind: "fork", expected: "main" },
+    { state: "open", kind: "unknown", expected: "main" },
+    { state: "merged", kind: "same_repo", expected: "main" },
+    { state: "closed", kind: "same_repo", expected: "main" },
+  ] as const)("defaults a $state $kind pull request workflow to $expected", async ({ state, kind, expected }) => {
+    const detail = pullDetail();
+    detail.merge_request.State = state;
+    detail.head_repo_kind = kind;
+
+    await openReleaseWorkflow(detail);
+
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Git ref" }).value).toBe(expected);
+  });
+
+  it("keeps the provider workflow ref editable", async () => {
+    await openReleaseWorkflow(pullDetail());
+    const ref = screen.getByRole<HTMLInputElement>("textbox", { name: "Git ref" });
+
+    await fireEvent.input(ref, { target: { value: "release/2026-08" } });
+
+    expect(ref.value).toBe("release/2026-08");
+  });
+
+  it("keeps only the workflow action surface on a merged pull request", async () => {
+    const detail = pullDetail();
+    detail.merge_request.State = "merged";
+    detail.repo.capabilities.review_mutation = true;
+    detail.repo.capabilities.merge_mutation = true;
+    enableWorkflowActions(detail);
+    const api = workflowClient(detail);
+
+    renderPullDetail(detail, api.repoSettings, api.client, {
+      actionsModeVisible: true,
+      runtimeClient: api.client,
+    });
+    await waitFor(() => {
+      expect(api.GET.mock.calls.some(([path]) => String(path).endsWith("/workflows"))).toBe(true);
+    });
+
+    expect(await screen.findByRole("button", { name: "Run workflow" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /merge/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+  });
+
+  it("routes definition-conflict recovery through a real catalog refresh without replaying POST", async () => {
+    const rendered = await openReleaseWorkflow(pullDetail());
+    const refreshCatalog = vi.spyOn(rendered.workflowActions, "refreshCatalog");
+    rendered.api.POST.mockResolvedValue({
+      error: {
+        code: "conflict",
+        detail: "Workflow definition changed.",
+        details: { reason: "workflow_definition_changed" },
+        status: 409,
+        title: "Conflict",
+        type: "about:blank",
+      },
+      response: new Response(null, { status: 409 }),
+    });
+
+    await fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Run workflow" })).getByRole("button", {
+        name: "Run workflow",
+      }),
+    );
+    const reload = await screen.findByRole("button", { name: "Reload workflows" });
+    rendered.api.GET.mockResolvedValue({
+      data: {
+        repo: pullDetail().repo,
+        environments: [],
+        workflows: [
+          {
+            ...releaseWorkflow,
+            definition_sha: "release-definition-v2",
+            inputs: [
+              { name: "version", type: "string", required: true, description: "Release version", has_default: false },
+            ],
+          },
+        ],
+      },
+    });
+    await fireEvent.click(reload);
+
+    expect(refreshCatalog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "github",
+        platformHost: "github.com",
+        owner: "acme",
+        name: "widget",
+      }),
+      "release.yml",
+    );
+    expect(rendered.api.POST).toHaveBeenCalledTimes(1);
+    const version = await screen.findByRole("textbox", { name: /version/i });
+    await fireEvent.input(version, { target: { value: "1.2.3" } });
+    rendered.api.POST.mockResolvedValue({ data: { accepted: true, dispatch_id: "dispatch-2" } });
+    await fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Run workflow" })).getByRole("button", { name: "Run workflow" }),
+    );
+    await waitFor(() => expect(rendered.api.POST).toHaveBeenCalledTimes(2));
+    expect(rendered.api.POST).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: {
+          expected_definition_sha: "release-definition-v2",
+          ref: "feature",
+          inputs: { version: "1.2.3" },
+        },
+      }),
+    );
+  });
+
+  it("closes an open workflow dialog when the refreshed catalog removes that workflow", async () => {
+    const rendered = await openReleaseWorkflow(pullDetail());
+    rendered.api.GET.mockResolvedValue({ data: { repo: pullDetail().repo, environments: [], workflows: [] } });
+    rendered.workflowActions.refreshCatalog(
+      { provider: "github", platformHost: "github.com", owner: "acme", name: "widget", repoPath: "acme/widget" },
+      "release.yml",
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Run workflow" })).toBeNull());
+    expect(rendered.api.POST).not.toHaveBeenCalled();
+  });
+
+  it("closes the confirmation without dispatch when Actions mode is disabled", async () => {
+    const detail = pullDetail();
+    const rendered = await openReleaseWorkflow(detail);
+
+    rendered.settings.setModeVisibility({
+      ...rendered.settings.getModeVisibility(),
+      actions: false,
+    });
+    await tick();
+
+    expect(screen.queryByRole("dialog", { name: "Run workflow" })).toBeNull();
+    expect(screen.queryByText("GitHub Actions")).toBeNull();
+    expect(rendered.api.POST).not.toHaveBeenCalled();
+
+    rendered.settings.setModeVisibility({
+      ...rendered.settings.getModeVisibility(),
+      actions: true,
+    });
+    await tick();
+    expect(screen.queryByRole("dialog", { name: "Run workflow" })).toBeNull();
+  });
+});
 
 describe("PullDetail activity refresh", () => {
   afterEach(() => {
@@ -689,6 +1064,7 @@ describe("PullDetail activity refresh", () => {
             settings: {
               getLaunchTargets: () => launchTargets,
               getDetailSettings: () => ({ initial_timeline_entry_limit: 250 }),
+              isModeVisible: () => false,
             },
           },
         ],
@@ -1135,7 +1511,7 @@ describe("PullDetail approvals", () => {
     expect(screen.queryByText("old-route")).toBeNull();
   });
 
-  it("closes the label picker when the actions menu Labels action is clicked after reopening the menu", async () => {
+  it("toggles the label picker from the visible Labels action", async () => {
     const detail = pullDetail();
     detail.repo.capabilities = {
       ...capabilities,
@@ -1145,28 +1521,21 @@ describe("PullDetail approvals", () => {
 
     renderPullDetail(detail);
 
-    const actionsTrigger = screen.getByRole("button", {
-      name: "Actions",
+    const labelsTrigger = screen.getByRole("button", {
+      name: "Labels",
     });
-    await fireEvent.click(actionsTrigger);
-    await fireEvent.click(getActionMenuLabelsButton());
+    await fireEvent.click(labelsTrigger);
 
     expect(await screen.findByRole("dialog", { name: "Edit labels" })).toBeTruthy();
     expect(document.querySelector(".actions-menu-popover")).toBeNull();
 
-    await fireEvent.mouseDown(actionsTrigger);
-    await fireEvent.click(actionsTrigger);
-    expect(document.querySelector(".actions-menu-popover")).not.toBeNull();
-
-    const labelsAction = getActionMenuLabelsButton();
-    await fireEvent.mouseDown(labelsAction);
-    await fireEvent.click(labelsAction);
+    await fireEvent.mouseDown(labelsTrigger);
+    await fireEvent.click(labelsTrigger);
 
     expect(screen.queryByRole("dialog", { name: "Edit labels" })).toBeNull();
-    expect(document.querySelector(".actions-menu-popover")).toBeNull();
   });
 
-  it("opens the actions-menu label picker as a non-modal popover", async () => {
+  it("opens the visible Labels action as a non-modal popover", async () => {
     const detail = pullDetail();
     detail.repo.capabilities = {
       ...capabilities,
@@ -1176,8 +1545,7 @@ describe("PullDetail approvals", () => {
 
     renderPullDetail(detail);
 
-    await fireEvent.click(screen.getByRole("button", { name: "Actions" }));
-    await fireEvent.click(getActionMenuLabelsButton());
+    await fireEvent.click(screen.getByRole("button", { name: "Labels" }));
 
     expect(await screen.findByRole("dialog", { name: "Edit labels" })).toBeTruthy();
     expect(document.querySelector(".label-editor-backdrop")).toBeNull();
@@ -1186,7 +1554,7 @@ describe("PullDetail approvals", () => {
     expect(screen.queryByRole("dialog", { name: "Edit labels" })).toBeNull();
   });
 
-  it("keeps the actions menu Labels button on the compact action geometry", async () => {
+  it("keeps the visible Labels action on small button geometry", async () => {
     const detail = pullDetail();
     detail.repo.capabilities = {
       ...capabilities,
@@ -1196,17 +1564,12 @@ describe("PullDetail approvals", () => {
 
     renderPullDetail(detail);
 
-    await fireEvent.click(screen.getByRole("button", { name: "Actions" }));
-
-    const labelsAction = getActionMenuLabelsButton();
+    const labelsAction = screen.getByRole("button", { name: "Labels" });
     const labelsIcon = labelsAction.querySelector("svg");
-    const labelsItem = labelsAction.closest(".actions-menu-popover__item--labels");
 
     expect(labelsAction.classList.contains("kit-button--sm")).toBe(true);
-    expect(labelsAction.parentElement).toBe(labelsItem);
-    expect(labelsItem?.classList.contains("label-editor-anchor")).toBe(true);
-    expect(labelsIcon?.getAttribute("width")).toBe("14");
-    expect(labelsIcon?.getAttribute("height")).toBe("14");
+    expect(labelsIcon?.getAttribute("width")).toBe("16");
+    expect(labelsIcon?.getAttribute("height")).toBe("16");
   });
 
   it("uses the shared View menu to persist compact activity rows", async () => {
@@ -1595,6 +1958,7 @@ describe("PullDetail approvals", () => {
             settings: {
               getLaunchTargets: () => [],
               getDetailSettings: () => ({ initial_timeline_entry_limit: 250 }),
+              isModeVisible: () => false,
             },
           },
         ],

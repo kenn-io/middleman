@@ -31,6 +31,7 @@ var allowedAPITags = map[string]struct{}{
 	"Sync":          {},
 	"System":        {},
 	"Workspaces":    {},
+	"Workflows":     {},
 }
 
 // collectMetadataFailures walks an OpenAPI document and returns one entry per

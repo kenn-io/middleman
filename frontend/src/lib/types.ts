@@ -110,6 +110,7 @@ export type { DetailActivityViewStore } from "./stores/detail-activity-view.svel
 export type { CollapsedReposStore } from "./stores/collapsedRepos.svelte.js";
 export type { SettingsStore } from "./stores/settings.svelte.js";
 export type { EventsStore } from "./stores/events.svelte.js";
+export type { WorkflowActionsStore } from "./stores/workflow-actions.svelte.js";
 export type { DaemonStore } from "./stores/roborev/daemon.svelte.js";
 export type { JobsStore } from "./stores/roborev/jobs.svelte.js";
 export type { ReviewStore } from "./stores/roborev/review.svelte.js";
@@ -128,6 +129,7 @@ import type { DetailActivityViewStore } from "./stores/detail-activity-view.svel
 import type { CollapsedReposStore } from "./stores/collapsedRepos.svelte.js";
 import type { SettingsStore } from "./stores/settings.svelte.js";
 import type { EventsStore } from "./stores/events.svelte.js";
+import type { WorkflowActionsStore } from "./stores/workflow-actions.svelte.js";
 import type { DaemonStore } from "./stores/roborev/daemon.svelte.js";
 import type { JobsStore } from "./stores/roborev/jobs.svelte.js";
 import type { ReviewStore } from "./stores/roborev/review.svelte.js";
@@ -147,6 +149,7 @@ export interface StoreInstances {
   collapsedRepos: CollapsedReposStore;
   settings: SettingsStore;
   events: EventsStore;
+  workflowActions: WorkflowActionsStore;
   roborevDaemon?: DaemonStore;
   roborevJobs?: JobsStore;
   roborevReview?: ReviewStore;

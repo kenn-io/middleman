@@ -57,5 +57,9 @@ back to TOML.
 - When zero is meaningful, represent the saved value as optional so TOML `omitempty` cannot turn explicit zero into an unset default; the round-trip test must cover zero (`internal/config/config.go::Terminal`).
 - Whole-file settings mutations must hold `configReloadMu` before `cfgMu` while applying and saving changes, or the watcher can restore a stale snapshot between writes (`internal/server/settings_handlers.go::updateSettings`).
 - Partial settings request objects must use pointer fields and merge only fields that were present; reusing persisted value structs collapses omission into zero values (`internal/server/settings_handlers.go::mcpSettingsUpdate`).
+- `modes.actions` is false by default and controls presentation only; provider
+  workflow HTTP access remains available (`internal/config/config.go::ModeVisibility`).
+- Disabling Actions releases demand and removes both its top-level mode and PR
+  workflow menu (`frontend/src/App.svelte::syncWorkflowActionsAvailability`).
 - `roborev.init_managed_clones` is a hot-reloaded, false-by-default setup policy. It persists through the partial `roborev` settings object and the committed workspace API snapshot; only the effective Roborev endpoint remains in the startup-bound restart snapshot (`internal/config/config.go::Roborev`, `internal/server/config_reload.go::startupConfigSnapshot`, `internal/server/workspaceapi/config.go::ConfigSnapshot`).
 - Repository preset config stores only named custom definitions; `Global` is a derived UI preset and must never be serialized to TOML. Each member persists provider, provider host, provider-verified repository ID, and a last-known display route; preset create/update/delete use dedicated atomic settings endpoints instead of replacing the collection through generic settings (`internal/config/config.go::RepoPreset`, `internal/server/settings_handlers.go::mutateRepoPresets`).

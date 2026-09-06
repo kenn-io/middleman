@@ -787,6 +787,7 @@ type ModeVisibility struct {
 	Activity   *bool `toml:"activity,omitempty" json:"activity" nullable:"false"`
 	Repos      *bool `toml:"repos,omitempty" json:"repos" nullable:"false"`
 	Docs       *bool `toml:"docs,omitempty" json:"docs" nullable:"false"`
+	Actions    *bool `toml:"actions,omitempty" json:"actions" nullable:"false"`
 	Pulls      *bool `toml:"pulls,omitempty" json:"pulls" nullable:"false"`
 	Issues     *bool `toml:"issues,omitempty" json:"issues" nullable:"false"`
 	Reviews    *bool `toml:"reviews,omitempty" json:"reviews" nullable:"false"`
@@ -798,6 +799,7 @@ func DefaultModeVisibility() ModeVisibility {
 		Activity:   new(true),
 		Repos:      new(true),
 		Docs:       new(false),
+		Actions:    new(false),
 		Pulls:      new(true),
 		Issues:     new(true),
 		Reviews:    new(true),
@@ -815,6 +817,9 @@ func (m ModeVisibility) WithDefaults() ModeVisibility {
 	}
 	if m.Docs != nil {
 		defaults.Docs = m.Docs
+	}
+	if m.Actions != nil {
+		defaults.Actions = m.Actions
 	}
 	if m.Pulls != nil {
 		defaults.Pulls = m.Pulls

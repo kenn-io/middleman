@@ -271,6 +271,24 @@ Persisted controls must state their scope clearly.
 - A foreground Activity load replaces a same-scope author read owned by supersedable
   reconciliation; joining that read can let its interruption strand stale candidates
   (`frontend/src/lib/stores/activity.svelte.ts::loadActivity`).
+- Actions is standalone-only and stays inert until settings hydrate; disabling it releases
+  workflow demand before replacing `/actions` with Activity (`frontend/src/App.svelte::syncWorkflowActionsAvailability`).
+- Actions derives provider identity from globally filtered repository summaries and requires
+  workflow catalog, run, and dispatch capabilities; unsupported repos stay visible without reads
+  (`frontend/src/lib/components/actions/ActionsPage.svelte::supportsWorkflowActions`).
+- Actions snapshot read failures never collapse into successful empty/current data: empty
+  failures replace the empty state, while retained runs/jobs remain with a visible stale-data alert
+  (`frontend/src/lib/components/actions/ActionsPage.svelte::workflowReadErrorMessage`).
+- Run reads belong to the selected workflow: selection replaces the prior run
+  projection and every generated request carries that workflow ID
+  (`frontend/src/lib/stores/workflow-actions.svelte.ts::selectWorkflow`).
+- A dispatched run appears in the list from the dispatch response or the first
+  `workflow_dispatch_progress` event, and later events update it in place; the
+  list is otherwise refreshed only by user action
+  (`frontend/src/lib/stores/workflow-actions.svelte.ts::applyDispatchProgress`).
+- PR Actions defaults open same-repository pulls to the head branch, but forks
+  and non-open states to the target; workflows remain on merged pulls
+  (`frontend/src/lib/components/detail/PullDetail.svelte::workflowInitialRef`).
 - Server-backed settings belong in the API only when the preference should
   follow the user/config rather than one browser session.
 - Settings controls persist on change. Do not add a Save button, a dirty draft,
@@ -872,6 +890,9 @@ Rows that contain buttons, links, or toggles need clear event ownership.
 - Catalog reads use consumer-local owners: picker teardown or route replacement may cancel only that
   consumer, never review-run state or sibling repository resolution
   (`frontend/src/lib/components/roborev/RepoTreePicker.svelte::owner`).
+- Workflow Actions seeds top-level refs from repository authority and reads jobs lazily once per
+  expanded run; collapsing a run keeps its jobs and never refetches
+  (`frontend/src/lib/components/actions/ActionsPage.svelte::expandRun`).
 - Docs publish commands snapshot folder and message and remain application-owned after replacement;
   same-folder surfaces adopt pending or unacknowledged failure state, while completed success is never
   replayed into a later session (`frontend/src/lib/stores/docs-workflow.ts::DocsWorkflowService`).

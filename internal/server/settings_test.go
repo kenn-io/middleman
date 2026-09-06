@@ -667,6 +667,7 @@ func TestHandleUpdateSettingsPersistsModes(t *testing.T) {
 	modes := config.DefaultModeVisibility()
 	*modes.Docs = true
 	*modes.Workspaces = false
+	*modes.Actions = true
 
 	rr := testutil.DoJSON(
 		t, srv, http.MethodPut, "/api/v1/settings",
@@ -676,6 +677,7 @@ func TestHandleUpdateSettingsPersistsModes(t *testing.T) {
 
 	var resp settingsResponse
 	require.NoError(json.NewDecoder(rr.Body).Decode(&resp))
+	assert.True(*resp.Modes.Actions)
 	assert.True(*resp.Modes.Docs)
 	assert.False(*resp.Modes.Workspaces)
 	assert.True(*resp.Modes.Activity)
@@ -686,6 +688,7 @@ func TestHandleUpdateSettingsPersistsModes(t *testing.T) {
 
 	cfg2, err := config.Load(cfgPath)
 	require.NoError(err)
+	assert.True(*cfg2.Modes.Actions)
 	assert.True(*cfg2.Modes.Docs)
 	assert.False(*cfg2.Modes.Workspaces)
 	assert.True(*cfg2.Modes.Activity)
@@ -693,6 +696,16 @@ func TestHandleUpdateSettingsPersistsModes(t *testing.T) {
 	assert.True(*cfg2.Modes.Pulls)
 	assert.True(*cfg2.Modes.Issues)
 	assert.True(*cfg2.Modes.Reviews)
+
+	activity := srv.cfg.Activity
+	activity.TimeRange = "30d"
+	rr = testutil.DoJSON(t, srv, http.MethodPut, "/api/v1/settings", updateSettingsRequest{
+		Activity: &activity,
+	})
+	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
+	cfg3, err := config.Load(cfgPath)
+	require.NoError(err)
+	assert.True(*cfg3.Modes.Actions)
 }
 
 func TestHandleUpdateSettingsPublishesPullConfigOnlyAfterPersistence(t *testing.T) {
@@ -809,6 +822,7 @@ func assertDefaultModeVisibility(t *testing.T, modes config.ModeVisibility) {
 	assert.True(*modes.Activity)
 	assert.True(*modes.Repos)
 	assert.False(*modes.Docs)
+	assert.False(*modes.Actions)
 	assert.True(*modes.Pulls)
 	assert.True(*modes.Issues)
 	assert.True(*modes.Reviews)

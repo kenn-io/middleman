@@ -162,6 +162,14 @@ describe("router basic routes", () => {
     expect(getPage()).toBe("design-system");
   });
 
+  it("parses and navigates to the top-level Actions workspace", () => {
+    navigate("/actions");
+
+    expect(getRoute()).toEqual({ page: "actions" });
+    expect(getPage()).toBe("actions");
+    expect(window.location.pathname + window.location.search).toBe("/actions");
+  });
+
   it("parses /pulls as list view", () => {
     navigate("/pulls");
     expect(getRoute()).toEqual({ page: "pulls", view: "list" });

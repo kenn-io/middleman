@@ -42,6 +42,26 @@ service is the supported tool here.
 - Use scoped acquisition and finalizers for listeners, streams, readers,
   abort controllers, timers, presenters, and workflow owners. Teardown must be
   explicit at the same lifetime boundary that acquired the resource.
+- Publish an owner registry entry and install its finalizer in one
+  uninterruptible acquisition handoff. After an ordered queue admits a
+  non-idempotent command, pending-state publication and executor release are
+  likewise one uninterruptible handoff.
+- Workflow Actions is a plain app-scoped store that reads on demand and applies
+  server events; it owns no polling loops, queues, or reconciliation. Dispatch
+  follow-through (watching the returned run ID finish) lives on the server and
+  arrives as `workflow_dispatch_progress` events keyed by `dispatch_id`
+  (`frontend/src/lib/stores/workflow-actions.svelte.ts::applyDispatchProgress`,
+  `internal/server/workflowapi/dispatch_follow.go::Handler.followDispatch`).
+- Reads are latest-wins per repository through generation counters; a stale catalog
+  or run response never replaces newer data
+  (`frontend/src/lib/stores/workflow-actions.svelte.ts::selectWorkflow`).
+- One dispatch cycle exists per workflow. Success, rejection, uncertainty, and
+  definition conflict leave presentation only through the explicit new-cycle
+  command; retry returns to fresh confirmation and never replays the POST
+  (`frontend/src/lib/stores/workflow-actions.svelte.ts::newDispatchCycle`).
+- Definition-reload failures are cycle state separate from general read errors;
+  a successful reload clears that workflow's cycle
+  (`frontend/src/lib/stores/workflow-actions.svelte.ts::refreshCatalog`).
 - Use Effect concurrency, queues, fibers, schedules, and interruption instead
   of bespoke Promise generations, overlapping timers, or boolean race guards.
   Preserve latest-wins, single-flight, ordered, or lossless semantics explicitly;

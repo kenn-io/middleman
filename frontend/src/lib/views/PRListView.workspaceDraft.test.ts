@@ -175,6 +175,7 @@ function renderWithRealPullDetail(
             settings: {
               getLaunchTargets: () => [],
               getDetailSettings: () => ({ initial_timeline_entry_limit: 250 }),
+              isModeVisible: () => false,
             },
           },
         ],

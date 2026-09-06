@@ -134,6 +134,19 @@ export function providerItemPath(kind: "pulls" | "issues", ref: ProviderRouteRef
   return `/${kind}/{provider}/{owner}/{name}/{number}${suffix}`;
 }
 
+type ActionsSuffix = "/workflows" | "/runs" | "/runs/{run_id}/jobs" | "/workflows/{workflow_id}/dispatch";
+
+type ActionsPath<S extends ActionsSuffix> =
+  | `/actions/{provider}/{owner}/{name}${S}`
+  | `/host/{platform_host}/actions/{provider}/{owner}/{name}${S}`;
+
+export function providerActionsPath<S extends ActionsSuffix>(ref: ProviderRouteRef, suffix: S): ActionsPath<S> {
+  if (providerUsesHostRoute(ref)) {
+    return `/host/{platform_host}/actions/{provider}/{owner}/{name}${suffix}`;
+  }
+  return `/actions/{provider}/{owner}/{name}${suffix}`;
+}
+
 type RepoSuffix =
   | ""
   | "/browser/asset"

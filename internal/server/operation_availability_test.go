@@ -37,6 +37,7 @@ func TestDeriveOperationAvailability(t *testing.T) {
 		ReviewMutation:              true,
 		ReviewDraftMutation:         true,
 		WorkflowApproval:            true,
+		WorkflowDispatch:            true,
 		ReadyForReview:              true,
 		DraftMutation:               true,
 		IssueMutation:               true,
@@ -79,6 +80,57 @@ func TestDeriveOperationAvailability(t *testing.T) {
 		{
 			name:     "healthy merge_pr is available",
 			op:       mergePR,
+			caps:     allCaps,
+			repo:     repoCanMerge,
+			expected: httpapi.OperationAvailability{Available: true},
+		},
+		{
+			name: "dispatch_workflow is unavailable without workflow_dispatch",
+			op:   descDispatchWorkflow,
+			caps: func() httpapi.ProviderCapabilitiesResponse {
+				c := allCaps
+				c.WorkflowDispatch = false
+				return c
+			}(),
+			repo: repoCanMerge,
+			expected: httpapi.OperationAvailability{
+				Code:               availabilityCodeUnsupportedCapability,
+				UnavailableReason:  "Provider does not support workflow_dispatch",
+				RequiredCapability: capabilityWorkflowDispatch,
+			},
+		},
+		{
+			name: "dispatch_workflow is unavailable without a write credential",
+			op:   descDispatchWorkflow,
+			caps: allCaps,
+			repo: repoCanMerge,
+			writeCred: writeCredentialGate{
+				code:   availabilityCodeMissingWriteCredential,
+				reason: "No user credential for writes on github.com",
+			},
+			expected: httpapi.OperationAvailability{
+				Code:              availabilityCodeMissingWriteCredential,
+				UnavailableReason: "No user credential for writes on github.com",
+			},
+		},
+		{
+			name: "dispatch_workflow is unavailable during a REST rate-limit window",
+			op:   descDispatchWorkflow,
+			caps: allCaps,
+			repo: repoCanMerge,
+			rate: operationRateLimitForBuckets(
+				descDispatchWorkflow.rateLimitBuckets(),
+				map[apiBucket]rateLimitAvailability{apiBucketREST: limitedRate},
+			),
+			expected: httpapi.OperationAvailability{
+				Code:              availabilityCodeRateLimited,
+				UnavailableReason: "github.com rate-limited",
+				RetryAt:           resetAt.UTC().Format(time.RFC3339),
+			},
+		},
+		{
+			name:     "dispatch_workflow is available when all gates pass",
+			op:       descDispatchWorkflow,
 			caps:     allCaps,
 			repo:     repoCanMerge,
 			expected: httpapi.OperationAvailability{Available: true},
@@ -320,6 +372,7 @@ func TestRepoOperationsWireShape(t *testing.T) {
 		"close_issue",
 		"reopen_issue",
 		"approve_workflow",
+		"dispatch_workflow",
 		"update_content",
 		"reply_review_thread",
 		"resolve_review_thread",

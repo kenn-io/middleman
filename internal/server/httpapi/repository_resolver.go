@@ -116,6 +116,8 @@ func CapabilityEnabled(caps ProviderCapabilitiesResponse, capability string) boo
 		return caps.ReviewMutation
 	case "workflow_approval":
 		return caps.WorkflowApproval
+	case "workflow_dispatch":
+		return caps.WorkflowDispatch
 	case "ready_for_review":
 		return caps.ReadyForReview
 	case "draft_mutation":
@@ -126,6 +128,10 @@ func CapabilityEnabled(caps ProviderCapabilitiesResponse, capability string) boo
 		return caps.ReadLabels
 	case "read_markdown_images":
 		return caps.ReadMarkdownImages
+	case "read_workflows":
+		return caps.ReadWorkflows
+	case "read_workflow_runs":
+		return caps.ReadWorkflowRuns
 	case "label_mutation":
 		return caps.LabelMutation
 	case "assignee_mutation":
@@ -298,6 +304,7 @@ func (r *RepositoryResolver) Ref(repo db.Repo) RepoRefResponse {
 		RepoPath:       repoPath,
 		Owner:          repo.Owner,
 		Name:           repo.Name,
+		DefaultBranch:  repo.DefaultBranch,
 		Capabilities:   r.Capabilities(platform.Kind(provider), host),
 	}
 }
@@ -343,6 +350,8 @@ func ProviderCapabilitiesFromPlatform(caps platform.Capabilities) ProviderCapabi
 		ReadComments:                caps.ReadComments,
 		ReadReleases:                caps.ReadReleases,
 		ReadCI:                      caps.ReadCI,
+		ReadWorkflows:               caps.ReadWorkflows,
+		ReadWorkflowRuns:            caps.ReadWorkflowRuns,
 		ReadLabels:                  caps.ReadLabels,
 		ReadMarkdownImages:          caps.ReadMarkdownImages,
 		ReadAuthenticatedUser:       caps.ReadAuthenticatedUser,
@@ -351,6 +360,7 @@ func ProviderCapabilitiesFromPlatform(caps platform.Capabilities) ProviderCapabi
 		MergeMutation:               caps.MergeMutation,
 		ReviewMutation:              caps.ReviewMutation,
 		WorkflowApproval:            caps.WorkflowApproval,
+		WorkflowDispatch:            caps.WorkflowDispatch,
 		ReadyForReview:              caps.ReadyForReview,
 		DraftMutation:               caps.DraftMutation,
 		IssueMutation:               caps.IssueMutation,

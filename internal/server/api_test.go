@@ -31188,3 +31188,42 @@ func TestMergeBlocksPredecessorWhenNativeStackRefreshIsPartial(t *testing.T) {
 	assert.Contains(string(mergeResp.Body), `"blocking_number":100`)
 	assert.False(merged, "the provider must not be asked to merge past an open predecessor")
 }
+
+func TestAPIHeadRepoKindClassifiesSameRepoForkAndUnknown(t *testing.T) {
+	require := require.New(t)
+	srv, database := setupTestServer(t)
+	repoID, err := database.UpsertRepo(
+		t.Context(),
+		verifiedGitHubRepoIdentity("github.com", "acme", "widget"),
+	)
+	require.NoError(err)
+	now := time.Now().UTC().Truncate(time.Second)
+	for index, test := range []struct {
+		cloneURL string
+		want     string
+	}{
+		{cloneURL: "https://github.com/acme/widget.git", want: "same_repo"},
+		{cloneURL: "https://github.com/contributor/widget.git", want: "fork"},
+		{cloneURL: "", want: "unknown"},
+	} {
+		number := 900 + index
+		_, err := database.UpsertMergeRequest(t.Context(), &db.MergeRequest{
+			RepoID: repoID, PlatformID: int64(number), Number: number,
+			URL:   "https://github.com/acme/widget/pull/" + strconv.Itoa(number),
+			Title: "Head repository classification", Author: "alice", State: "open",
+			HeadBranch: "feature/head-repo", BaseBranch: "main",
+			HeadRepoCloneURL: test.cloneURL,
+			CreatedAt:        now, UpdatedAt: now, LastActivityAt: now,
+		})
+		require.NoError(err)
+		response := testutil.DoJSON(
+			t, srv, http.MethodGet,
+			"/api/v1/pulls/gh/acme/widget/"+strconv.Itoa(number),
+			nil,
+		)
+		require.Equal(http.StatusOK, response.Code, response.Body.String())
+		var detail pullapi.MergeRequestDetailResponse
+		require.NoError(json.Unmarshal(response.Body.Bytes(), &detail))
+		assert.Equal(t, test.want, string(detail.HeadRepoKind))
+	}
+}

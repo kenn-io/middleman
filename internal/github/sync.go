@@ -1992,6 +1992,22 @@ type githubReviewerClient interface {
 	RemovePullRequestReviewers(ctx context.Context, owner, repo string, number int, usernames []string) error
 }
 
+type githubWorkflowCatalogClient interface {
+	ListRepositoryWorkflows(context.Context, string, string) ([]*gh.Workflow, error)
+	GetWorkflowDefinition(context.Context, string, string, string, string) (string, string, error)
+	ListRepositoryEnvironments(context.Context, string, string) ([]*gh.Environment, error)
+}
+
+type githubWorkflowRunClient interface {
+	GetManualWorkflowRun(context.Context, string, string, int64) (*gh.WorkflowRun, error)
+	ListManualWorkflowRuns(context.Context, string, string, int64, platform.WorkflowRunQuery) (platform.Page[*gh.WorkflowRun], error)
+	ListManualWorkflowJobs(context.Context, string, string, int64) ([]*gh.WorkflowJob, error)
+}
+
+type githubWorkflowDispatchClient interface {
+	DispatchManualWorkflow(context.Context, string, string, int64, gh.CreateWorkflowDispatchEventRequest) (*gh.WorkflowDispatchRunDetails, error)
+}
+
 func registryFromGitHubClients(clients map[string]Client) *platform.Registry {
 	registry, err := platform.NewRegistry()
 	if err != nil {
@@ -2035,6 +2051,9 @@ func (p *gitHubClientProvider) Capabilities() platform.Capabilities {
 	_, labels := p.client.(githubLabelClient)
 	_, assignees := p.client.(githubAssigneeClient)
 	_, reviewers := p.client.(githubReviewerClient)
+	_, workflows := p.client.(githubWorkflowCatalogClient)
+	_, workflowRuns := p.client.(githubWorkflowRunClient)
+	_, workflowDispatch := p.client.(githubWorkflowDispatchClient)
 	_, archivePages := p.client.(pageClient)
 	_, markdownImages := p.client.(markdownImageClient)
 	_, directViewer := p.client.(authenticatedViewerLoginClient)
@@ -2053,12 +2072,15 @@ func (p *gitHubClientProvider) Capabilities() platform.Capabilities {
 		ReadMarkdownImages:          markdownImages,
 		ReadAuthenticatedUser:       directViewer || routedViewer,
 		ReadNotifications:           true,
+		ReadWorkflows:               workflows,
+		ReadWorkflowRuns:            workflowRuns,
 		CommentMutation:             true,
 		StateMutation:               true,
 		MergeMutation:               true,
 		ReviewMutation:              true,
 		MutationHeadBinding:         true,
 		WorkflowApproval:            true,
+		WorkflowDispatch:            workflowDispatch,
 		ReadyForReview:              true,
 		DraftMutation:               true,
 		IssueMutation:               true,
@@ -2249,6 +2271,250 @@ func (p *gitHubClientProvider) GetRepository(
 		return platform.Repository{}, err
 	}
 	return gitHubPlatformRepository(p.host, ref.Owner, repo), nil
+}
+
+func workflowDefinitionReadMustAbort(err error) bool {
+	if errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, platform.ErrRateLimited) {
+		return true
+	}
+	if _, ok := errors.AsType[*gh.RateLimitError](err); ok {
+		return true
+	}
+	if _, ok := errors.AsType[*gh.AbuseRateLimitError](err); ok {
+		return true
+	}
+	status := githubStatusCode(err)
+	if status == http.StatusNotFound {
+		return false
+	}
+	if status == http.StatusUnauthorized || status == http.StatusForbidden || status >= http.StatusInternalServerError {
+		return true
+	}
+	_, transportFailure := errors.AsType[*url.Error](err)
+	return transportFailure
+}
+
+func (p *gitHubClientProvider) ListManualWorkflows(
+	ctx context.Context, ref platform.RepoRef,
+) ([]platform.WorkflowDefinition, error) {
+	client, ok := p.client.(githubWorkflowCatalogClient)
+	if !ok {
+		return nil, platform.UnsupportedCapability(platform.KindGitHub, p.host, "read_workflows")
+	}
+	repo, err := p.client.GetRepository(ctx, ref.Owner, ref.Name)
+	if err != nil {
+		return nil, err
+	}
+	workflows, err := client.ListRepositoryWorkflows(ctx, ref.Owner, ref.Name)
+	if err != nil {
+		return nil, err
+	}
+	definitions := make([]platform.WorkflowDefinition, 0, len(workflows))
+	for _, workflow := range workflows {
+		if workflow == nil || workflow.GetState() != "active" {
+			continue
+		}
+		content, sha, fileErr := client.GetWorkflowDefinition(
+			ctx, ref.Owner, ref.Name, workflow.GetPath(), repo.GetDefaultBranch(),
+		)
+		if fileErr != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, ctxErr
+			}
+			if workflowDefinitionReadMustAbort(fileErr) {
+				return nil, fileErr
+			}
+			definitions = append(definitions, platform.WorkflowDefinition{
+				ID: strconv.FormatInt(workflow.GetID(), 10), Name: workflow.GetName(),
+				Path: workflow.GetPath(), State: workflow.GetState(), WebURL: workflow.GetHTMLURL(),
+				Available: false, UnavailableReason: fileErr.Error(),
+			})
+			continue
+		}
+		definition, manual, parseErr := platformgithub.ParseManualWorkflow(
+			workflow.GetName(), workflow.GetPath(), workflow.GetHTMLURL(), sha, []byte(content),
+		)
+		definition.ID = strconv.FormatInt(workflow.GetID(), 10)
+		definition.State = workflow.GetState()
+		if parseErr != nil {
+			definition.Available = false
+			definition.UnavailableReason = parseErr.Error()
+			definitions = append(definitions, definition)
+			continue
+		}
+		if manual {
+			definitions = append(definitions, definition)
+		}
+	}
+	return definitions, nil
+}
+
+func (p *gitHubClientProvider) ListWorkflowEnvironments(
+	ctx context.Context, ref platform.RepoRef,
+) ([]platform.WorkflowEnvironment, error) {
+	client, ok := p.client.(githubWorkflowCatalogClient)
+	if !ok {
+		return nil, platform.UnsupportedCapability(platform.KindGitHub, p.host, "read_workflows")
+	}
+	environments, err := client.ListRepositoryEnvironments(ctx, ref.Owner, ref.Name)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]platform.WorkflowEnvironment, 0, len(environments))
+	for _, environment := range environments {
+		if environment != nil {
+			result = append(result, platform.WorkflowEnvironment{Name: environment.GetName()})
+		}
+	}
+	return result, nil
+}
+
+func parseGitHubWorkflowID(host, field, raw string) (int64, error) {
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, &platform.Error{
+			Code: platform.ErrCodeInvalidArgument, Provider: platform.KindGitHub,
+			PlatformHost: host, Field: field, Err: fmt.Errorf("%s must be a positive decimal GitHub ID", field),
+		}
+	}
+	return id, nil
+}
+
+func (p *gitHubClientProvider) ListWorkflowRuns(
+	ctx context.Context, ref platform.RepoRef, query platform.WorkflowRunQuery,
+) (platform.Page[platform.WorkflowRun], error) {
+	client, ok := p.client.(githubWorkflowRunClient)
+	if !ok {
+		return platform.Page[platform.WorkflowRun]{}, platform.UnsupportedCapability(platform.KindGitHub, p.host, "read_workflow_runs")
+	}
+	workflowID, err := parseGitHubWorkflowID(p.host, "workflow_id", query.WorkflowID)
+	if err != nil {
+		return platform.Page[platform.WorkflowRun]{}, err
+	}
+	page, err := client.ListManualWorkflowRuns(ctx, ref.Owner, ref.Name, workflowID, query)
+	if err != nil {
+		return platform.Page[platform.WorkflowRun]{}, err
+	}
+	result := platform.Page[platform.WorkflowRun]{
+		NextCursor: page.NextCursor,
+		Exhausted:  page.Exhausted,
+		Items:      make([]platform.WorkflowRun, 0, len(page.Items)),
+	}
+	for _, run := range page.Items {
+		result.Items = append(result.Items, normalizeGitHubWorkflowRun(run))
+	}
+	return result, nil
+}
+
+func (p *gitHubClientProvider) GetWorkflowRun(ctx context.Context, ref platform.RepoRef, rawRunID string) (platform.WorkflowRun, error) {
+	client, ok := p.client.(githubWorkflowRunClient)
+	if !ok {
+		return platform.WorkflowRun{}, platform.UnsupportedCapability(platform.KindGitHub, p.host, "read_workflow_runs")
+	}
+	runID, err := parseGitHubWorkflowID(p.host, "run_id", rawRunID)
+	if err != nil {
+		return platform.WorkflowRun{}, err
+	}
+	run, err := client.GetManualWorkflowRun(ctx, ref.Owner, ref.Name, runID)
+	if err != nil {
+		return platform.WorkflowRun{}, err
+	}
+	return normalizeGitHubWorkflowRun(run), nil
+}
+
+func (p *gitHubClientProvider) ListWorkflowRunJobs(
+	ctx context.Context, ref platform.RepoRef, rawRunID string,
+) ([]platform.WorkflowRunJob, error) {
+	client, ok := p.client.(githubWorkflowRunClient)
+	if !ok {
+		return nil, platform.UnsupportedCapability(platform.KindGitHub, p.host, "read_workflow_runs")
+	}
+	runID, err := parseGitHubWorkflowID(p.host, "run_id", rawRunID)
+	if err != nil {
+		return nil, err
+	}
+	jobs, err := client.ListManualWorkflowJobs(ctx, ref.Owner, ref.Name, runID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]platform.WorkflowRunJob, 0, len(jobs))
+	for _, job := range jobs {
+		if job == nil {
+			continue
+		}
+		normalized := platform.WorkflowRunJob{
+			ID: strconv.FormatInt(job.GetID(), 10), Name: job.GetName(),
+			Status: job.GetStatus(), Conclusion: job.GetConclusion(),
+			StartedAt:   githubWorkflowTimestamp(job.StartedAt),
+			CompletedAt: githubWorkflowTimestamp(job.CompletedAt), WebURL: job.GetHTMLURL(),
+			Steps: make([]platform.WorkflowRunStep, 0, len(job.Steps)),
+		}
+		for _, step := range job.Steps {
+			if step == nil {
+				continue
+			}
+			normalized.Steps = append(normalized.Steps, platform.WorkflowRunStep{
+				Number: int(step.GetNumber()), Name: step.GetName(), Status: step.GetStatus(),
+				Conclusion: step.GetConclusion(), StartedAt: githubWorkflowTimestamp(step.StartedAt),
+				CompletedAt: githubWorkflowTimestamp(step.CompletedAt),
+			})
+		}
+		result = append(result, normalized)
+	}
+	return result, nil
+}
+
+func (p *gitHubClientProvider) DispatchWorkflow(
+	ctx context.Context, ref platform.RepoRef, request platform.WorkflowDispatchRequest,
+) (platform.WorkflowDispatchResult, error) {
+	client, ok := p.client.(githubWorkflowDispatchClient)
+	if !ok {
+		return platform.WorkflowDispatchResult{}, platform.UnsupportedCapability(platform.KindGitHub, p.host, "workflow_dispatch")
+	}
+	workflowID, err := parseGitHubWorkflowID(p.host, "workflow_id", request.WorkflowID)
+	if err != nil {
+		return platform.WorkflowDispatchResult{}, err
+	}
+	actor, _ := p.AuthenticatedUser(ctx, ref)
+	result := platform.WorkflowDispatchResult{Actor: actor}
+	details, err := client.DispatchManualWorkflow(ctx, ref.Owner, ref.Name, workflowID, gh.CreateWorkflowDispatchEventRequest{
+		Ref: request.Ref, Inputs: request.Inputs,
+	})
+	if err != nil {
+		return result, err
+	}
+	result.Accepted = true
+	if details != nil && details.GetWorkflowRunID() != 0 {
+		run := platform.WorkflowRun{
+			ID:         strconv.FormatInt(details.GetWorkflowRunID(), 10),
+			WorkflowID: request.WorkflowID, Actor: actor, WebURL: details.GetHTMLURL(),
+		}
+		result.Run = &run
+	}
+	return result, nil
+}
+
+func normalizeGitHubWorkflowRun(run *gh.WorkflowRun) platform.WorkflowRun {
+	if run == nil {
+		return platform.WorkflowRun{}
+	}
+	return platform.WorkflowRun{
+		ID: strconv.FormatInt(run.GetID(), 10), WorkflowID: strconv.FormatInt(run.GetWorkflowID(), 10),
+		RunNumber: int64(run.GetRunNumber()), Name: run.GetName(), Event: run.GetEvent(),
+		Ref: run.GetHeadBranch(), HeadSHA: run.GetHeadSHA(), Actor: run.GetActor().GetLogin(),
+		Status: run.GetStatus(), Conclusion: run.GetConclusion(),
+		CreatedAt: githubWorkflowTimestamp(run.CreatedAt), UpdatedAt: githubWorkflowTimestamp(run.UpdatedAt),
+		WebURL: run.GetHTMLURL(),
+	}
+}
+
+func githubWorkflowTimestamp(timestamp *gh.Timestamp) time.Time {
+	if timestamp == nil {
+		return time.Time{}
+	}
+	return timestamp.UTC()
 }
 
 // gitHubPlatformRepository converts a GitHub REST repository into the

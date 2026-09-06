@@ -22,6 +22,8 @@ export interface ProviderCapabilitiesResponse {
   read_releases: boolean;
   read_repositories: boolean;
   read_review_threads: boolean;
+  read_workflow_runs: boolean;
+  read_workflows: boolean;
   ready_for_review: boolean;
   review_draft_mutation: boolean;
   review_mutation: boolean;
@@ -33,4 +35,5 @@ export interface ProviderCapabilitiesResponse {
   thread_reply: boolean;
   thread_resolve: boolean;
   workflow_approval: boolean;
+  workflow_dispatch: boolean;
 }

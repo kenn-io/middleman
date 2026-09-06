@@ -51,6 +51,17 @@ until earlier members land.
 The conversation, files, and workspace can share a pane layout. Reorder,
 split, resize, hide, or maximize panes as the task changes.
 
+## Run manual provider workflows
+
+Actions is opt-in. Open **Settings → Visible modes**, enable **Actions**, and
+save. In **Actions**, choose a repository and a manual workflow, select a Git
+ref, complete its typed inputs, and run it.
+
+Recent runs show their status, jobs, and steps. Follow the provider link on a
+run to inspect its full logs. Pull requests also offer available workflows in
+the **Actions** menu: open same-repository pull requests start from the head
+branch, while fork and merged pull requests start from the target branch.
+
 ## Track local pull-request state
 
 Set a workflow status from the pull-request detail and filter the list by one

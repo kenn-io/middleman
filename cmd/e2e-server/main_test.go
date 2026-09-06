@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/db"
+	ghclient "go.kenn.io/forge/internal/github"
+	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/procutil"
 	"go.kenn.io/forge/internal/testutil"
 	"go.kenn.io/forge/internal/testutil/testsignal"
@@ -128,6 +130,138 @@ func (tracker *testTmuxTracker) stop(key string, tmuxCommand []string) error {
 	}
 	tracker.mu.Unlock()
 	return nil
+}
+func TestE2EWorkflowClientExercisesProviderWorkflowContract(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	base, ok := testutil.NewFixtureClient().(*testutil.FixtureClient)
+	require.True(ok)
+	fixture := newE2EWorkflowClient(base)
+	registry, err := ghclient.NewProviderRegistry(map[string]ghclient.Client{
+		"github.com": fixture,
+	})
+	require.NoError(err)
+	capabilities, err := registry.Capabilities(platform.KindGitHub, "github.com")
+	require.NoError(err)
+	assert.True(capabilities.ReadLabels)
+	assert.True(capabilities.LabelMutation)
+
+	ref := platform.RepoRef{
+		Platform: platform.KindGitHub,
+		Host:     "github.com",
+		Owner:    "acme",
+		Name:     "widgets",
+		RepoPath: "acme/widgets",
+	}
+	catalogReader, err := registry.WorkflowCatalogReader(platform.KindGitHub, "github.com")
+	require.NoError(err)
+	workflows, err := catalogReader.ListManualWorkflows(t.Context(), ref)
+	require.NoError(err)
+	require.Len(workflows, 2)
+	assert.Equal([]string{"Release", "Maintenance"}, []string{
+		workflows[0].Name,
+		workflows[1].Name,
+	})
+	assert.Equal([]platform.WorkflowInput{
+		{
+			Name:        "version",
+			Description: "Version to publish",
+			Required:    true,
+			Type:        platform.WorkflowInputString,
+		},
+		{
+			Name:       "dry_run",
+			Type:       platform.WorkflowInputBoolean,
+			Default:    false,
+			HasDefault: true,
+		},
+		{
+			Name:       "channel",
+			Required:   true,
+			Type:       platform.WorkflowInputChoice,
+			Default:    "stable",
+			HasDefault: true,
+			Options:    []string{"stable", "beta"},
+		},
+		{
+			Name:     "target",
+			Required: true,
+			Type:     platform.WorkflowInputEnvironment,
+		},
+	}, workflows[0].Inputs)
+	assert.Empty(workflows[1].Inputs)
+	environments, err := catalogReader.ListWorkflowEnvironments(t.Context(), ref)
+	require.NoError(err)
+	assert.Equal([]platform.WorkflowEnvironment{
+		{Name: "staging"},
+		{Name: "production"},
+	}, environments)
+
+	runReader, err := registry.WorkflowRunReader(platform.KindGitHub, "github.com")
+	require.NoError(err)
+	page, err := runReader.ListWorkflowRuns(t.Context(), ref, platform.WorkflowRunQuery{
+		WorkflowID: e2eReleaseWorkflowID,
+		Event:      "workflow_dispatch",
+	})
+	require.NoError(err)
+	require.Len(page.Items, 2)
+	assert.Equal([]string{"success", "failure"}, []string{
+		page.Items[0].Conclusion,
+		page.Items[1].Conclusion,
+	})
+
+	dispatcher, err := registry.WorkflowDispatcher(platform.KindGitHub, "github.com")
+	require.NoError(err)
+	submittedInputs := map[string]any{
+		"version": "v2.4.0",
+		"dry_run": true,
+		"channel": "beta",
+		"target":  "production",
+	}
+	result, err := dispatcher.DispatchWorkflow(t.Context(), ref, platform.WorkflowDispatchRequest{
+		WorkflowID: e2eReleaseWorkflowID,
+		Ref:        "feature/caching",
+		Inputs:     submittedInputs,
+	})
+	require.NoError(err)
+	require.NotNil(result.Run)
+	assert.Equal(e2eDispatchedRunID, result.Run.ID)
+	submittedInputs["version"] = "mutated-after-dispatch"
+	assert.Equal([]e2eWorkflowDispatch{{
+		Owner:      "acme",
+		Repository: "widgets",
+		WorkflowID: 8101,
+		Ref:        "feature/caching",
+		Inputs: map[string]any{
+			"version": "v2.4.0",
+			"dry_run": true,
+			"channel": "beta",
+			"target":  "production",
+		},
+	}}, fixture.dispatchedRequests())
+
+	page, err = runReader.ListWorkflowRuns(t.Context(), ref, platform.WorkflowRunQuery{
+		WorkflowID: e2eReleaseWorkflowID,
+		Event:      "workflow_dispatch",
+		Branch:     "feature/caching",
+	})
+	require.NoError(err)
+	require.Len(page.Items, 1)
+	assert.Equal(e2eDispatchedRunID, page.Items[0].ID)
+	assert.Equal("in_progress", page.Items[0].Status)
+	assert.Equal("fixture-viewer", page.Items[0].Actor)
+	assert.Equal("e2e-dispatched-head-sha", page.Items[0].HeadSHA)
+
+	jobs, err := runReader.ListWorkflowRunJobs(t.Context(), ref, e2eDispatchedRunID)
+	require.NoError(err)
+	require.Len(jobs, 1)
+	assert.Equal("publish-release", jobs[0].Name)
+	require.Len(jobs[0].Steps, 2)
+	assert.Equal([]string{"Prepare", "Publish"}, []string{
+		jobs[0].Steps[0].Name,
+		jobs[0].Steps[1].Name,
+	})
+	assert.Equal("in_progress", jobs[0].Steps[1].Status)
 }
 
 func TestTestTmuxTrackerRetainsFailedCleanupForRetry(t *testing.T) {

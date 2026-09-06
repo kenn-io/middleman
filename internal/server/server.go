@@ -45,6 +45,7 @@ import (
 	"go.kenn.io/forge/internal/server/kata"
 	"go.kenn.io/forge/internal/server/pullapi"
 	"go.kenn.io/forge/internal/server/repobrowserapi"
+	"go.kenn.io/forge/internal/server/workflowapi"
 	"go.kenn.io/forge/internal/server/workspaceapi"
 	"go.kenn.io/forge/internal/systemclipboard"
 	"go.kenn.io/forge/internal/telemetry"
@@ -236,6 +237,7 @@ type Server struct {
 	repoBrowserAPI         *repobrowserapi.Handler
 	pullAPI                *pullapi.Handler
 	issueAPI               *issueapi.Handler
+	workflowAPI            *workflowapi.Handler
 	pullLifecycle          pullLifecycle
 	workspaceAPI           *workspaceapi.Handler
 	providerSource         *hubProviderSource
@@ -350,6 +352,18 @@ func (s *Server) subscribeWorkspaceEvents(
 
 // SetBuildInfo sets the metadata returned by GET /api/v1/version.
 func (s *Server) SetBuildInfo(info BuildInfo) { s.buildInfo = info }
+
+// workflowRuntime exposes event publication and tracked background work to
+// the workflow API without leaking the rest of the server.
+type workflowRuntime struct{ server *Server }
+
+func (r workflowRuntime) Publish(eventType string, data any) {
+	r.server.hub.Broadcast(Event{Type: eventType, Data: data})
+}
+
+func (r workflowRuntime) Go(fn func(context.Context)) bool {
+	return r.server.runBackground(fn)
+}
 
 // runBackground launches fn as a tracked goroutine. fn receives a
 // context cancelled by Shutdown. If Shutdown has already started,
@@ -1219,6 +1233,12 @@ func newServer(
 		)
 	}
 	s.updateCatalogStripEnvVars(bootCatalog.TokenEnvNames())
+	s.workflowAPI = workflowapi.New(workflowapi.Deps{
+		Resolver:       repoResolver,
+		Syncer:         syncer,
+		RepoOperations: s.repoOperations,
+		Runtime:        workflowRuntime{server: s},
+	})
 	var pullProviderSource pullapi.ProviderSource
 	var issueProviderSource issueapi.ProviderSource
 	if s.providerSource != nil {

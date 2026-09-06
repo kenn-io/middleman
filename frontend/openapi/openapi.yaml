@@ -4709,6 +4709,12 @@ components:
           items:
             $ref: "#/components/schemas/MergeRequestEventResponse"
           type: array
+        head_repo_kind:
+          enum:
+            - same_repo
+            - fork
+            - unknown
+          type: string
         merge_base_sha:
           type: string
         merge_request:
@@ -4749,6 +4755,7 @@ components:
         - repo_name
         - platform_host
         - platform_head_sha
+        - head_repo_kind
         - platform_base_sha
         - reviewed_head_sha
         - diff_head_sha
@@ -5020,6 +5027,8 @@ components:
     ModeVisibility:
       additionalProperties: false
       properties:
+        actions:
+          type: boolean
         activity:
           type: boolean
         docs:
@@ -5038,6 +5047,7 @@ components:
         - activity
         - repos
         - docs
+        - actions
         - pulls
         - issues
         - reviews
@@ -5784,6 +5794,10 @@ components:
           type: boolean
         read_review_threads:
           type: boolean
+        read_workflow_runs:
+          type: boolean
+        read_workflows:
+          type: boolean
         ready_for_review:
           type: boolean
         review_draft_mutation:
@@ -5808,6 +5822,8 @@ components:
           type: boolean
         workflow_approval:
           type: boolean
+        workflow_dispatch:
+          type: boolean
       required:
         - read_repositories
         - read_merge_requests
@@ -5816,6 +5832,8 @@ components:
         - read_comments
         - read_releases
         - read_ci
+        - read_workflows
+        - read_workflow_runs
         - read_labels
         - read_markdown_images
         - read_authenticated_user
@@ -5824,6 +5842,7 @@ components:
         - merge_mutation
         - review_mutation
         - workflow_approval
+        - workflow_dispatch
         - ready_for_review
         - draft_mutation
         - issue_mutation
@@ -7102,6 +7121,8 @@ components:
           $ref: "#/components/schemas/OperationAvailability"
         delete_comment:
           $ref: "#/components/schemas/OperationAvailability"
+        dispatch_workflow:
+          $ref: "#/components/schemas/OperationAvailability"
         edit_comment:
           $ref: "#/components/schemas/OperationAvailability"
         mark_draft:
@@ -7149,6 +7170,7 @@ components:
         - close_issue
         - reopen_issue
         - approve_workflow
+        - dispatch_workflow
         - update_content
         - reply_review_thread
         - resolve_review_thread
@@ -7289,6 +7311,8 @@ components:
       properties:
         capabilities:
           $ref: "#/components/schemas/ProviderCapabilitiesResponse"
+        default_branch:
+          type: string
         name:
           type: string
         operations:
@@ -8902,6 +8926,292 @@ components:
         - required
         - count
       type: object
+    WorkflowCatalogResponse:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/WorkflowCatalogResponse.json
+          format: uri
+          readOnly: true
+          type: string
+        environments:
+          items:
+            $ref: "#/components/schemas/WorkflowEnvironmentResponse"
+          type: array
+        repo:
+          $ref: "#/components/schemas/RepoRefResponse"
+        workflows:
+          items:
+            $ref: "#/components/schemas/WorkflowDefinitionResponse"
+          type: array
+      required:
+        - repo
+        - workflows
+        - environments
+      type: object
+    WorkflowDefinitionResponse:
+      additionalProperties: false
+      properties:
+        available:
+          type: boolean
+        definition_sha:
+          type: string
+        id:
+          type: string
+        inputs:
+          items:
+            $ref: "#/components/schemas/WorkflowInputResponse"
+          type: array
+        name:
+          type: string
+        path:
+          type: string
+        state:
+          type: string
+        unavailable_reason:
+          type: string
+        web_url:
+          format: uri
+          type: string
+      required:
+        - id
+        - name
+        - path
+        - state
+        - web_url
+        - definition_sha
+        - inputs
+        - available
+      type: object
+    WorkflowDispatchBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/WorkflowDispatchBody.json
+          format: uri
+          readOnly: true
+          type: string
+        expected_definition_sha:
+          type: string
+        inputs:
+          additionalProperties: {}
+          type: object
+        ref:
+          type: string
+      required:
+        - ref
+        - inputs
+        - expected_definition_sha
+      type: object
+    WorkflowDispatchResponse:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/WorkflowDispatchResponse.json
+          format: uri
+          readOnly: true
+          type: string
+        accepted:
+          type: boolean
+        actor:
+          type: string
+        dispatch_id:
+          type: string
+        run:
+          $ref: "#/components/schemas/WorkflowRunResponse"
+      required:
+        - accepted
+        - dispatch_id
+      type: object
+    WorkflowEnvironmentResponse:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+      required:
+        - name
+      type: object
+    WorkflowInputResponse:
+      additionalProperties: false
+      properties:
+        default: {}
+        description:
+          type: string
+        has_default:
+          type: boolean
+        name:
+          type: string
+        options:
+          items:
+            type: string
+          type: array
+        required:
+          type: boolean
+        type:
+          enum:
+            - string
+            - number
+            - boolean
+            - choice
+            - environment
+          type: string
+      required:
+        - name
+        - required
+        - type
+        - has_default
+      type: object
+    WorkflowJobsResponse:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/WorkflowJobsResponse.json
+          format: uri
+          readOnly: true
+          type: string
+        items:
+          items:
+            $ref: "#/components/schemas/WorkflowRunJobResponse"
+          type: array
+        repo:
+          $ref: "#/components/schemas/RepoRefResponse"
+      required:
+        - repo
+        - items
+      type: object
+    WorkflowRunJobResponse:
+      additionalProperties: false
+      properties:
+        completed_at:
+          format: date-time
+          type: string
+        conclusion:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        started_at:
+          format: date-time
+          type: string
+        status:
+          type: string
+        steps:
+          items:
+            $ref: "#/components/schemas/WorkflowRunStepResponse"
+          type: array
+        web_url:
+          format: uri
+          type: string
+      required:
+        - id
+        - name
+        - status
+        - conclusion
+        - steps
+      type: object
+    WorkflowRunResponse:
+      additionalProperties: false
+      properties:
+        actor:
+          type: string
+        conclusion:
+          type: string
+        created_at:
+          format: date-time
+          type: string
+        event:
+          type: string
+        head_sha:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        ref:
+          type: string
+        run_number:
+          format: int64
+          type: integer
+        status:
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+        web_url:
+          format: uri
+          type: string
+        workflow_id:
+          type: string
+      required:
+        - id
+        - workflow_id
+        - run_number
+        - name
+        - event
+        - ref
+        - head_sha
+        - actor
+        - status
+        - conclusion
+      type: object
+    WorkflowRunStepResponse:
+      additionalProperties: false
+      properties:
+        completed_at:
+          format: date-time
+          type: string
+        conclusion:
+          type: string
+        name:
+          type: string
+        number:
+          format: int64
+          type: integer
+        started_at:
+          format: date-time
+          type: string
+        status:
+          type: string
+      required:
+        - number
+        - name
+        - status
+        - conclusion
+      type: object
+    WorkflowRunsResponse:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/WorkflowRunsResponse.json
+          format: uri
+          readOnly: true
+          type: string
+        exhausted:
+          type: boolean
+        items:
+          items:
+            $ref: "#/components/schemas/WorkflowRunResponse"
+          type: array
+        next_cursor:
+          type: string
+        repo:
+          $ref: "#/components/schemas/RepoRefResponse"
+      required:
+        - repo
+        - items
+        - exhausted
+      type: object
     WorkflowStateMetaResponse:
       additionalProperties: false
       properties:
@@ -9799,6 +10109,192 @@ info:
   version: 0.1.0
 openapi: 3.1.0
 paths:
+  /actions/{provider}/{owner}/{name}/runs:
+    get:
+      operationId: list-workflow-runs
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: workflow_id
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: event
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: branch
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: cursor
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: per_page
+          schema:
+            default: 20
+            format: int64
+            maximum: 100
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowRunsResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemError"
+          description: Error
+      summary: List workflow runs
+      tags:
+        - Workflows
+  /actions/{provider}/{owner}/{name}/runs/{run_id}/jobs:
+    get:
+      operationId: list-workflow-run-jobs
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowJobsResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemError"
+          description: Error
+      summary: List workflow run jobs
+      tags:
+        - Workflows
+  /actions/{provider}/{owner}/{name}/workflows:
+    get:
+      operationId: list-workflows
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowCatalogResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemError"
+          description: Error
+      summary: List manual workflows
+      tags:
+        - Workflows
+  /actions/{provider}/{owner}/{name}/workflows/{workflow_id}/dispatch:
+    post:
+      operationId: dispatch-workflow
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workflow_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkflowDispatchBody"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowDispatchResponse"
+          description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemError"
+          description: Error
+      summary: Dispatch workflow
+      tags:
+        - Workflows
   /activity:
     get:
       operationId: list-activity
@@ -13099,6 +13595,212 @@ paths:
       summary: Abort pending spoke preparation and restore standalone writes
       tags:
         - Fleet
+  /host/{platform_host}/actions/{provider}/{owner}/{name}/runs:
+    get:
+      operationId: list-workflow-runs-on-host
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: platform_host
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: workflow_id
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: event
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: branch
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: cursor
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: per_page
+          schema:
+            default: 20
+            format: int64
+            maximum: 100
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowRunsResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemError"
+          description: Error
+      summary: List workflow runs
+      tags:
+        - Workflows
+  /host/{platform_host}/actions/{provider}/{owner}/{name}/runs/{run_id}/jobs:
+    get:
+      operationId: list-workflow-run-jobs-on-host
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: platform_host
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowJobsResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemError"
+          description: Error
+      summary: List workflow run jobs
+      tags:
+        - Workflows
+  /host/{platform_host}/actions/{provider}/{owner}/{name}/workflows:
+    get:
+      operationId: list-workflows-on-host
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: platform_host
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowCatalogResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemError"
+          description: Error
+      summary: List manual workflows
+      tags:
+        - Workflows
+  /host/{platform_host}/actions/{provider}/{owner}/{name}/workflows/{workflow_id}/dispatch:
+    post:
+      operationId: dispatch-workflow-on-host
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: platform_host
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: workflow_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkflowDispatchBody"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowDispatchResponse"
+          description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemError"
+          description: Error
+      summary: Dispatch workflow
+      tags:
+        - Workflows
   /host/{platform_host}/issues/{provider}/{owner}/{name}:
     post:
       operationId: create-issue-on-host

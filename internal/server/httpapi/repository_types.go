@@ -8,6 +8,8 @@ type ProviderCapabilitiesResponse struct {
 	ReadComments                bool     `json:"read_comments"`
 	ReadReleases                bool     `json:"read_releases"`
 	ReadCI                      bool     `json:"read_ci"`
+	ReadWorkflows               bool     `json:"read_workflows"`
+	ReadWorkflowRuns            bool     `json:"read_workflow_runs"`
 	ReadLabels                  bool     `json:"read_labels"`
 	ReadMarkdownImages          bool     `json:"read_markdown_images"`
 	ReadAuthenticatedUser       bool     `json:"read_authenticated_user"`
@@ -16,6 +18,7 @@ type ProviderCapabilitiesResponse struct {
 	MergeMutation               bool     `json:"merge_mutation"`
 	ReviewMutation              bool     `json:"review_mutation"`
 	WorkflowApproval            bool     `json:"workflow_approval"`
+	WorkflowDispatch            bool     `json:"workflow_dispatch"`
 	ReadyForReview              bool     `json:"ready_for_review"`
 	DraftMutation               bool     `json:"draft_mutation"`
 	IssueMutation               bool     `json:"issue_mutation"`
@@ -60,6 +63,7 @@ type RepoOperations struct {
 	CloseIssue            OperationAvailability `json:"close_issue"`
 	ReopenIssue           OperationAvailability `json:"reopen_issue"`
 	ApproveWorkflow       OperationAvailability `json:"approve_workflow"`
+	DispatchWorkflow      OperationAvailability `json:"dispatch_workflow"`
 	UpdateContent         OperationAvailability `json:"update_content"`
 	ReplyReviewThread     OperationAvailability `json:"reply_review_thread"`
 	ResolveReviewThread   OperationAvailability `json:"resolve_review_thread"`
@@ -73,6 +77,7 @@ type RepoRefResponse struct {
 	RepoPath       string                       `json:"repo_path"`
 	Owner          string                       `json:"owner"`
 	Name           string                       `json:"name"`
+	DefaultBranch  string                       `json:"default_branch,omitempty"`
 	Capabilities   ProviderCapabilitiesResponse `json:"capabilities"`
 	Operations     *RepoOperations              `json:"operations,omitempty"`
 }

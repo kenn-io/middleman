@@ -191,6 +191,9 @@ and the root event stream.
 
 ## Event Replay
 
+- Workflow dispatch progress belongs to the server and the returned run ID;
+  an accepted dispatch without an ID reports tracking unresolved and never starts a search
+  (`internal/server/workflowapi/dispatch_follow.go::Handler.followDispatch`).
 - SSE event IDs are process-scoped replay cursors, not durable sequence
   numbers. Reconnects may replay only IDs retained by the current process's
   ring (`internal/server/event_hub.go::EventHub.ReplaySnapshotSince`).

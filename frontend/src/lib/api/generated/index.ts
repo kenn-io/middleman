@@ -13,5 +13,6 @@ export * as SettingsService from "./settings/settings.ts";
 export * as StacksService from "./stacks/stacks.ts";
 export * as SyncService from "./sync/sync.ts";
 export * as SystemService from "./system/system.ts";
+export * as WorkflowsService from "./workflows/workflows.ts";
 export * as WorkspacesService from "./workspaces/workspaces.ts";
 export * from "./models/index.ts";

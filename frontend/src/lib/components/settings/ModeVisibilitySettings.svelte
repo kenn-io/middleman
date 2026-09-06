@@ -40,6 +40,7 @@
     { key: "activity", label: "Activity" },
     { key: "repos", label: "Repos" },
     { key: "docs", label: "Docs" },
+    { key: "actions", label: "Actions" },
     { key: "pulls", label: "PRs" },
     { key: "issues", label: "Issues" },
     { key: "reviews", label: "Reviews" },

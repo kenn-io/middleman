@@ -18,6 +18,7 @@ export type EmbedDetailTab = "pr" | "issue" | "reviews";
 
 export type Route =
   | { page: "activity" }
+  | { page: "actions" }
   | { page: "mobile-activity" }
   | { page: "mobile-pulls" }
   | { page: "mobile-issues" }
@@ -298,6 +299,9 @@ function parseRoute(fullPath: string): Route {
         ...issue,
       };
     }
+  }
+  if (path === "/actions") {
+    return { page: "actions" };
   }
   if (path === "/design-system") {
     return { page: "design-system" };

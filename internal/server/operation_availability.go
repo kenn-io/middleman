@@ -19,6 +19,7 @@ const (
 	capabilityMergeMutation               = "merge_mutation"
 	capabilityReviewMutation              = "review_mutation"
 	capabilityWorkflowApproval            = "workflow_approval"
+	capabilityWorkflowDispatch            = "workflow_dispatch"
 	capabilityReadyForReview              = "ready_for_review"
 	capabilityDraftMutation               = "draft_mutation"
 	capabilityIssueMutation               = "issue_mutation"
@@ -58,6 +59,7 @@ const (
 	operationCloseIssue            = "close_issue"
 	operationReopenIssue           = "reopen_issue"
 	operationApproveWorkflow       = "approve_workflow"
+	operationDispatchWorkflow      = "dispatch_workflow"
 	operationUpdateContent         = "update_content"
 	operationReplyReviewThread     = "reply_review_thread"
 	operationResolveReviewThread   = "resolve_review_thread"
@@ -142,6 +144,7 @@ var (
 	descCloseIssue         = operationDescriptor{name: operationCloseIssue, requiredCapabilities: []string{capabilityIssueMutation}, bucket: apiBucketREST}
 	descReopenIssue        = operationDescriptor{name: operationReopenIssue, requiredCapabilities: []string{capabilityIssueMutation}, bucket: apiBucketREST}
 	descApproveWorkflow    = operationDescriptor{name: operationApproveWorkflow, requiredCapabilities: []string{capabilityWorkflowApproval}, bucket: apiBucketREST}
+	descDispatchWorkflow   = operationDescriptor{name: operationDispatchWorkflow, requiredCapabilities: []string{capabilityWorkflowDispatch}, bucket: apiBucketREST}
 	// Content edits (PR/issue title, body, task-list writes) ride the
 	// state-mutation capability: state_mutation has always meant "can
 	// PATCH the item" across providers — state transitions and
@@ -205,6 +208,7 @@ func (s *Server) repoOperationsWithContext(
 		CloseIssue:            derive(descCloseIssue),
 		ReopenIssue:           derive(descReopenIssue),
 		ApproveWorkflow:       derive(descApproveWorkflow),
+		DispatchWorkflow:      derive(descDispatchWorkflow),
 		UpdateContent:         derive(descUpdateContent),
 		ReplyReviewThread:     derive(descReplyReviewThread),
 		ResolveReviewThread:   derive(descResolveReviewThread),

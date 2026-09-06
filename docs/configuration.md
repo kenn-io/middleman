@@ -182,14 +182,18 @@ These values set the initial Activity view and local default-branch retention.
 activity = true
 repos = true
 docs = false
+actions = false
 pulls = true
 issues = true
 reviews = true
 workspaces = true
 ```
 
-Set a mode to `false` to hide it. Docs starts hidden because it needs configured
-local folders. Kata integration is contextual rather than a top-level mode.
+Actions and Docs default to `false`; enable them after their provider workflows
+or local folders are ready. Disabling Actions removes both its top-level page
+and pull-request menu while leaving provider workflow access available to API
+clients. Kata integration is contextual rather than a top-level mode. Set any
+other mode to `false` to hide it.
 
 ## Roborev
 

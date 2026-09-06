@@ -241,6 +241,9 @@ cleanup targets the server instead of a `go run` wrapper. An explicit binary rem
 externally owned
 and must not be rebuilt or removed (`frontend/tests/e2e-full/support/e2eServer.ts::ensureE2EServerBinary`).
 
+- E2E provider decorators must embed concrete fixtures rather than base interfaces;
+  narrowing erases optional capability interfaces (`cmd/e2e-server/main_test.go::TestE2EWorkflowClientExercisesProviderWorkflowContract`).
+
 - Full-stack Playwright workers must publish child ownership in the shared tmux root;
   the root removes it only after every published child exits (`frontend/tests/e2e-full/support/e2eServer.ts::waitForSharedServerOwners`).
 - Give independent full-stack boundary scenarios separate Playwright tests; a loop shares

@@ -175,6 +175,9 @@ otherwise fails only in the Vitest/Playwright transform tier, not in
   wrapped instead. Every stage must expose the same accessible names
   (`frontend/src/lib/components/roborev/ReviewDrawer.svelte::.footer-actions-fit`,
   `frontend/src/lib/components/detail/PullDetail.svelte::measuredPrimaryActions`).
+- Pull-request lifecycle decisions stay in the primary action row; workspace
+  creation and workflow dispatch form a utility row, joining the measured
+  `Actions` overflow only under pressure (`frontend/src/lib/components/detail/PullDetail.svelte::workflowActionsMenu`).
 - Flash: one shared store (`frontend/src/lib/stores/flash.svelte.ts`); kit `FlashBanner`
   mounts once per shell in a page-level fixed layer below measured shell chrome
   and above modal backdrops, never inside feature containers; headerless shells

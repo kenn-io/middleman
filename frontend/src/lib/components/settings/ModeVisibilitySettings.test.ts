@@ -39,6 +39,7 @@ function defaultModes(): ModeVisibility {
   return {
     activity: true,
     repos: true,
+    actions: false,
     docs: false,
     pulls: true,
     issues: true,
@@ -59,6 +60,7 @@ describe("ModeVisibilitySettings", () => {
     const updated = {
       ...modes,
       docs: true,
+      actions: true,
       workspaces: false,
     };
     mockPersistSettings.mockReturnValue(Effect.succeed({ modes: updated }));
@@ -68,10 +70,12 @@ describe("ModeVisibilitySettings", () => {
       props: { component: ModeVisibilitySettings, componentProps: { modes, onUpdate } },
     });
 
+    expect((screen.getByLabelText("Actions") as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText("Docs") as HTMLInputElement).checked).toBe(false);
     expect(screen.queryByLabelText("Messages")).toBeNull();
     expect(screen.queryByLabelText("Board")).toBeNull();
 
+    await fireEvent.click(screen.getByLabelText("Actions"));
     await fireEvent.click(screen.getByLabelText("Docs"));
     await fireEvent.click(screen.getByLabelText("Workspaces"));
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));

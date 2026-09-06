@@ -72,6 +72,22 @@ Rules:
   `internal/gitclone/clone.go::Manager.RequireCredentialRoute`).
 - Handlers must check capabilities before performing mutations. A missing
   capability is a feature-level failure, not a whole-provider failure.
+- Keep workflow approval and workflow dispatch separate: approval advances an
+  existing run, while dispatch starts a new one; neither contract may assume
+  GitHub Actions semantics (`internal/platform/client.go::WorkflowDispatcher`).
+- Workflow contracts remain optional and provider-neutral. GitHub is the sole
+  current implementation; other providers must not advertise capabilities
+  before implementing the interfaces (`internal/github/sync.go::gitHubClientProvider.Capabilities`).
+- Treat workflow dispatch as live-state mutation: re-read definitions/environments,
+  validate SHA and typed inputs, then gate one provider call under a stable route fence;
+  never retry uncertain writes or persist definitions (`internal/server/workflowapi/routes.go::Handler.dispatch`).
+- Workflow catalog partial availability is definition-specific: missing or undecodable files
+  become unavailable rows, while cancellation, auth, server, transport, and rate failures abort
+  the catalog (`internal/github/sync.go::workflowDefinitionReadMustAbort`).
+- actionlint owns the GitHub workflow file grammar; Forge only projects its dispatch inputs
+  and types defaults. Do not hand-parse workflow YAML. The module is pinned to the fork
+  behind rhysd/actionlint#730 until a release compiles against yaml/v4 rc.6
+  (`internal/platform/github/workflow_definition.go::ParseManualWorkflow`, `go.mod`).
 - Provider-backed comment deletes remove synchronized local rows only after upstream
   synchronization observes provider absence. DELETE itself changes no SQLite comment
   state; the UI hides a confirmed deletion while ordinary sync converges. Authoritative

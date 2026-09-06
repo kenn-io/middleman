@@ -290,6 +290,45 @@ func (r *Registry) CIReader(kind Kind, host string) (CIReader, error) {
 	return reader, nil
 }
 
+func (r *Registry) WorkflowCatalogReader(kind Kind, host string) (WorkflowCatalogReader, error) {
+	provider, err := r.Provider(kind, host)
+	if err != nil {
+		return nil, err
+	}
+
+	reader, ok := provider.(WorkflowCatalogReader)
+	if !ok || !provider.Capabilities().ReadWorkflows {
+		return nil, UnsupportedCapability(kind, host, "read_workflows")
+	}
+	return reader, nil
+}
+
+func (r *Registry) WorkflowRunReader(kind Kind, host string) (WorkflowRunReader, error) {
+	provider, err := r.Provider(kind, host)
+	if err != nil {
+		return nil, err
+	}
+
+	reader, ok := provider.(WorkflowRunReader)
+	if !ok || !provider.Capabilities().ReadWorkflowRuns {
+		return nil, UnsupportedCapability(kind, host, "read_workflow_runs")
+	}
+	return reader, nil
+}
+
+func (r *Registry) WorkflowDispatcher(kind Kind, host string) (WorkflowDispatcher, error) {
+	provider, err := r.Provider(kind, host)
+	if err != nil {
+		return nil, err
+	}
+
+	dispatcher, ok := provider.(WorkflowDispatcher)
+	if !ok || !provider.Capabilities().WorkflowDispatch {
+		return nil, UnsupportedCapability(kind, host, "workflow_dispatch")
+	}
+	return dispatcher, nil
+}
+
 func (r *Registry) CommentMutator(kind Kind, host string) (CommentMutator, error) {
 	provider, err := r.Provider(kind, host)
 	if err != nil {

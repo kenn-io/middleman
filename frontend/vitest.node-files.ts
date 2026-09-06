@@ -14,6 +14,7 @@ export const nodeUnitTestFiles = [
   "src/lib/api/problems.test.ts",
   "src/lib/api/project-intake.test.ts",
   "src/lib/api/provider-capabilities.test.ts",
+  "src/lib/api/provider-routes.test.ts",
   "src/lib/api/provider-labels.test.ts",
   "src/lib/api/retry-policy.test.ts",
   "src/lib/api/runtime.test.ts",

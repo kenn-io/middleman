@@ -3,6 +3,7 @@
  */
 
 export interface ModeVisibility {
+  actions: boolean;
   activity: boolean;
   docs: boolean;
   issues: boolean;

@@ -74,4 +74,8 @@ func TestProviderRouteOwnershipExamples(t *testing.T) {
 	assert.Equal(ProviderHubOnly, rules["merge-pull"].Owner)
 	assert.Equal(NodeLocal, rules["get-pull-diff"].Owner)
 	assert.Equal(NodeLocal, rules["get-workspace"].Owner)
+	assert.Equal(ProviderHubOnly, rules["list-workflows"].Owner)
+	assert.Equal(federationauth.ScopeProviderRead, rules["list-workflows"].PeerScope)
+	assert.Equal(ProviderHubOnly, rules["dispatch-workflow"].Owner)
+	assert.Equal(federationauth.ScopeProviderWrite, rules["dispatch-workflow"].PeerScope)
 }

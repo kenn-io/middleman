@@ -632,6 +632,27 @@ func (e MergeRequestState) Valid() bool {
 	}
 }
 
+// Defines values for MergeRequestDetailResponseHeadRepoKind.
+const (
+	MergeRequestDetailResponseHeadRepoKindFork     MergeRequestDetailResponseHeadRepoKind = "fork"
+	MergeRequestDetailResponseHeadRepoKindSameRepo MergeRequestDetailResponseHeadRepoKind = "same_repo"
+	MergeRequestDetailResponseHeadRepoKindUnknown  MergeRequestDetailResponseHeadRepoKind = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the MergeRequestDetailResponseHeadRepoKind enum.
+func (e MergeRequestDetailResponseHeadRepoKind) Valid() bool {
+	switch e {
+	case MergeRequestDetailResponseHeadRepoKindFork:
+		return true
+	case MergeRequestDetailResponseHeadRepoKindSameRepo:
+		return true
+	case MergeRequestDetailResponseHeadRepoKindUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MergeRequestResponseKanbanStatus.
 const (
 	MergeRequestResponseKanbanStatusAwaitingMerge MergeRequestResponseKanbanStatus = "awaiting_merge"
@@ -824,6 +845,33 @@ const (
 func (e SyncStatusLastErrorCode) Valid() bool {
 	switch e {
 	case LocalSyncCeilingExhausted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowInputResponseType.
+const (
+	Boolean     WorkflowInputResponseType = "boolean"
+	Choice      WorkflowInputResponseType = "choice"
+	Environment WorkflowInputResponseType = "environment"
+	Number      WorkflowInputResponseType = "number"
+	String      WorkflowInputResponseType = "string"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowInputResponseType enum.
+func (e WorkflowInputResponseType) Valid() bool {
+	switch e {
+	case Boolean:
+		return true
+	case Choice:
+		return true
+	case Environment:
+		return true
+	case Number:
+		return true
+	case String:
 		return true
 	default:
 		return false
@@ -3441,28 +3489,32 @@ type MergeRequestDetailResponse struct {
 	// Schema A URL to the JSON Schema for this object.
 	//
 	// Example: /api/v1/schemas/MergeRequestDetailResponse.json
-	Schema               *string                     `json:"$schema,omitempty"`
-	Checks               *[]CICheck                  `json:"checks,omitempty"`
-	DeferredMergePending bool                        `json:"deferred_merge_pending"`
-	DetailFetchedAt      *string                     `json:"detail_fetched_at,omitempty"`
-	DetailLoaded         bool                        `json:"detail_loaded"`
-	DiffHeadSha          string                      `json:"diff_head_sha"`
-	Events               []MergeRequestEventResponse `json:"events"`
-	MergeBaseSha         string                      `json:"merge_base_sha"`
-	MergeRequest         MergeRequest                `json:"merge_request"`
-	PlatformBaseSha      string                      `json:"platform_base_sha"`
-	PlatformHeadSha      string                      `json:"platform_head_sha"`
-	PlatformHost         string                      `json:"platform_host"`
-	Repo                 RepoRefResponse             `json:"repo"`
-	RepoName             string                      `json:"repo_name"`
-	RepoOwner            string                      `json:"repo_owner"`
-	ReviewedHeadSha      string                      `json:"reviewed_head_sha"`
-	Stack                *StackContextResponse       `json:"stack,omitempty"`
-	Warnings             *[]string                   `json:"warnings,omitempty"`
-	WorkflowApproval     WorkflowApprovalResponse    `json:"workflow_approval"`
-	Workspace            *WorkspaceRef               `json:"workspace,omitempty"`
-	WorktreeLinks        []WorktreeLinkResponse      `json:"worktree_links"`
+	Schema               *string                                `json:"$schema,omitempty"`
+	Checks               *[]CICheck                             `json:"checks,omitempty"`
+	DeferredMergePending bool                                   `json:"deferred_merge_pending"`
+	DetailFetchedAt      *string                                `json:"detail_fetched_at,omitempty"`
+	DetailLoaded         bool                                   `json:"detail_loaded"`
+	DiffHeadSha          string                                 `json:"diff_head_sha"`
+	Events               []MergeRequestEventResponse            `json:"events"`
+	HeadRepoKind         MergeRequestDetailResponseHeadRepoKind `json:"head_repo_kind"`
+	MergeBaseSha         string                                 `json:"merge_base_sha"`
+	MergeRequest         MergeRequest                           `json:"merge_request"`
+	PlatformBaseSha      string                                 `json:"platform_base_sha"`
+	PlatformHeadSha      string                                 `json:"platform_head_sha"`
+	PlatformHost         string                                 `json:"platform_host"`
+	Repo                 RepoRefResponse                        `json:"repo"`
+	RepoName             string                                 `json:"repo_name"`
+	RepoOwner            string                                 `json:"repo_owner"`
+	ReviewedHeadSha      string                                 `json:"reviewed_head_sha"`
+	Stack                *StackContextResponse                  `json:"stack,omitempty"`
+	Warnings             *[]string                              `json:"warnings,omitempty"`
+	WorkflowApproval     WorkflowApprovalResponse               `json:"workflow_approval"`
+	Workspace            *WorkspaceRef                          `json:"workspace,omitempty"`
+	WorktreeLinks        []WorktreeLinkResponse                 `json:"worktree_links"`
 }
+
+// MergeRequestDetailResponseHeadRepoKind defines model for MergeRequestDetailResponse.HeadRepoKind.
+type MergeRequestDetailResponseHeadRepoKind string
 
 // MergeRequestEventResponse defines model for MergeRequestEventResponse.
 type MergeRequestEventResponse struct {
@@ -3556,6 +3608,7 @@ type MergeRequestSummary struct {
 
 // ModeVisibility defines model for ModeVisibility.
 type ModeVisibility struct {
+	Actions    bool `json:"actions"`
 	Activity   bool `json:"activity"`
 	Docs       bool `json:"docs"`
 	Issues     bool `json:"issues"`
@@ -3907,6 +3960,8 @@ type ProviderCapabilitiesResponse struct {
 	ReadReleases                bool     `json:"read_releases"`
 	ReadRepositories            bool     `json:"read_repositories"`
 	ReadReviewThreads           bool     `json:"read_review_threads"`
+	ReadWorkflowRuns            bool     `json:"read_workflow_runs"`
+	ReadWorkflows               bool     `json:"read_workflows"`
 	ReadyForReview              bool     `json:"ready_for_review"`
 	ReviewDraftMutation         bool     `json:"review_draft_mutation"`
 	ReviewMutation              bool     `json:"review_mutation"`
@@ -3918,6 +3973,7 @@ type ProviderCapabilitiesResponse struct {
 	ThreadReply                 bool     `json:"thread_reply"`
 	ThreadResolve               bool     `json:"thread_resolve"`
 	WorkflowApproval            bool     `json:"workflow_approval"`
+	WorkflowDispatch            bool     `json:"workflow_dispatch"`
 }
 
 // ProviderRepositoryObservation defines model for ProviderRepositoryObservation.
@@ -4528,6 +4584,7 @@ type RepoOperations struct {
 	ClosePr               OperationAvailability `json:"close_pr"`
 	CreateIssue           OperationAvailability `json:"create_issue"`
 	DeleteComment         OperationAvailability `json:"delete_comment"`
+	DispatchWorkflow      OperationAvailability `json:"dispatch_workflow"`
 	EditComment           OperationAvailability `json:"edit_comment"`
 	MarkDraft             OperationAvailability `json:"mark_draft"`
 	MarkReadyForReview    OperationAvailability `json:"mark_ready_for_review"`
@@ -4605,6 +4662,7 @@ type RepoPreviewRow struct {
 // RepoRefResponse defines model for RepoRefResponse.
 type RepoRefResponse struct {
 	Capabilities   ProviderCapabilitiesResponse `json:"capabilities"`
+	DefaultBranch  *string                      `json:"default_branch,omitempty"`
 	Name           string                       `json:"name"`
 	Operations     *RepoOperations              `json:"operations,omitempty"`
 	Owner          string                       `json:"owner"`
@@ -5350,6 +5408,133 @@ type WorkflowApprovalResponse struct {
 	Required bool  `json:"required"`
 }
 
+// WorkflowCatalogResponse defines model for WorkflowCatalogResponse.
+type WorkflowCatalogResponse struct {
+	// Schema A URL to the JSON Schema for this object.
+	//
+	// Example: /api/v1/schemas/WorkflowCatalogResponse.json
+	Schema       *string                       `json:"$schema,omitempty"`
+	Environments []WorkflowEnvironmentResponse `json:"environments"`
+	Repo         RepoRefResponse               `json:"repo"`
+	Workflows    []WorkflowDefinitionResponse  `json:"workflows"`
+}
+
+// WorkflowDefinitionResponse defines model for WorkflowDefinitionResponse.
+type WorkflowDefinitionResponse struct {
+	Available         bool                    `json:"available"`
+	DefinitionSha     string                  `json:"definition_sha"`
+	Id                string                  `json:"id"`
+	Inputs            []WorkflowInputResponse `json:"inputs"`
+	Name              string                  `json:"name"`
+	Path              string                  `json:"path"`
+	State             string                  `json:"state"`
+	UnavailableReason *string                 `json:"unavailable_reason,omitempty"`
+	WebUrl            string                  `json:"web_url"`
+}
+
+// WorkflowDispatchBody defines model for WorkflowDispatchBody.
+type WorkflowDispatchBody struct {
+	// Schema A URL to the JSON Schema for this object.
+	//
+	// Example: /api/v1/schemas/WorkflowDispatchBody.json
+	Schema                *string                `json:"$schema,omitempty"`
+	ExpectedDefinitionSha string                 `json:"expected_definition_sha"`
+	Inputs                map[string]interface{} `json:"inputs"`
+	Ref                   string                 `json:"ref"`
+}
+
+// WorkflowDispatchResponse defines model for WorkflowDispatchResponse.
+type WorkflowDispatchResponse struct {
+	// Schema A URL to the JSON Schema for this object.
+	//
+	// Example: /api/v1/schemas/WorkflowDispatchResponse.json
+	Schema     *string              `json:"$schema,omitempty"`
+	Accepted   bool                 `json:"accepted"`
+	Actor      *string              `json:"actor,omitempty"`
+	DispatchId string               `json:"dispatch_id"`
+	Run        *WorkflowRunResponse `json:"run,omitempty"`
+}
+
+// WorkflowEnvironmentResponse defines model for WorkflowEnvironmentResponse.
+type WorkflowEnvironmentResponse struct {
+	Name string `json:"name"`
+}
+
+// WorkflowInputResponse defines model for WorkflowInputResponse.
+type WorkflowInputResponse struct {
+	Default     interface{}               `json:"default,omitempty"`
+	Description *string                   `json:"description,omitempty"`
+	HasDefault  bool                      `json:"has_default"`
+	Name        string                    `json:"name"`
+	Options     *[]string                 `json:"options,omitempty"`
+	Required    bool                      `json:"required"`
+	Type        WorkflowInputResponseType `json:"type"`
+}
+
+// WorkflowInputResponseType defines model for WorkflowInputResponse.Type.
+type WorkflowInputResponseType string
+
+// WorkflowJobsResponse defines model for WorkflowJobsResponse.
+type WorkflowJobsResponse struct {
+	// Schema A URL to the JSON Schema for this object.
+	//
+	// Example: /api/v1/schemas/WorkflowJobsResponse.json
+	Schema *string                  `json:"$schema,omitempty"`
+	Items  []WorkflowRunJobResponse `json:"items"`
+	Repo   RepoRefResponse          `json:"repo"`
+}
+
+// WorkflowRunJobResponse defines model for WorkflowRunJobResponse.
+type WorkflowRunJobResponse struct {
+	CompletedAt *time.Time                `json:"completed_at,omitempty"`
+	Conclusion  string                    `json:"conclusion"`
+	Id          string                    `json:"id"`
+	Name        string                    `json:"name"`
+	StartedAt   *time.Time                `json:"started_at,omitempty"`
+	Status      string                    `json:"status"`
+	Steps       []WorkflowRunStepResponse `json:"steps"`
+	WebUrl      *string                   `json:"web_url,omitempty"`
+}
+
+// WorkflowRunResponse defines model for WorkflowRunResponse.
+type WorkflowRunResponse struct {
+	Actor      string     `json:"actor"`
+	Conclusion string     `json:"conclusion"`
+	CreatedAt  *time.Time `json:"created_at,omitempty"`
+	Event      string     `json:"event"`
+	HeadSha    string     `json:"head_sha"`
+	Id         string     `json:"id"`
+	Name       string     `json:"name"`
+	Ref        string     `json:"ref"`
+	RunNumber  int64      `json:"run_number"`
+	Status     string     `json:"status"`
+	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
+	WebUrl     *string    `json:"web_url,omitempty"`
+	WorkflowId string     `json:"workflow_id"`
+}
+
+// WorkflowRunStepResponse defines model for WorkflowRunStepResponse.
+type WorkflowRunStepResponse struct {
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Conclusion  string     `json:"conclusion"`
+	Name        string     `json:"name"`
+	Number      int64      `json:"number"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	Status      string     `json:"status"`
+}
+
+// WorkflowRunsResponse defines model for WorkflowRunsResponse.
+type WorkflowRunsResponse struct {
+	// Schema A URL to the JSON Schema for this object.
+	//
+	// Example: /api/v1/schemas/WorkflowRunsResponse.json
+	Schema     *string               `json:"$schema,omitempty"`
+	Exhausted  bool                  `json:"exhausted"`
+	Items      []WorkflowRunResponse `json:"items"`
+	NextCursor *string               `json:"next_cursor,omitempty"`
+	Repo       RepoRefResponse       `json:"repo"`
+}
+
 // WorkflowStateMetaResponse defines model for WorkflowStateMetaResponse.
 type WorkflowStateMetaResponse struct {
 	Status        WorkflowStateMetaResponseStatus `json:"status"`
@@ -5751,6 +5936,15 @@ type WorktreeSummary struct {
 	SyncBehind         *int64         `json:"syncBehind,omitempty"`
 }
 
+// ListWorkflowRunsParams defines parameters for ListWorkflowRuns.
+type ListWorkflowRunsParams struct {
+	WorkflowId string  `form:"workflow_id" json:"workflow_id"`
+	Event      *string `form:"event,omitempty" json:"event,omitempty"`
+	Branch     *string `form:"branch,omitempty" json:"branch,omitempty"`
+	Cursor     *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	PerPage    *int64  `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
+
 // ListActivityParams defines parameters for ListActivity.
 type ListActivityParams struct {
 	// Repo Repository filter. Accepts provider|platform_host/repo_path, with comma-separated values for multiple repositories.
@@ -6046,6 +6240,15 @@ type LaunchFleetWorkspaceRuntimeSessionJSONBody map[string]interface{}
 
 // RenameFleetWorkspaceRuntimeSessionJSONBody defines parameters for RenameFleetWorkspaceRuntimeSession.
 type RenameFleetWorkspaceRuntimeSessionJSONBody map[string]interface{}
+
+// ListWorkflowRunsOnHostParams defines parameters for ListWorkflowRunsOnHost.
+type ListWorkflowRunsOnHostParams struct {
+	WorkflowId string  `form:"workflow_id" json:"workflow_id"`
+	Event      *string `form:"event,omitempty" json:"event,omitempty"`
+	Branch     *string `form:"branch,omitempty" json:"branch,omitempty"`
+	Cursor     *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	PerPage    *int64  `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
 
 // GetPullDiffOnHostParams defines parameters for GetPullDiffOnHost.
 type GetPullDiffOnHostParams struct {
@@ -6507,6 +6710,9 @@ type GetWorkspaceFilesParams struct {
 	To *string `form:"to,omitempty" json:"to,omitempty"`
 }
 
+// DispatchWorkflowJSONRequestBody defines body for DispatchWorkflow for application/json ContentType.
+type DispatchWorkflowJSONRequestBody = WorkflowDispatchBody
+
 // ReceiveAgentHookJSONRequestBody defines body for ReceiveAgentHook for application/json ContentType.
 type ReceiveAgentHookJSONRequestBody = HookEvent
 
@@ -6632,6 +6838,9 @@ type JoinFederationJSONRequestBody = LocalJoinInputBody
 
 // AbortFederationSpokePreparationJSONRequestBody defines body for AbortFederationSpokePreparation for application/json ContentType.
 type AbortFederationSpokePreparationJSONRequestBody = AbortFederationSpokeInputBody
+
+// DispatchWorkflowOnHostJSONRequestBody defines body for DispatchWorkflowOnHost for application/json ContentType.
+type DispatchWorkflowOnHostJSONRequestBody = WorkflowDispatchBody
 
 // CreateIssueOnHostJSONRequestBody defines body for CreateIssueOnHost for application/json ContentType.
 type CreateIssueOnHostJSONRequestBody = CreateIssueHostInputBody
@@ -7134,6 +7343,35 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+
+	// ListWorkflowRuns List workflow runs
+	//
+	// Corresponds with GET /actions/{provider}/{owner}/{name}/runs (the `ListWorkflowRuns` operationId).
+	ListWorkflowRuns(ctx context.Context, provider string, owner string, name string, params *ListWorkflowRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWorkflowRunJobs List workflow run jobs
+	//
+	// Corresponds with GET /actions/{provider}/{owner}/{name}/runs/{run_id}/jobs (the `ListWorkflowRunJobs` operationId).
+	ListWorkflowRunJobs(ctx context.Context, provider string, owner string, name string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWorkflows List manual workflows
+	//
+	// Corresponds with GET /actions/{provider}/{owner}/{name}/workflows (the `ListWorkflows` operationId).
+	ListWorkflows(ctx context.Context, provider string, owner string, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DispatchWorkflowWithBody Dispatch workflow
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /actions/{provider}/{owner}/{name}/workflows/{workflow_id}/dispatch (the `DispatchWorkflow` operationId).
+	DispatchWorkflowWithBody(ctx context.Context, provider string, owner string, name string, workflowId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DispatchWorkflow Dispatch workflow
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /actions/{provider}/{owner}/{name}/workflows/{workflow_id}/dispatch (the `DispatchWorkflow` operationId).
+	DispatchWorkflow(ctx context.Context, provider string, owner string, name string, workflowId string, body DispatchWorkflowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListActivity List activity
 	//
@@ -8019,6 +8257,35 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /fleet/prepare-spoke/abort (the `AbortFederationSpokePreparation` operationId).
 	AbortFederationSpokePreparation(ctx context.Context, body AbortFederationSpokePreparationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWorkflowRunsOnHost List workflow runs
+	//
+	// Corresponds with GET /host/{platform_host}/actions/{provider}/{owner}/{name}/runs (the `ListWorkflowRunsOnHost` operationId).
+	ListWorkflowRunsOnHost(ctx context.Context, platformHost string, provider string, owner string, name string, params *ListWorkflowRunsOnHostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWorkflowRunJobsOnHost List workflow run jobs
+	//
+	// Corresponds with GET /host/{platform_host}/actions/{provider}/{owner}/{name}/runs/{run_id}/jobs (the `ListWorkflowRunJobsOnHost` operationId).
+	ListWorkflowRunJobsOnHost(ctx context.Context, platformHost string, provider string, owner string, name string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWorkflowsOnHost List manual workflows
+	//
+	// Corresponds with GET /host/{platform_host}/actions/{provider}/{owner}/{name}/workflows (the `ListWorkflowsOnHost` operationId).
+	ListWorkflowsOnHost(ctx context.Context, platformHost string, provider string, owner string, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DispatchWorkflowOnHostWithBody Dispatch workflow
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /host/{platform_host}/actions/{provider}/{owner}/{name}/workflows/{workflow_id}/dispatch (the `DispatchWorkflowOnHost` operationId).
+	DispatchWorkflowOnHostWithBody(ctx context.Context, platformHost string, provider string, owner string, name string, workflowId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DispatchWorkflowOnHost Dispatch workflow
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /host/{platform_host}/actions/{provider}/{owner}/{name}/workflows/{workflow_id}/dispatch (the `DispatchWorkflowOnHost` operationId).
+	DispatchWorkflowOnHost(ctx context.Context, platformHost string, provider string, owner string, name string, workflowId string, body DispatchWorkflowOnHostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateIssueOnHostWithBody Create issue
 	//
@@ -10053,6 +10320,85 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /worktrees/remove-stale (the `RemoveStaleWorktree` operationId).
 	RemoveStaleWorktree(ctx context.Context, body RemoveStaleWorktreeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// ListWorkflowRuns List workflow runs
+//
+// Corresponds with GET /actions/{provider}/{owner}/{name}/runs (the `ListWorkflowRuns` operationId).
+func (c *Client) ListWorkflowRuns(ctx context.Context, provider string, owner string, name string, params *ListWorkflowRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkflowRunsRequest(c.Server, provider, owner, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWorkflowRunJobs List workflow run jobs
+//
+// Corresponds with GET /actions/{provider}/{owner}/{name}/runs/{run_id}/jobs (the `ListWorkflowRunJobs` operationId).
+func (c *Client) ListWorkflowRunJobs(ctx context.Context, provider string, owner string, name string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkflowRunJobsRequest(c.Server, provider, owner, name, runId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWorkflows List manual workflows
+//
+// Corresponds with GET /actions/{provider}/{owner}/{name}/workflows (the `ListWorkflows` operationId).
+func (c *Client) ListWorkflows(ctx context.Context, provider string, owner string, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkflowsRequest(c.Server, provider, owner, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DispatchWorkflowWithBody Dispatch workflow
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /actions/{provider}/{owner}/{name}/workflows/{workflow_id}/dispatch (the `DispatchWorkflow` operationId).
+func (c *Client) DispatchWorkflowWithBody(ctx context.Context, provider string, owner string, name string, workflowId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDispatchWorkflowRequestWithBody(c.Server, provider, owner, name, workflowId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DispatchWorkflow Dispatch workflow
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /actions/{provider}/{owner}/{name}/workflows/{workflow_id}/dispatch (the `DispatchWorkflow` operationId).
+func (c *Client) DispatchWorkflow(ctx context.Context, provider string, owner string, name string, workflowId string, body DispatchWorkflowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDispatchWorkflowRequest(c.Server, provider, owner, name, workflowId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // ListActivity List activity
@@ -12360,6 +12706,85 @@ func (c *Client) AbortFederationSpokePreparationWithBody(ctx context.Context, co
 // Corresponds with POST /fleet/prepare-spoke/abort (the `AbortFederationSpokePreparation` operationId).
 func (c *Client) AbortFederationSpokePreparation(ctx context.Context, body AbortFederationSpokePreparationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAbortFederationSpokePreparationRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWorkflowRunsOnHost List workflow runs
+//
+// Corresponds with GET /host/{platform_host}/actions/{provider}/{owner}/{name}/runs (the `ListWorkflowRunsOnHost` operationId).
+func (c *Client) ListWorkflowRunsOnHost(ctx context.Context, platformHost string, provider string, owner string, name string, params *ListWorkflowRunsOnHostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkflowRunsOnHostRequest(c.Server, platformHost, provider, owner, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWorkflowRunJobsOnHost List workflow run jobs
+//
+// Corresponds with GET /host/{platform_host}/actions/{provider}/{owner}/{name}/runs/{run_id}/jobs (the `ListWorkflowRunJobsOnHost` operationId).
+func (c *Client) ListWorkflowRunJobsOnHost(ctx context.Context, platformHost string, provider string, owner string, name string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkflowRunJobsOnHostRequest(c.Server, platformHost, provider, owner, name, runId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWorkflowsOnHost List manual workflows
+//
+// Corresponds with GET /host/{platform_host}/actions/{provider}/{owner}/{name}/workflows (the `ListWorkflowsOnHost` operationId).
+func (c *Client) ListWorkflowsOnHost(ctx context.Context, platformHost string, provider string, owner string, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkflowsOnHostRequest(c.Server, platformHost, provider, owner, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DispatchWorkflowOnHostWithBody Dispatch workflow
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /host/{platform_host}/actions/{provider}/{owner}/{name}/workflows/{workflow_id}/dispatch (the `DispatchWorkflowOnHost` operationId).
+func (c *Client) DispatchWorkflowOnHostWithBody(ctx context.Context, platformHost string, provider string, owner string, name string, workflowId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDispatchWorkflowOnHostRequestWithBody(c.Server, platformHost, provider, owner, name, workflowId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DispatchWorkflowOnHost Dispatch workflow
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /host/{platform_host}/actions/{provider}/{owner}/{name}/workflows/{workflow_id}/dispatch (the `DispatchWorkflowOnHost` operationId).
+func (c *Client) DispatchWorkflowOnHost(ctx context.Context, platformHost string, provider string, owner string, name string, workflowId string, body DispatchWorkflowOnHostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDispatchWorkflowOnHostRequest(c.Server, platformHost, provider, owner, name, workflowId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -17722,6 +18147,296 @@ func (c *Client) RemoveStaleWorktree(ctx context.Context, body RemoveStaleWorktr
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewListWorkflowRunsRequest constructs an http.Request for the ListWorkflowRuns method
+func NewListWorkflowRunsRequest(server string, provider string, owner string, name string, params *ListWorkflowRunsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "owner", owner, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/actions/%s/%s/%s/runs", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", false, "workflow_id", params.WorkflowId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Event != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "event", *params.Event, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Branch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "branch", *params.Branch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PerPage != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "per_page", *params.PerPage, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListWorkflowRunJobsRequest constructs an http.Request for the ListWorkflowRunJobs method
+func NewListWorkflowRunJobsRequest(server string, provider string, owner string, name string, runId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "owner", owner, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "run_id", runId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/actions/%s/%s/%s/runs/%s/jobs", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListWorkflowsRequest constructs an http.Request for the ListWorkflows method
+func NewListWorkflowsRequest(server string, provider string, owner string, name string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "owner", owner, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/actions/%s/%s/%s/workflows", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDispatchWorkflowRequest calls the generic DispatchWorkflow builder with application/json body
+func NewDispatchWorkflowRequest(server string, provider string, owner string, name string, workflowId string, body DispatchWorkflowJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDispatchWorkflowRequestWithBody(server, provider, owner, name, workflowId, "application/json", bodyReader)
+}
+
+// NewDispatchWorkflowRequestWithBody constructs an http.Request for the DispatchWorkflow method, with any body, and a specified content type
+func NewDispatchWorkflowRequestWithBody(server string, provider string, owner string, name string, workflowId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "owner", owner, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "workflow_id", workflowId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/actions/%s/%s/%s/workflows/%s/dispatch", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
 }
 
 // NewListActivityRequest constructs an http.Request for the ListActivity method
@@ -23214,6 +23929,324 @@ func NewAbortFederationSpokePreparationRequestWithBody(server string, contentTyp
 	}
 
 	operationPath := fmt.Sprintf("/fleet/prepare-spoke/abort")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListWorkflowRunsOnHostRequest constructs an http.Request for the ListWorkflowRunsOnHost method
+func NewListWorkflowRunsOnHostRequest(server string, platformHost string, provider string, owner string, name string, params *ListWorkflowRunsOnHostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "platform_host", platformHost, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "owner", owner, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/host/%s/actions/%s/%s/%s/runs", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", false, "workflow_id", params.WorkflowId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Event != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "event", *params.Event, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Branch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "branch", *params.Branch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PerPage != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "per_page", *params.PerPage, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListWorkflowRunJobsOnHostRequest constructs an http.Request for the ListWorkflowRunJobsOnHost method
+func NewListWorkflowRunJobsOnHostRequest(server string, platformHost string, provider string, owner string, name string, runId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "platform_host", platformHost, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "owner", owner, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam4 string
+
+	pathParam4, err = runtime.StyleParamWithOptions("simple", false, "run_id", runId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/host/%s/actions/%s/%s/%s/runs/%s/jobs", pathParam0, pathParam1, pathParam2, pathParam3, pathParam4)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListWorkflowsOnHostRequest constructs an http.Request for the ListWorkflowsOnHost method
+func NewListWorkflowsOnHostRequest(server string, platformHost string, provider string, owner string, name string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "platform_host", platformHost, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "owner", owner, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/host/%s/actions/%s/%s/%s/workflows", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDispatchWorkflowOnHostRequest calls the generic DispatchWorkflowOnHost builder with application/json body
+func NewDispatchWorkflowOnHostRequest(server string, platformHost string, provider string, owner string, name string, workflowId string, body DispatchWorkflowOnHostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDispatchWorkflowOnHostRequestWithBody(server, platformHost, provider, owner, name, workflowId, "application/json", bodyReader)
+}
+
+// NewDispatchWorkflowOnHostRequestWithBody constructs an http.Request for the DispatchWorkflowOnHost method, with any body, and a specified content type
+func NewDispatchWorkflowOnHostRequestWithBody(server string, platformHost string, provider string, owner string, name string, workflowId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "platform_host", platformHost, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "owner", owner, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam4 string
+
+	pathParam4, err = runtime.StyleParamWithOptions("simple", false, "workflow_id", workflowId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/host/%s/actions/%s/%s/%s/workflows/%s/dispatch", pathParam0, pathParam1, pathParam2, pathParam3, pathParam4)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -38512,6 +39545,20 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// ListWorkflowRunsWithResponse request
+	ListWorkflowRunsWithResponse(ctx context.Context, provider string, owner string, name string, params *ListWorkflowRunsParams, reqEditors ...RequestEditorFn) (*ListWorkflowRunsResponse, error)
+
+	// ListWorkflowRunJobsWithResponse request
+	ListWorkflowRunJobsWithResponse(ctx context.Context, provider string, owner string, name string, runId string, reqEditors ...RequestEditorFn) (*ListWorkflowRunJobsResponse, error)
+
+	// ListWorkflowsWithResponse request
+	ListWorkflowsWithResponse(ctx context.Context, provider string, owner string, name string, reqEditors ...RequestEditorFn) (*ListWorkflowsResponse, error)
+
+	// DispatchWorkflowWithBodyWithResponse request with any body
+	DispatchWorkflowWithBodyWithResponse(ctx context.Context, provider string, owner string, name string, workflowId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DispatchWorkflowResponse, error)
+
+	DispatchWorkflowWithResponse(ctx context.Context, provider string, owner string, name string, workflowId string, body DispatchWorkflowJSONRequestBody, reqEditors ...RequestEditorFn) (*DispatchWorkflowResponse, error)
+
 	// ListActivityWithResponse request
 	ListActivityWithResponse(ctx context.Context, params *ListActivityParams, reqEditors ...RequestEditorFn) (*ListActivityResponse, error)
 
@@ -38895,6 +39942,20 @@ type ClientWithResponsesInterface interface {
 	AbortFederationSpokePreparationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AbortFederationSpokePreparationResponse, error)
 
 	AbortFederationSpokePreparationWithResponse(ctx context.Context, body AbortFederationSpokePreparationJSONRequestBody, reqEditors ...RequestEditorFn) (*AbortFederationSpokePreparationResponse, error)
+
+	// ListWorkflowRunsOnHostWithResponse request
+	ListWorkflowRunsOnHostWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, params *ListWorkflowRunsOnHostParams, reqEditors ...RequestEditorFn) (*ListWorkflowRunsOnHostResponse, error)
+
+	// ListWorkflowRunJobsOnHostWithResponse request
+	ListWorkflowRunJobsOnHostWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, runId string, reqEditors ...RequestEditorFn) (*ListWorkflowRunJobsOnHostResponse, error)
+
+	// ListWorkflowsOnHostWithResponse request
+	ListWorkflowsOnHostWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, reqEditors ...RequestEditorFn) (*ListWorkflowsOnHostResponse, error)
+
+	// DispatchWorkflowOnHostWithBodyWithResponse request with any body
+	DispatchWorkflowOnHostWithBodyWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, workflowId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DispatchWorkflowOnHostResponse, error)
+
+	DispatchWorkflowOnHostWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, workflowId string, body DispatchWorkflowOnHostJSONRequestBody, reqEditors ...RequestEditorFn) (*DispatchWorkflowOnHostResponse, error)
 
 	// CreateIssueOnHostWithBodyWithResponse request with any body
 	CreateIssueOnHostWithBodyWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateIssueOnHostResponse, error)
@@ -39799,6 +40860,98 @@ type ClientWithResponsesInterface interface {
 	RemoveStaleWorktreeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RemoveStaleWorktreeResponse, error)
 
 	RemoveStaleWorktreeWithResponse(ctx context.Context, body RemoveStaleWorktreeJSONRequestBody, reqEditors ...RequestEditorFn) (*RemoveStaleWorktreeResponse, error)
+}
+
+type ListWorkflowRunsResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON200                       *WorkflowRunsResponse
+	ApplicationproblemJSONDefault *ProblemError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkflowRunsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkflowRunsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListWorkflowRunJobsResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON200                       *WorkflowJobsResponse
+	ApplicationproblemJSONDefault *ProblemError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkflowRunJobsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkflowRunJobsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListWorkflowsResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON200                       *WorkflowCatalogResponse
+	ApplicationproblemJSONDefault *ProblemError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkflowsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkflowsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DispatchWorkflowResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON202                       *WorkflowDispatchResponse
+	ApplicationproblemJSONDefault *ProblemError
+}
+
+// Status returns HTTPResponse.Status
+func (r DispatchWorkflowResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DispatchWorkflowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type ListActivityResponse struct {
@@ -42088,6 +43241,98 @@ func (r AbortFederationSpokePreparationResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r AbortFederationSpokePreparationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListWorkflowRunsOnHostResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON200                       *WorkflowRunsResponse
+	ApplicationproblemJSONDefault *ProblemError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkflowRunsOnHostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkflowRunsOnHostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListWorkflowRunJobsOnHostResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON200                       *WorkflowJobsResponse
+	ApplicationproblemJSONDefault *ProblemError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkflowRunJobsOnHostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkflowRunJobsOnHostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListWorkflowsOnHostResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON200                       *WorkflowCatalogResponse
+	ApplicationproblemJSONDefault *ProblemError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkflowsOnHostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkflowsOnHostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DispatchWorkflowOnHostResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON202                       *WorkflowDispatchResponse
+	ApplicationproblemJSONDefault *ProblemError
+}
+
+// Status returns HTTPResponse.Status
+func (r DispatchWorkflowOnHostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DispatchWorkflowOnHostResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -47570,6 +48815,50 @@ func (r RemoveStaleWorktreeResponse) StatusCode() int {
 	return 0
 }
 
+// ListWorkflowRunsWithResponse request returning *ListWorkflowRunsResponse
+func (c *ClientWithResponses) ListWorkflowRunsWithResponse(ctx context.Context, provider string, owner string, name string, params *ListWorkflowRunsParams, reqEditors ...RequestEditorFn) (*ListWorkflowRunsResponse, error) {
+	rsp, err := c.ListWorkflowRuns(ctx, provider, owner, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkflowRunsResponse(rsp)
+}
+
+// ListWorkflowRunJobsWithResponse request returning *ListWorkflowRunJobsResponse
+func (c *ClientWithResponses) ListWorkflowRunJobsWithResponse(ctx context.Context, provider string, owner string, name string, runId string, reqEditors ...RequestEditorFn) (*ListWorkflowRunJobsResponse, error) {
+	rsp, err := c.ListWorkflowRunJobs(ctx, provider, owner, name, runId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkflowRunJobsResponse(rsp)
+}
+
+// ListWorkflowsWithResponse request returning *ListWorkflowsResponse
+func (c *ClientWithResponses) ListWorkflowsWithResponse(ctx context.Context, provider string, owner string, name string, reqEditors ...RequestEditorFn) (*ListWorkflowsResponse, error) {
+	rsp, err := c.ListWorkflows(ctx, provider, owner, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkflowsResponse(rsp)
+}
+
+// DispatchWorkflowWithBodyWithResponse request with arbitrary body returning *DispatchWorkflowResponse
+func (c *ClientWithResponses) DispatchWorkflowWithBodyWithResponse(ctx context.Context, provider string, owner string, name string, workflowId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DispatchWorkflowResponse, error) {
+	rsp, err := c.DispatchWorkflowWithBody(ctx, provider, owner, name, workflowId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDispatchWorkflowResponse(rsp)
+}
+
+func (c *ClientWithResponses) DispatchWorkflowWithResponse(ctx context.Context, provider string, owner string, name string, workflowId string, body DispatchWorkflowJSONRequestBody, reqEditors ...RequestEditorFn) (*DispatchWorkflowResponse, error) {
+	rsp, err := c.DispatchWorkflow(ctx, provider, owner, name, workflowId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDispatchWorkflowResponse(rsp)
+}
+
 // ListActivityWithResponse request returning *ListActivityResponse
 func (c *ClientWithResponses) ListActivityWithResponse(ctx context.Context, params *ListActivityParams, reqEditors ...RequestEditorFn) (*ListActivityResponse, error) {
 	rsp, err := c.ListActivity(ctx, params, reqEditors...)
@@ -48804,6 +50093,50 @@ func (c *ClientWithResponses) AbortFederationSpokePreparationWithResponse(ctx co
 		return nil, err
 	}
 	return ParseAbortFederationSpokePreparationResponse(rsp)
+}
+
+// ListWorkflowRunsOnHostWithResponse request returning *ListWorkflowRunsOnHostResponse
+func (c *ClientWithResponses) ListWorkflowRunsOnHostWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, params *ListWorkflowRunsOnHostParams, reqEditors ...RequestEditorFn) (*ListWorkflowRunsOnHostResponse, error) {
+	rsp, err := c.ListWorkflowRunsOnHost(ctx, platformHost, provider, owner, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkflowRunsOnHostResponse(rsp)
+}
+
+// ListWorkflowRunJobsOnHostWithResponse request returning *ListWorkflowRunJobsOnHostResponse
+func (c *ClientWithResponses) ListWorkflowRunJobsOnHostWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, runId string, reqEditors ...RequestEditorFn) (*ListWorkflowRunJobsOnHostResponse, error) {
+	rsp, err := c.ListWorkflowRunJobsOnHost(ctx, platformHost, provider, owner, name, runId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkflowRunJobsOnHostResponse(rsp)
+}
+
+// ListWorkflowsOnHostWithResponse request returning *ListWorkflowsOnHostResponse
+func (c *ClientWithResponses) ListWorkflowsOnHostWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, reqEditors ...RequestEditorFn) (*ListWorkflowsOnHostResponse, error) {
+	rsp, err := c.ListWorkflowsOnHost(ctx, platformHost, provider, owner, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkflowsOnHostResponse(rsp)
+}
+
+// DispatchWorkflowOnHostWithBodyWithResponse request with arbitrary body returning *DispatchWorkflowOnHostResponse
+func (c *ClientWithResponses) DispatchWorkflowOnHostWithBodyWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, workflowId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DispatchWorkflowOnHostResponse, error) {
+	rsp, err := c.DispatchWorkflowOnHostWithBody(ctx, platformHost, provider, owner, name, workflowId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDispatchWorkflowOnHostResponse(rsp)
+}
+
+func (c *ClientWithResponses) DispatchWorkflowOnHostWithResponse(ctx context.Context, platformHost string, provider string, owner string, name string, workflowId string, body DispatchWorkflowOnHostJSONRequestBody, reqEditors ...RequestEditorFn) (*DispatchWorkflowOnHostResponse, error) {
+	rsp, err := c.DispatchWorkflowOnHost(ctx, platformHost, provider, owner, name, workflowId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDispatchWorkflowOnHostResponse(rsp)
 }
 
 // CreateIssueOnHostWithBodyWithResponse request with arbitrary body returning *CreateIssueOnHostResponse
@@ -51700,6 +53033,138 @@ func (c *ClientWithResponses) RemoveStaleWorktreeWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParseRemoveStaleWorktreeResponse(rsp)
+}
+
+// ParseListWorkflowRunsResponse parses an HTTP response from a ListWorkflowRunsWithResponse call
+func ParseListWorkflowRunsResponse(rsp *http.Response) (*ListWorkflowRunsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkflowRunsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WorkflowRunsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ProblemError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListWorkflowRunJobsResponse parses an HTTP response from a ListWorkflowRunJobsWithResponse call
+func ParseListWorkflowRunJobsResponse(rsp *http.Response) (*ListWorkflowRunJobsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkflowRunJobsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WorkflowJobsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ProblemError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListWorkflowsResponse parses an HTTP response from a ListWorkflowsWithResponse call
+func ParseListWorkflowsResponse(rsp *http.Response) (*ListWorkflowsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkflowsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WorkflowCatalogResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ProblemError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDispatchWorkflowResponse parses an HTTP response from a DispatchWorkflowWithResponse call
+func ParseDispatchWorkflowResponse(rsp *http.Response) (*DispatchWorkflowResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DispatchWorkflowResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest WorkflowDispatchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ProblemError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListActivityResponse parses an HTTP response from a ListActivityWithResponse call
@@ -54955,6 +56420,138 @@ func ParseAbortFederationSpokePreparationResponse(rsp *http.Response) (*AbortFed
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ProblemError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListWorkflowRunsOnHostResponse parses an HTTP response from a ListWorkflowRunsOnHostWithResponse call
+func ParseListWorkflowRunsOnHostResponse(rsp *http.Response) (*ListWorkflowRunsOnHostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkflowRunsOnHostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WorkflowRunsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ProblemError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListWorkflowRunJobsOnHostResponse parses an HTTP response from a ListWorkflowRunJobsOnHostWithResponse call
+func ParseListWorkflowRunJobsOnHostResponse(rsp *http.Response) (*ListWorkflowRunJobsOnHostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkflowRunJobsOnHostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WorkflowJobsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ProblemError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListWorkflowsOnHostResponse parses an HTTP response from a ListWorkflowsOnHostWithResponse call
+func ParseListWorkflowsOnHostResponse(rsp *http.Response) (*ListWorkflowsOnHostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkflowsOnHostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WorkflowCatalogResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ProblemError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDispatchWorkflowOnHostResponse parses an HTTP response from a DispatchWorkflowOnHostWithResponse call
+func ParseDispatchWorkflowOnHostResponse(rsp *http.Response) (*DispatchWorkflowOnHostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DispatchWorkflowOnHostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest WorkflowDispatchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest ProblemError

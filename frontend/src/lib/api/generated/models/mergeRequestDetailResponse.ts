@@ -3,6 +3,7 @@
  */
 import type { CICheck } from "./cICheck.ts";
 import type { MergeRequest } from "./mergeRequest.ts";
+import type { MergeRequestDetailResponseHeadRepoKind } from "./mergeRequestDetailResponseHeadRepoKind.ts";
 import type { MergeRequestEventResponse } from "./mergeRequestEventResponse.ts";
 import type { RepoRefResponse } from "./repoRefResponse.ts";
 import type { StackContextResponse } from "./stackContextResponse.ts";
@@ -19,6 +20,7 @@ export interface MergeRequestDetailResponse {
   detail_loaded: boolean;
   diff_head_sha: string;
   events: MergeRequestEventResponse[];
+  head_repo_kind: MergeRequestDetailResponseHeadRepoKind;
   merge_base_sha: string;
   merge_request: MergeRequest;
   platform_base_sha: string;

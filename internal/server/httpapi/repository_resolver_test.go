@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -37,6 +38,25 @@ func TestEmptyRegistryDoesNotAdvertiseProviderCapabilities(t *testing.T) {
 	assert.False(github.MergeMutation)
 	assert.False(gitlab.ReadRepositories)
 	assert.False(gitlab.MergeMutation)
+}
+
+func TestProviderCapabilitiesFromPlatformMapsWorkflowWireFields(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	response := ProviderCapabilitiesFromPlatform(platform.Capabilities{
+		ReadWorkflows:    true,
+		ReadWorkflowRuns: true,
+		WorkflowDispatch: true,
+	})
+
+	encoded, err := json.Marshal(response)
+	require.NoError(err)
+	var fields map[string]any
+	require.NoError(json.Unmarshal(encoded, &fields))
+
+	assert.Equal(true, fields["read_workflows"])
+	assert.Equal(true, fields["read_workflow_runs"])
+	assert.Equal(true, fields["workflow_dispatch"])
 }
 
 func TestRepositoryResolverBuildsCanonicalRef(t *testing.T) {

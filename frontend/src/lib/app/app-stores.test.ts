@@ -58,6 +58,15 @@ describe("app store composition", () => {
     expect(composition.stores.issues.getIssues()).toEqual([]);
     expect(composition.stores.activity.getActivityItems()).toEqual([]);
     expect(composition.stores.grouping.getGroupByRepo()).toBe(true);
+    expect(
+      composition.stores.workflowActions.getRuns({
+        provider: "github",
+        platformHost: "github.com",
+        owner: "acme",
+        name: "widgets",
+        repoPath: "acme/widgets",
+      }),
+    ).toEqual([]);
   });
 
   it("keeps provider data unavailable when reconnect reconciliation fails", async () => {

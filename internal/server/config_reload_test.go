@@ -607,6 +607,7 @@ func TestConfigReload_UpdatesModes(t *testing.T) {
 
 	srv.cfgMu.Lock()
 	gotModes := cloneModeVisibility(srv.cfg.Modes)
+	originalActions := srv.cfg.Modes.Actions
 	srv.cfgMu.Unlock()
 	assert.True(*gotModes.Docs)
 	assert.False(*gotModes.Workspaces)
@@ -615,6 +616,10 @@ func TestConfigReload_UpdatesModes(t *testing.T) {
 	assert.True(*gotModes.Pulls)
 	assert.True(*gotModes.Issues)
 	assert.True(*gotModes.Reviews)
+	assert.False(*gotModes.Actions)
+
+	*gotModes.Actions = true
+	assert.False(*originalActions, "cloned Actions pointer must not alias live config")
 }
 
 func TestConfigReload_UpdatesDocFoldersAndRegistry(t *testing.T) {

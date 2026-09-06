@@ -14,6 +14,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -160,6 +161,405 @@ func (s staticTokenSource) Invalidate(string) {}
 
 func (s staticTokenSource) Descriptor() tokenauth.Descriptor {
 	return tokenauth.Descriptor{Key: tokenauth.Key{Platform: "github", Host: "github.com"}}
+}
+
+const (
+	e2eReleaseWorkflowID = "8101"
+	e2eDispatchedRunID   = "82003"
+)
+
+const e2eReleaseWorkflowDefinition = `name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish
+        required: true
+        type: string
+      dry_run:
+        default: false
+        type: boolean
+      channel:
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
+      target:
+        required: true
+        type: environment
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+`
+
+const e2eMaintenanceWorkflowDefinition = `name: Maintenance
+on:
+  workflow_dispatch:
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+`
+
+const e2ePushWorkflowDefinition = `name: Push checks
+on:
+  push:
+    branches:
+      - main
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+`
+
+type e2eWorkflowDispatch struct {
+	Owner      string
+	Repository string
+	WorkflowID int64
+	Ref        string
+	Inputs     map[string]any
+}
+
+type e2eWorkflowClient struct {
+	*testutil.FixtureClient
+
+	mu         sync.RWMutex
+	runs       []*gh.WorkflowRun
+	jobs       map[int64][]*gh.WorkflowJob
+	dispatches []e2eWorkflowDispatch
+	nextRunID  int64
+}
+
+func newE2EWorkflowClient(client *testutil.FixtureClient) *e2eWorkflowClient {
+	successCreated := time.Date(2026, 8, 27, 9, 0, 0, 0, time.UTC)
+	failureCreated := successCreated.Add(-time.Hour)
+	return &e2eWorkflowClient{
+		FixtureClient: client,
+		runs: []*gh.WorkflowRun{
+			{
+				ID: new(int64(82001)), WorkflowID: new(int64(8101)),
+				RunNumber: new(41), Name: new("Release"),
+				Event: new("workflow_dispatch"), HeadBranch: new("main"),
+				HeadSHA: new("e2e-success-head-sha"),
+				Actor:   &gh.User{Login: new("release-bot")},
+				Status:  new("completed"), Conclusion: new("success"),
+				CreatedAt: &gh.Timestamp{Time: successCreated},
+				UpdatedAt: &gh.Timestamp{Time: successCreated.Add(2 * time.Minute)},
+				HTMLURL:   new("https://github.com/acme/widgets/actions/runs/82001"),
+			},
+			{
+				ID: new(int64(82002)), WorkflowID: new(int64(8101)),
+				RunNumber: new(40), Name: new("Release"),
+				Event: new("workflow_dispatch"), HeadBranch: new("release/previous"),
+				HeadSHA: new("e2e-failure-head-sha"),
+				Actor:   &gh.User{Login: new("fixture-viewer")},
+				Status:  new("completed"), Conclusion: new("failure"),
+				CreatedAt: &gh.Timestamp{Time: failureCreated},
+				UpdatedAt: &gh.Timestamp{Time: failureCreated.Add(time.Minute)},
+				HTMLURL:   new("https://github.com/acme/widgets/actions/runs/82002"),
+			},
+		},
+		jobs:      make(map[int64][]*gh.WorkflowJob),
+		nextRunID: 82003,
+	}
+}
+
+func (c *e2eWorkflowClient) ListRepositoryWorkflows(
+	_ context.Context, owner, repo string,
+) ([]*gh.Workflow, error) {
+	if owner != "acme" || repo != "widgets" {
+		return []*gh.Workflow{}, nil
+	}
+	return []*gh.Workflow{
+		{
+			ID: new(int64(8101)), Name: new("Release"),
+			Path: new(".github/workflows/release.yml"), State: new("active"),
+			HTMLURL: new("https://github.com/acme/widgets/actions/workflows/release.yml"),
+		},
+		{
+			ID: new(int64(8102)), Name: new("Maintenance"),
+			Path: new(".github/workflows/maintenance.yml"), State: new("active"),
+			HTMLURL: new("https://github.com/acme/widgets/actions/workflows/maintenance.yml"),
+		},
+		{
+			ID: new(int64(8103)), Name: new("Push checks"),
+			Path: new(".github/workflows/push.yml"), State: new("active"),
+			HTMLURL: new("https://github.com/acme/widgets/actions/workflows/push.yml"),
+		},
+	}, nil
+}
+
+func (c *e2eWorkflowClient) GetWorkflowDefinition(
+	_ context.Context, owner, repo, path, _ string,
+) (string, string, error) {
+	if owner != "acme" || repo != "widgets" {
+		return "", "", platform.ErrNotFound
+	}
+	switch path {
+	case ".github/workflows/release.yml":
+		return e2eReleaseWorkflowDefinition, "e2e-release-definition-sha", nil
+	case ".github/workflows/maintenance.yml":
+		return e2eMaintenanceWorkflowDefinition, "e2e-maintenance-definition-sha", nil
+	case ".github/workflows/push.yml":
+		return e2ePushWorkflowDefinition, "e2e-push-definition-sha", nil
+	default:
+		return "", "", platform.ErrNotFound
+	}
+}
+
+func (c *e2eWorkflowClient) ListRepositoryEnvironments(
+	_ context.Context, owner, repo string,
+) ([]*gh.Environment, error) {
+	if owner != "acme" || repo != "widgets" {
+		return []*gh.Environment{}, nil
+	}
+	return []*gh.Environment{
+		{Name: new("staging")},
+		{Name: new("production")},
+	}, nil
+}
+
+func (c *e2eWorkflowClient) ListManualWorkflowRuns(
+	_ context.Context,
+	owner, repo string,
+	workflowID int64,
+	query platform.WorkflowRunQuery,
+) (platform.Page[*gh.WorkflowRun], error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if owner != "acme" || repo != "widgets" {
+		return platform.Page[*gh.WorkflowRun]{Items: []*gh.WorkflowRun{}, Exhausted: true}, nil
+	}
+	offset := 0
+	if query.Cursor != "" {
+		parsed, err := strconv.Atoi(query.Cursor)
+		if err != nil || parsed < 0 {
+			return platform.Page[*gh.WorkflowRun]{}, fmt.Errorf("invalid workflow run cursor %q", query.Cursor)
+		}
+		offset = parsed
+	}
+	filtered := make([]*gh.WorkflowRun, 0, len(c.runs))
+	for _, run := range c.runs {
+		if run.GetWorkflowID() != workflowID {
+			continue
+		}
+		if query.Event != "" && run.GetEvent() != query.Event {
+			continue
+		}
+		if query.Branch != "" && run.GetHeadBranch() != query.Branch {
+			continue
+		}
+		filtered = append(filtered, cloneE2EWorkflowRun(run))
+	}
+	if offset > len(filtered) {
+		offset = len(filtered)
+	}
+	end := len(filtered)
+	if query.PerPage > 0 && offset+query.PerPage < end {
+		end = offset + query.PerPage
+	}
+	page := platform.Page[*gh.WorkflowRun]{
+		Items:     filtered[offset:end],
+		Exhausted: end == len(filtered),
+	}
+	if !page.Exhausted {
+		page.NextCursor = strconv.Itoa(end)
+	}
+	return page, nil
+}
+
+func (c *e2eWorkflowClient) GetManualWorkflowRun(_ context.Context, owner, repo string, runID int64) (*gh.WorkflowRun, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if owner == "acme" && repo == "widgets" {
+		for _, run := range c.runs {
+			if run.GetID() == runID {
+				return cloneE2EWorkflowRun(run), nil
+			}
+		}
+	}
+	return nil, platform.ErrNotFound
+}
+
+func (c *e2eWorkflowClient) ListManualWorkflowJobs(
+	_ context.Context, owner, repo string, runID int64,
+) ([]*gh.WorkflowJob, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if owner != "acme" || repo != "widgets" {
+		return []*gh.WorkflowJob{}, nil
+	}
+	seeded := c.jobs[runID]
+	jobs := make([]*gh.WorkflowJob, 0, len(seeded))
+	for _, job := range seeded {
+		jobs = append(jobs, cloneE2EWorkflowJob(job))
+	}
+	return jobs, nil
+}
+
+func (c *e2eWorkflowClient) DispatchManualWorkflow(
+	_ context.Context,
+	owner, repo string,
+	workflowID int64,
+	request gh.CreateWorkflowDispatchEventRequest,
+) (*gh.WorkflowDispatchRunDetails, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if owner != "acme" || repo != "widgets" || (workflowID != 8101 && workflowID != 8102) {
+		return nil, platform.ErrNotFound
+	}
+	inputs := cloneE2EWorkflowInputs(request.Inputs)
+	c.dispatches = append(c.dispatches, e2eWorkflowDispatch{
+		Owner: owner, Repository: repo, WorkflowID: workflowID,
+		Ref: request.Ref, Inputs: inputs,
+	})
+	runID := c.nextRunID
+	c.nextRunID++
+	runNumber := int(runID - 81960)
+	created := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC).
+		Add(time.Duration(runID-82003) * time.Minute)
+	runURL := fmt.Sprintf("https://github.com/%s/%s/actions/runs/%d", owner, repo, runID)
+	name := "Release"
+	if workflowID == 8102 {
+		name = "Maintenance"
+	}
+	run := &gh.WorkflowRun{
+		ID: new(runID), WorkflowID: new(workflowID),
+		RunNumber: new(runNumber), Name: new(name),
+		Event: new("workflow_dispatch"), HeadBranch: new(request.Ref),
+		HeadSHA: new("e2e-dispatched-head-sha"),
+		Actor:   &gh.User{Login: new("fixture-viewer")},
+		Status:  new("in_progress"), Conclusion: new(""),
+		CreatedAt: &gh.Timestamp{Time: created},
+		UpdatedAt: &gh.Timestamp{Time: created},
+		HTMLURL:   new(runURL),
+	}
+	c.runs = append([]*gh.WorkflowRun{run}, c.runs...)
+	jobID := runID + 1000
+	started := created.Add(time.Second)
+	c.jobs[runID] = []*gh.WorkflowJob{{
+		ID: new(jobID), Name: new("publish-release"),
+		Status: new("in_progress"), Conclusion: new(""),
+		StartedAt: &gh.Timestamp{Time: started},
+		HTMLURL: new(fmt.Sprintf(
+			"https://github.com/%s/%s/actions/runs/%d/job/%d",
+			owner, repo, runID, jobID,
+		)),
+		Steps: []*gh.TaskStep{
+			{
+				Number: new(int64(1)), Name: new("Prepare"),
+				Status: new("completed"), Conclusion: new("success"),
+				StartedAt:   &gh.Timestamp{Time: started},
+				CompletedAt: &gh.Timestamp{Time: started.Add(time.Second)},
+			},
+			{
+				Number: new(int64(2)), Name: new("Publish"),
+				Status: new("in_progress"), Conclusion: new(""),
+				StartedAt: &gh.Timestamp{Time: started.Add(time.Second)},
+			},
+		},
+	}}
+	return &gh.WorkflowDispatchRunDetails{
+		WorkflowRunID: new(runID),
+		HTMLURL:       new(runURL),
+	}, nil
+}
+
+func (c *e2eWorkflowClient) dispatchedRequests() []e2eWorkflowDispatch {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	result := make([]e2eWorkflowDispatch, 0, len(c.dispatches))
+	for _, dispatch := range c.dispatches {
+		dispatch.Inputs = cloneE2EWorkflowInputs(dispatch.Inputs)
+		result = append(result, dispatch)
+	}
+	return result
+}
+
+func cloneE2EWorkflowInputs(inputs map[string]any) map[string]any {
+	if inputs == nil {
+		return nil
+	}
+	clone := make(map[string]any, len(inputs))
+	maps.Copy(clone, inputs)
+	return clone
+}
+
+func cloneE2EWorkflowRun(run *gh.WorkflowRun) *gh.WorkflowRun {
+	if run == nil {
+		return nil
+	}
+	clone := *run
+	if run.Actor != nil {
+		actor := *run.Actor
+		clone.Actor = &actor
+	}
+	return &clone
+}
+
+func cloneE2EWorkflowJob(job *gh.WorkflowJob) *gh.WorkflowJob {
+	if job == nil {
+		return nil
+	}
+	clone := *job
+	clone.Steps = make([]*gh.TaskStep, 0, len(job.Steps))
+	for _, step := range job.Steps {
+		if step == nil {
+			clone.Steps = append(clone.Steps, nil)
+			continue
+		}
+		stepClone := *step
+		clone.Steps = append(clone.Steps, &stepClone)
+	}
+	return &clone
+}
+
+func seedWorkflowPullRefFixture(
+	ctx context.Context,
+	database *db.DB,
+	fc *testutil.FixtureClient,
+) error {
+	repo, err := database.GetRepoByIdentity(
+		ctx, db.GitHubRepoIdentity("github.com", "acme", "widgets"),
+	)
+	if err != nil {
+		return fmt.Errorf("get workflow pull fixture repo: %w", err)
+	}
+	if repo == nil {
+		return errors.New("get workflow pull fixture repo: not found")
+	}
+	pull, err := database.GetMergeRequestByRepoIDAndNumber(ctx, repo.ID, 2)
+	if err != nil {
+		return fmt.Errorf("get workflow fork pull fixture: %w", err)
+	}
+	if pull == nil {
+		return errors.New("get workflow fork pull fixture: not found")
+	}
+	const forkCloneURL = "https://github.com/contributor/widgets.git"
+	pull.HeadRepoCloneURL = forkCloneURL
+	if _, err := database.UpsertMergeRequest(ctx, pull); err != nil {
+		return fmt.Errorf("seed workflow fork pull fixture: %w", err)
+	}
+	patchFork := func(pulls []*gh.PullRequest) {
+		for _, providerPull := range pulls {
+			if providerPull.GetNumber() != 2 || providerPull.Head == nil {
+				continue
+			}
+			if providerPull.Head.Repo == nil {
+				providerPull.Head.Repo = &gh.Repository{}
+			}
+			providerPull.Head.Repo.CloneURL = gh.Ptr(forkCloneURL)
+		}
+	}
+	patchFork(fc.OpenPRs["acme/widgets"])
+	patchFork(fc.PRs["acme/widgets"])
+	return nil
 }
 
 type e2eStaticProvider struct {
@@ -1361,6 +1761,9 @@ func buildAppState(
 	if err := seedAssigneeReviewerFixture(ctx, database, fc); err != nil {
 		return nil, fmt.Errorf("seed assignee reviewer fixture: %w", err)
 	}
+	if err := seedWorkflowPullRefFixture(ctx, database, fc); err != nil {
+		return nil, fmt.Errorf("seed workflow pull refs: %w", err)
+	}
 	fc.ListRepositoriesByOwnerFn = func(
 		ctx context.Context, owner string,
 	) ([]*gh.Repository, error) {
@@ -1485,9 +1888,10 @@ func buildAppState(
 		}
 	}
 
+	workflowClient := newE2EWorkflowClient(fc)
 	fixtureClients := map[string]ghclient.Client{
-		"github.com":        fc,
-		defaultPlatformHost: fc,
+		"github.com":        workflowClient,
+		defaultPlatformHost: workflowClient,
 	}
 	startupResolved := ghclient.ResolveConfiguredRepos(
 		ctx,

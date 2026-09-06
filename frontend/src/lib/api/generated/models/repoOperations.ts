@@ -12,6 +12,7 @@ export interface RepoOperations {
   close_pr: OperationAvailability;
   create_issue: OperationAvailability;
   delete_comment: OperationAvailability;
+  dispatch_workflow: OperationAvailability;
   edit_comment: OperationAvailability;
   mark_draft: OperationAvailability;
   mark_ready_for_review: OperationAvailability;

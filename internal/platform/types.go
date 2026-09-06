@@ -505,6 +505,101 @@ func archiveContractError(kind Kind, host, field, format string, args ...any) er
 	return ProviderContract(kind, host, field, fmt.Errorf(format, args...))
 }
 
+type WorkflowInputType string
+
+const (
+	WorkflowInputString      WorkflowInputType = "string"
+	WorkflowInputNumber      WorkflowInputType = "number"
+	WorkflowInputBoolean     WorkflowInputType = "boolean"
+	WorkflowInputChoice      WorkflowInputType = "choice"
+	WorkflowInputEnvironment WorkflowInputType = "environment"
+)
+
+type WorkflowInput struct {
+	Name        string
+	Description string
+	Required    bool
+	Type        WorkflowInputType
+	Default     any
+	HasDefault  bool
+	Options     []string
+}
+
+type WorkflowDefinition struct {
+	ID                string
+	Name              string
+	Path              string
+	State             string
+	WebURL            string
+	DefinitionSHA     string
+	Inputs            []WorkflowInput
+	Available         bool
+	UnavailableReason string
+}
+
+type WorkflowEnvironment struct {
+	Name string
+}
+
+type WorkflowRunQuery struct {
+	WorkflowID string
+	Event      string
+	Branch     string
+	Cursor     string
+	PerPage    int
+}
+
+type WorkflowRunStep struct {
+	Number      int
+	Name        string
+	Status      string
+	Conclusion  string
+	StartedAt   time.Time
+	CompletedAt time.Time
+}
+
+type WorkflowRunJob struct {
+	ID          string
+	Name        string
+	Status      string
+	Conclusion  string
+	StartedAt   time.Time
+	CompletedAt time.Time
+	WebURL      string
+	Steps       []WorkflowRunStep
+}
+
+type WorkflowRun struct {
+	ID         string
+	WorkflowID string
+	RunNumber  int64
+	Name       string
+	Event      string
+	Ref        string
+	HeadSHA    string
+	Actor      string
+	Status     string
+	Conclusion string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	WebURL     string
+}
+
+type WorkflowDispatchRequest struct {
+	WorkflowID            string
+	Ref                   string
+	Inputs                map[string]any
+	ExpectedDefinitionSHA string
+}
+
+// WorkflowDispatchResult reports an accepted dispatch. Run is set only when the
+// provider names the created run; otherwise callers locate it by reading runs.
+type WorkflowDispatchResult struct {
+	Accepted bool
+	Run      *WorkflowRun
+	Actor    string
+}
+
 type Capabilities struct {
 	ReadRepositories      bool
 	ReadMergeRequests     bool
@@ -517,6 +612,8 @@ type Capabilities struct {
 	ReadMarkdownImages    bool
 	ReadAuthenticatedUser bool
 	ReadNotifications     bool
+	ReadWorkflows         bool
+	ReadWorkflowRuns      bool
 	CommentMutation       bool
 	// StateMutation means the provider can PATCH the item itself:
 	// open/close state transitions AND title/body/content updates.
@@ -529,6 +626,7 @@ type Capabilities struct {
 	MergeMutation               bool
 	ReviewMutation              bool
 	WorkflowApproval            bool
+	WorkflowDispatch            bool
 	ReadyForReview              bool
 	DraftMutation               bool
 	IssueMutation               bool

@@ -42,6 +42,44 @@ func (p testRepositoryReader) ListRepositories(
 	return nil, nil
 }
 
+type testWorkflowProvider struct {
+	testProvider
+}
+
+func (p testWorkflowProvider) ListManualWorkflows(
+	context.Context, RepoRef,
+) ([]WorkflowDefinition, error) {
+	return nil, nil
+}
+
+func (p testWorkflowProvider) ListWorkflowEnvironments(
+	context.Context, RepoRef,
+) ([]WorkflowEnvironment, error) {
+	return nil, nil
+}
+
+func (p testWorkflowProvider) ListWorkflowRuns(
+	context.Context, RepoRef, WorkflowRunQuery,
+) (Page[WorkflowRun], error) {
+	return Page[WorkflowRun]{}, nil
+}
+
+func (p testWorkflowProvider) GetWorkflowRun(context.Context, RepoRef, string) (WorkflowRun, error) {
+	return WorkflowRun{}, nil
+}
+
+func (p testWorkflowProvider) ListWorkflowRunJobs(
+	context.Context, RepoRef, string,
+) ([]WorkflowRunJob, error) {
+	return nil, nil
+}
+
+func (p testWorkflowProvider) DispatchWorkflow(
+	context.Context, RepoRef, WorkflowDispatchRequest,
+) (WorkflowDispatchResult, error) {
+	return WorkflowDispatchResult{}, nil
+}
+
 func TestRegistryLooksUpProvidersByKindAndHost(t *testing.T) {
 	provider := testProvider{
 		kind: KindGitLab,
@@ -120,6 +158,80 @@ func TestRegistryFindsOptionalRepositoryReader(t *testing.T) {
 	})
 	require.NoError(err)
 	assert.Equal(t, Repository{}, repo)
+}
+
+func TestRegistryFindsWorkflowCapabilities(t *testing.T) {
+	require := require.New(t)
+	provider := testWorkflowProvider{
+		kind: KindGitLab,
+		host: "gitlab.com",
+		caps: Capabilities{
+			ReadWorkflows:    true,
+			ReadWorkflowRuns: true,
+			WorkflowDispatch: true,
+		}}
+	registry, err := NewRegistry(provider)
+	require.NoError(err)
+
+	catalogReader, err := registry.WorkflowCatalogReader(KindGitLab, "gitlab.com")
+	require.NoError(err)
+	runReader, err := registry.WorkflowRunReader(KindGitLab, "gitlab.com")
+	require.NoError(err)
+	dispatcher, err := registry.WorkflowDispatcher(KindGitLab, "gitlab.com")
+	require.NoError(err)
+
+	assert.Equal(t, provider, catalogReader)
+	assert.Equal(t, provider, runReader)
+	assert.Equal(t, provider, dispatcher)
+}
+
+func TestRegistryReturnsUnsupportedCapabilityForMissingWorkflowCapabilities(t *testing.T) {
+	require := require.New(t)
+	registry, err := NewRegistry(testWorkflowProvider{
+		kind: KindGitLab,
+		host: "gitlab.com"})
+	require.NoError(err)
+
+	tests := []struct {
+		name       string
+		access     func() error
+		capability string
+	}{
+		{
+			name: "workflow catalog",
+			access: func() error {
+				_, err := registry.WorkflowCatalogReader(KindGitLab, "gitlab.com")
+				return err
+			},
+			capability: "read_workflows",
+		},
+		{
+			name: "workflow runs",
+			access: func() error {
+				_, err := registry.WorkflowRunReader(KindGitLab, "gitlab.com")
+				return err
+			},
+			capability: "read_workflow_runs",
+		},
+		{
+			name: "workflow dispatch",
+			access: func() error {
+				_, err := registry.WorkflowDispatcher(KindGitLab, "gitlab.com")
+				return err
+			},
+			capability: "workflow_dispatch",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.access()
+
+			var platformErr *Error
+			require.ErrorAs(err, &platformErr)
+			require.ErrorIs(err, ErrUnsupportedCapability)
+			assert.Equal(t, tc.capability, platformErr.Capability)
+		})
+	}
 }
 
 func TestRegistryReturnsUnsupportedCapabilityForMissingOptionalReader(t *testing.T) {
