@@ -1815,8 +1815,8 @@ describe("TerminalPane", () => {
     );
   });
 
-  it("uploads every image-only browser paste and sends each path separately", async () => {
-    const paths = ["/remote/paste-image-1.png", "/remote/paste-image-2.webp"];
+  it("pastes multiple image paths as separate quoted tokens in one paste", async () => {
+    const paths = ["/remote/paste-image-1.png", "/remote/paste images/paste-image-2.webp"];
     const fetchMock = vi.fn(
       async () => new Response(JSON.stringify({ path: paths[fetchMock.mock.calls.length - 1] }), { status: 201 }),
     );
@@ -1854,9 +1854,12 @@ describe("TerminalPane", () => {
       `${window.location.origin}/api/v1/fleet/hosts/host-a/terminal/paste-image`,
     );
     await waitFor(() => {
-      const frames = mockSockets[0]!.sent.map((_, index) => sentText(mockSockets[0]!, index));
-      expect(frames).toContain("\x1b[200~/remote/paste-image-1.png\x1b[201~");
-      expect(frames).toContain("\x1b[200~/remote/paste-image-2.webp\x1b[201~");
+      const frames = mockSockets[0]!.sent.flatMap((frame, index) =>
+        typeof frame === "string" ? [] : [sentText(mockSockets[0]!, index)],
+      );
+      expect(frames.join("")).toBe(
+        "\x1b[200~/remote/paste-image-1.png '/remote/paste images/paste-image-2.webp'\x1b[201~",
+      );
     });
     expect(mockShowFlash).toHaveBeenCalledWith("2 images uploaded; paths pasted into terminal.");
   });

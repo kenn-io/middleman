@@ -527,13 +527,11 @@
         });
         return;
       }
-      for (const path of paths) {
-        if (!sendPastedInput(terminalPastePathToken(path))) {
-          showFlash("Image uploaded, but its path could not be pasted into the terminal.", {
-            tone: "danger",
-          });
-          return;
-        }
+      if (!sendPastedInput(paths.map(terminalPastePathToken).join(" "))) {
+        showFlash("Images uploaded, but their paths could not be pasted into the terminal.", {
+          tone: "danger",
+        });
+        return;
       }
       showFlash(
         paths.length === 1
