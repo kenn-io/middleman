@@ -1182,6 +1182,7 @@ type StackMemberWithPR struct {
 // StackPlacement is a merge request's contiguous position within its stack
 // after hidden members are filtered, plus the visible stack size.
 type StackPlacement struct {
+	StackID  int64
 	Position int
 	Size     int
 }

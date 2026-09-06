@@ -198,9 +198,9 @@ func TestListPullsReportsStackPlacementForMultiMemberStacks(t *testing.T) {
 	}
 	require.Len(byNumber, 5)
 	require.NotNil(byNumber[2].Stack)
-	assert.Equal(StackPlacementResponse{Position: 2, Size: 3}, *byNumber[2].Stack)
+	assert.Equal(StackPlacementResponse{StackID: stackID, Position: 2, Size: 3}, *byNumber[2].Stack)
 	require.NotNil(byNumber[3].Stack)
-	assert.Equal(StackPlacementResponse{Position: 3, Size: 3}, *byNumber[3].Stack)
+	assert.Equal(StackPlacementResponse{StackID: stackID, Position: 3, Size: 3}, *byNumber[3].Stack)
 	assert.Nil(byNumber[4].Stack, "pull requests outside a stack carry no placement")
 	assert.Nil(byNumber[5].Stack, "single-member stacks are not shown as stacked")
 }

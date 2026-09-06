@@ -399,7 +399,7 @@ func (d *DB) ListStackPlacementsForMRs(ctx context.Context, mrIDs []int64) (map[
 		          AND ai.lifecycle_state = 'removed_upstream'
 		    )
 		)
-		SELECT merge_request_id, position, size
+		SELECT merge_request_id, stack_id, position, size
 		FROM visible
 		WHERE merge_request_id IN (SELECT merge_request_id FROM requested)`,
 		string(payload),
@@ -412,7 +412,7 @@ func (d *DB) ListStackPlacementsForMRs(ctx context.Context, mrIDs []int64) (map[
 	for rows.Next() {
 		var id int64
 		var placement StackPlacement
-		if err := rows.Scan(&id, &placement.Position, &placement.Size); err != nil {
+		if err := rows.Scan(&id, &placement.StackID, &placement.Position, &placement.Size); err != nil {
 			return nil, fmt.Errorf("scan stack placement: %w", err)
 		}
 		placements[id] = placement

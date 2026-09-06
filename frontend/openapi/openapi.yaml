@@ -8460,7 +8460,12 @@ components:
           description: Number of visible pull requests in the stack
           format: int64
           type: integer
+        stack_id:
+          description: Stable local stack identity
+          format: int64
+          type: integer
       required:
+        - stack_id
         - position
         - size
       type: object

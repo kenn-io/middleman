@@ -34,8 +34,9 @@ type MergeRequestResponse struct {
 
 // StackPlacementResponse is a pull request's position within its stack.
 type StackPlacementResponse struct {
-	Position int `json:"position" doc:"1-based position of this pull request in its stack"`
-	Size     int `json:"size" doc:"Number of visible pull requests in the stack"`
+	StackID  int64 `json:"stack_id" doc:"Stable local stack identity"`
+	Position int   `json:"position" doc:"1-based position of this pull request in its stack"`
+	Size     int   `json:"size" doc:"Number of visible pull requests in the stack"`
 }
 
 type mergeRequestEventResponse struct {

@@ -500,7 +500,7 @@ func (s *Handler) listPullsRouteCore(ctx context.Context, input *listPullsInput)
 			resp.DetailFetchedAt = formatUTCRFC3339(*mr.DetailFetchedAt)
 		}
 		if placement, ok := stackPlacements[mr.ID]; ok && placement.Size > 1 {
-			resp.Stack = &StackPlacementResponse{Position: placement.Position, Size: placement.Size}
+			resp.Stack = &StackPlacementResponse{StackID: placement.StackID, Position: placement.Position, Size: placement.Size}
 		}
 		out = append(out, resp)
 	}

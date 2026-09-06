@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import { Effect } from "effect";
   import { pollWhileVisible } from "../../effect/poll-while-visible.js";
   import { onDestroy, untrack } from "svelte";
@@ -96,7 +97,7 @@
 
   let searchInput = $state(pulls.getSearchQuery() ?? "");
   let searchExecution: AppExecution<void, never> | null = null;
-  const visiblePulls = $derived(pulls.getDisplayOrderPRs());
+  const visiblePulls = $derived(pulls.getFilteredPulls());
   const repoLabelFormatter = $derived(
     createRepoLabelFormatter(
       visiblePulls.map((pr) => ({
@@ -165,6 +166,7 @@
   function resetCompactView(): void {
     pulls.clearLocalFilters();
     grouping.setGroupingMode("byRepo");
+    pulls.setStackTree(false);
     grouping.setHideOrgName(false);
     if (pulls.getFilterState() !== "open") {
       pulls.setFilterState("open");
@@ -247,8 +249,14 @@
       ],
     },
     {
-      title: "Visibility",
+      title: "View",
       items: [
+        {
+          id: "stack-tree",
+          label: "Stack tree",
+          active: pulls.getStackTree(),
+          onSelect: () => pulls.setStackTree(!pulls.getStackTree()),
+        },
         {
           id: "hide-org-name",
           label: "Hide org name",
@@ -266,7 +274,8 @@
     pulls.getFilterState() !== "open"
       || groupingMode !== "byRepo"
       || pulls.getLocalFilterCount() > 0
-      || grouping.getHideOrgName(),
+      || grouping.getHideOrgName()
+      || pulls.getStackTree(),
   );
   const localViewFilterCount = $derived(
     pulls.getLocalFilterCount() + Number(grouping.getHideOrgName()),
@@ -378,7 +387,8 @@
   const selectedVisiblePR = $derived.by(() => {
     const sel = pulls.getSelectedPR();
     if (sel === null) return null;
-    const pr = visiblePulls.find((p) => pullMatchesSelection(p, sel));
+    const items = selectedPRGroup?.items ?? visiblePulls;
+    const pr = pulls.getSidebarRows(items).find((row) => pullMatchesSelection(row.pr, sel))?.pr;
     if (!pr) return null;
     // Collapsed grouped modes hide the selected PR row, so the files tab
     // renders the fallback file list instead of losing the diff sidebar.
@@ -414,6 +424,67 @@
     return pr.worktree_links.some((l) => l.worktree_key === key);
   });
 </script>
+
+{#snippet pullRows(items: PullRequest[], showRepo: boolean)}
+  {#each pulls.getSidebarRows(items) as row (row.pr.ID)}
+    {@const pr = row.pr}
+    {@const prRef = routeRefForPull(pr)}
+    {@const prSelected = isSelected(prRef)}
+    <div
+      class="stack-row"
+      class:stack-row--member={row.depth > 0}
+      class:stack-row--root={row.memberCount > 0}
+      style:--stack-depth={Math.min(row.depth, 3)}
+    >
+      {#if row.memberCount > 0}
+        {@const countLabel = row.memberCount === pr.stack?.size
+          ? `${row.memberCount} PRs in stack`
+          : `${row.memberCount} of ${pr.stack?.size} PRs in this view`}
+        <div class="stack-control">
+          {#if row.memberCount > 1}
+            <button
+              type="button"
+              class="stack-toggle"
+              aria-expanded={row.expanded}
+              aria-label={`${row.expanded ? "Collapse" : "Expand"} stack at #${pr.Number}: ${countLabel}`}
+              title={countLabel}
+              onclick={() => pulls.toggleStack(row.stackKey, row.expanded)}
+            >
+              <ChevronDownIcon size={12} class={row.expanded ? "" : "stack-chevron--collapsed"} aria-hidden="true" />
+              <span>{row.memberCount}</span>
+            </button>
+          {:else}
+            <span class="stack-partial" title={countLabel} aria-label={countLabel}>1/{pr.stack?.size}</span>
+          {/if}
+        </div>
+      {/if}
+      <div class="stack-row-content">
+        {#if row.memberCount > 0 && pr.stack && (pr.stack.position > 1 || row.memberCount < pr.stack.size)}
+          <span class="stack-context">{row.memberCount} of {pr.stack.size} PRs in this view{pr.stack.position > 1 ? ` · starts at ${pr.stack.position}/${pr.stack.size}` : ""}</span>
+        {/if}
+        <PullItem
+          {pr}
+          repoLabel={repoLabelFormatter.format({
+            provider: pr.repo.provider,
+            platformHost: pr.repo.platform_host,
+            owner: pr.repo.owner,
+            name: pr.repo.name,
+            repoPath: pr.repo.repo_path,
+          })}
+          {showRepo}
+          selected={prSelected}
+          {importAction}
+          onclick={() => handleSelect(prRef)}
+        />
+        {#if showSelectedDiffSidebar && prSelected && _getDetailTab() === "files"}
+          <div class="diff-files-wrap">
+            <DiffSidebar showCommits={false} />
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/each}
+{/snippet}
 
 <div class="pull-list">
   <div class="filter-bar" class:filter-bar--compact={useCompactFilters}>
@@ -457,7 +528,7 @@
       <FilterDropdown
         label="PR filters"
         title="PR filters"
-        active={localViewFilterCount > 0}
+        active={localViewFilterCount > 0 || pulls.getStackTree()}
         badgeCount={localViewFilterCount}
         sections={localFilterSections}
         resetLabel="Clear filters"
@@ -547,55 +618,11 @@
             {collapsed}
             onclick={() => collapsedRepos.toggle("pulls", group.collapseKey)}
           >
-              {#each group.items as pr (pr.ID)}
-                {@const prRef = routeRefForPull(pr)}
-                {@const prSelected = isSelected(prRef)}
-                <PullItem
-                  {pr}
-                  repoLabel={repoLabelFormatter.format({
-                    provider: pr.repo.provider,
-                    platformHost: pr.repo.platform_host,
-                    owner: pr.repo.owner,
-                    name: pr.repo.name,
-                    repoPath: pr.repo.repo_path,
-                  })}
-                  showRepo={group.showRepo}
-                  selected={prSelected}
-                  {importAction}
-                  onclick={() => handleSelect(prRef)}
-                />
-                {#if showSelectedDiffSidebar && prSelected && _getDetailTab() === "files"}
-                  <div class="diff-files-wrap">
-                    <DiffSidebar showCommits={false} />
-                  </div>
-                {/if}
-              {/each}
+            {@render pullRows(group.items, group.showRepo)}
           </GroupedSidebarSection>
         {/each}
       {:else}
-        {#each visiblePulls as pr (pr.ID)}
-          {@const prRef = routeRefForPull(pr)}
-          {@const prSelected = isSelected(prRef)}
-          <PullItem
-            {pr}
-            repoLabel={repoLabelFormatter.format({
-              provider: pr.repo.provider,
-              platformHost: pr.repo.platform_host,
-              owner: pr.repo.owner,
-              name: pr.repo.name,
-              repoPath: pr.repo.repo_path,
-            })}
-            showRepo={true}
-            selected={prSelected}
-            {importAction}
-            onclick={() => handleSelect(prRef)}
-          />
-          {#if showSelectedDiffSidebar && prSelected && _getDetailTab() === "files"}
-            <div class="diff-files-wrap">
-              <DiffSidebar showCommits={false} />
-            </div>
-          {/if}
-        {/each}
+        {@render pullRows(visiblePulls, true)}
       {/if}
     {/if}
   </ScrollBox>
@@ -614,6 +641,71 @@
 </div>
 
 <style>
+  .stack-row {
+    display: flex;
+    min-width: 0;
+  }
+
+  .stack-row-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .stack-row--member {
+    margin-left: calc(16px + var(--stack-depth) * 12px);
+    border-left: 1px solid var(--border-default);
+  }
+
+  .stack-control {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    width: 28px;
+    flex-shrink: 0;
+    padding-top: 8px;
+  }
+
+  .stack-toggle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    width: 28px;
+    min-height: 40px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-2xs);
+    font-variant-numeric: tabular-nums;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+
+  .stack-toggle:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+  }
+
+  .stack-toggle:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: -2px;
+  }
+
+  .stack-toggle :global(.stack-chevron--collapsed) {
+    transform: rotate(-90deg);
+  }
+
+  .stack-partial {
+    color: var(--text-muted);
+    font-size: var(--font-size-2xs);
+  }
+
+  .stack-context {
+    display: block;
+    padding: 6px 12px 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-2xs);
+  }
+
   .pull-list {
     display: flex;
     flex-direction: column;
@@ -749,7 +841,7 @@
 
   .state-toggle {
     display: flex;
-    gap: 2px;
+    gap: var(--space-1);
     background: var(--bg-inset);
     border-radius: 6px;
     padding: 2px;
@@ -826,7 +918,7 @@
   }
   .group-toggle {
     display: flex;
-    gap: 2px;
+    gap: var(--space-1);
     background: var(--bg-inset);
     border-radius: 6px;
     padding: 2px;

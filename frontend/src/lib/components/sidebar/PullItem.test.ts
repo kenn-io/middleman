@@ -294,7 +294,7 @@ describe("PullItem kanban status", () => {
   });
 
   it("shows the stack position and size when the PR belongs to a stack", () => {
-    renderItem(mkPR({ stack: { position: 4, size: 7 } }));
+    renderItem(mkPR({ stack: { stack_id: 1, position: 4, size: 7 } }));
 
     const indicator = screen.getByLabelText("Stacked: 4/7");
     expect(indicator.textContent?.trim()).toBe("4/7");
