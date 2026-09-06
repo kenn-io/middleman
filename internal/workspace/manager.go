@@ -3289,7 +3289,7 @@ func (m *Manager) addPreferredWorktree(
 		}
 		if err := setBranchUpstream(
 			ctx, ws.WorktreePath, ws.GitHeadRef,
-			originRemoteName, "refs/heads/"+ws.GitHeadRef,
+			gitDir.remote, "refs/heads/"+ws.GitHeadRef,
 		); err != nil {
 			cleanupErr := cleanupOwnedWorktreeAddOnUpstreamFailure(
 				ctx, gitDir.path, ws, ws.GitHeadRef, branchSHA,
@@ -3497,13 +3497,13 @@ func cleanupOwnedWorktreeAddOnUpstreamFailure(
 }
 
 // configureFallbackBranchUpstream points the synthetic PR fallback branch at
-// the PR's head branch on origin, so divergence counts, push, and pull treat
-// the remote PR branch as the sync target exactly like a preferred-name
-// checkout would. Setup classifies MRHeadRepo from the current merge-request
+// the PR's head branch on the selected remote, so divergence counts, push, and
+// pull treat the remote PR branch as the sync target like a preferred-name
+// checkout. Setup classifies MRHeadRepo from the current merge-request
 // row before reaching this path, so nil is explicit same-repository evidence.
 // The SHA check is an additional checkout-consistency check, not repository
 // identity evidence: forks preserve commit IDs. Fork and unknown heads take
-// the merge-request-ref path and remain without an origin upstream.
+// the merge-request-ref path and remain without a tracking upstream.
 func configureFallbackBranchUpstream(
 	ctx context.Context,
 	gitDir workspaceGitDir,
@@ -3531,7 +3531,7 @@ func configureFallbackBranchUpstream(
 	}
 	return setBranchUpstream(
 		ctx, ws.WorktreePath, fallbackBranch,
-		originRemoteName, "refs/heads/"+ws.GitHeadRef,
+		gitDir.remote, "refs/heads/"+ws.GitHeadRef,
 	)
 }
 

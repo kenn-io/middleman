@@ -149,6 +149,10 @@ func (w *Watcher) run(ctx context.Context) {
 	}
 	w.markReady(nil)
 
+	w.runEvents(ctx, fsw.Events, fsw.Errors)
+}
+
+func (w *Watcher) runEvents(ctx context.Context, events <-chan fsnotify.Event, errs <-chan error) {
 	// debounceTimer is created lazily so we don't pay for a stopped
 	// timer on watchers that never see an event. The callback runs in
 	// this goroutine, not via time.AfterFunc, so Done only closes after
@@ -176,7 +180,7 @@ func (w *Watcher) run(ctx context.Context) {
 			// Callers should keep OnChange robust; this watcher must not
 			// silently swallow callback errors.
 			w.onChange()
-		case ev, ok := <-fsw.Events:
+		case ev, ok := <-events:
 			if !ok {
 				return
 			}
@@ -204,7 +208,7 @@ func (w *Watcher) run(ctx context.Context) {
 				debounceTimer.Reset(w.debounce)
 			}
 			debounceC = debounceTimer.C
-		case _, ok := <-fsw.Errors:
+		case _, ok := <-errs:
 			if !ok {
 				return
 			}

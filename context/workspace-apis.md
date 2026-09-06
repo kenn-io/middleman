@@ -668,6 +668,9 @@ silently report nothing when the upstream is not configured. A configured upstre
 whose local tracking ref is missing exposes `branch_upstream_missing`, so the UI can
 offer the push that verifies or creates its remote branch. Every path that creates a
 PR-owned branch should configure its upstream when repository identity is known.
+Configured local bases may use a remote other than `origin`; new preferred and synthetic
+PR branches must track the same identity-selected remote used for checkout
+(`internal/workspace/manager.go::configureFallbackBranchUpstream`).
 Passive workspace enrichment never contacts remotes, so the UI offers Push only for a
 missing local tracking ref or commits ahead. A zero-ahead branch deleted remotely remains
 in-sync until local Git state changes (`internal/server/workspaceapi/routes_handlers.go::applyWorktreeDivergence`).

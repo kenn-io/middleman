@@ -2041,7 +2041,7 @@ func TestSetupCreatesPRWorktreeFromForkStyleWorktreeBase(t *testing.T) {
 		t.Context(), ws.WorktreePath, "branch.feature/thing.remote",
 	)
 	require.NoError(err)
-	assert.Equal(originRemoteName, remote)
+	assert.Equal("upstream", remote)
 }
 
 func TestSetupWithOptionsConfirmsRoborevBeforeTerminal(t *testing.T) {
@@ -4779,6 +4779,40 @@ func TestAddWorktreeUsesFallbackWhenLocalBasePreferredBranchCheckedOut(t *testin
 		t, localRepo, "rev-parse", "refs/remotes/origin/"+branch,
 	)))
 	assert.Equal(originSHA, headSHA)
+}
+
+func TestAddWorktreeTracksSelectedLocalBaseRemote(t *testing.T) {
+	for _, fallback := range []bool{false, true} {
+		t.Run(fmt.Sprintf("fallback=%t", fallback), func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+			const headBranch = "feature/thing"
+			localRepo := setupLocalWorktreeBaseForWorkspaceGitTest(t, headBranch)
+			runWorkspaceTestGit(t, localRepo, "remote", "rename", "origin", "upstream")
+			wantBranch := headBranch
+			if fallback {
+				// An occupied preferred branch forces the synthetic branch path.
+				runWorkspaceTestGit(t, localRepo, "checkout", "-b", headBranch, "upstream/"+headBranch)
+				wantBranch = "kenn-forge/pr-42"
+			}
+			mgr := newTestManager(t, openTestDB(t), t.TempDir())
+			ws := &Workspace{
+				ID: "ws-selected-remote", ItemType: db.WorkspaceItemTypePullRequest,
+				ItemNumber: 42, GitHeadRef: headBranch,
+				WorktreePath: filepath.Join(t.TempDir(), "worktree"),
+			}
+
+			branch, err := mgr.addWorktreeLocked(t.Context(), workspaceGitDir{
+				path: localRepo, remote: "upstream", localBase: true,
+			}, ws, workspaceGitFetchOptions{})
+			require.NoError(err)
+			assert.Equal(wantBranch, branch)
+			trackingRef, err := gitOutput(t.Context(), ws.WorktreePath,
+				"rev-parse", "--symbolic-full-name", "@{upstream}")
+			require.NoError(err)
+			assert.Equal("refs/remotes/upstream/feature/thing", strings.TrimSpace(trackingRef))
+		})
+	}
 }
 
 func TestAddWorktreeFallbackBranchTracksPRHeadBranch(t *testing.T) {
