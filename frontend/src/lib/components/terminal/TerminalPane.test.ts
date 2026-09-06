@@ -1815,8 +1815,16 @@ describe("TerminalPane", () => {
     );
   });
 
-  it("pastes multiple image paths as separate quoted tokens in one paste", async () => {
-    const paths = ["/remote/paste-image-1.png", "/remote/paste images/paste-image-2.webp"];
+  it.each([
+    {
+      paths: ["/remote/paste-image-1.png", "/remote/paste images/paste-image-2.webp"],
+      pasted: "/remote/paste-image-1.png '/remote/paste images/paste-image-2.webp'",
+    },
+    {
+      paths: [String.raw`C:\Forge Images\first.png`, String.raw`C:\Forge Images\second.webp`],
+      pasted: String.raw`"C:\Forge Images\first.png" "C:\Forge Images\second.webp"`,
+    },
+  ])("pastes multiple image paths as separate quoted tokens in one paste: $pasted", async ({ paths, pasted }) => {
     const fetchMock = vi.fn(
       async () => new Response(JSON.stringify({ path: paths[fetchMock.mock.calls.length - 1] }), { status: 201 }),
     );
@@ -1857,9 +1865,7 @@ describe("TerminalPane", () => {
       const frames = mockSockets[0]!.sent.flatMap((frame, index) =>
         typeof frame === "string" ? [] : [sentText(mockSockets[0]!, index)],
       );
-      expect(frames.join("")).toBe(
-        "\x1b[200~/remote/paste-image-1.png '/remote/paste images/paste-image-2.webp'\x1b[201~",
-      );
+      expect(frames.join("")).toBe(`\x1b[200~${pasted}\x1b[201~`);
     });
     expect(mockShowFlash).toHaveBeenCalledWith("2 images uploaded; paths pasted into terminal.");
   });

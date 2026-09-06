@@ -18,6 +18,23 @@ describe("terminal paste image upload", () => {
     );
   });
 
+  it.each([
+    String.raw`C:\Forge Images\paste'image.png`,
+    "D:/Forge Images/paste-image.png",
+    String.raw`\\files.example.test\Forge Images\paste-image.png`,
+  ])("quotes native Windows path %s for cmd.exe and PowerShell", (path) => {
+    expect(terminalPastePathToken(path)).toBe(`"${path}"`);
+  });
+
+  it.each(["%TEMP%", "$cache", "`cache", "!cache!", "“cache”"])(
+    "rejects Windows paths requiring shell-specific expansion escaping: %s",
+    (directory) => {
+      expect(() => terminalPastePathToken(`C:\\${directory}\\paste-image.png`)).toThrow(
+        "Windows image path contains characters that require shell-specific quoting",
+      );
+    },
+  );
+
   it("posts raw image bytes to the local host endpoint", async () => {
     const fetchMock = vi.fn<typeof fetch>(
       async () =>
