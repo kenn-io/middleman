@@ -126,27 +126,6 @@ function footerRect(): DOMRect {
   return document.querySelector<HTMLElement>(".kit-bottom-dock__footer")!.getBoundingClientRect();
 }
 
-// FitStages picks its stage from a ResizeObserver measurement, so first paint
-// shows the labelled row at every width. A stage-agnostic settle -- two
-// consecutive reads with identical geometry -- is what lets a width sweep
-// assert on the stage the user actually ends up with.
-async function settleActions(): Promise<void> {
-  const geometry = (): string =>
-    JSON.stringify(
-      [...document.querySelectorAll<HTMLElement>(".footer-actions button")].map((el) => {
-        const r = el.getBoundingClientRect();
-        return [r.left, r.top, r.width];
-      }),
-    );
-  let previous = "";
-  await vi.waitFor(() => {
-    const current = geometry();
-    const settled = current !== "[]" && current === previous;
-    previous = current;
-    expect(settled).toBe(true);
-  });
-}
-
 describe("review drawer footer layout", () => {
   let mounted: { unmount: () => Promise<void> } | null = null;
 
@@ -247,11 +226,13 @@ describe("review drawer footer layout", () => {
   for (const width of [280, 300, 340, 380, 420, 460]) {
     it(`keeps the actions clear of the usage summary at ${width}px`, async () => {
       mounted = mountAt(width);
-      await settleActions();
-
-      const actions = assertActionsOnOneRow();
-      assertActionsInsideFooter(actions);
-      assertActionsClearOfUsage(actions, usageRect());
+      // Repeated first-paint geometry does not prove ResizeObserver has run.
+      // Wait for the layout contract itself, regardless of the selected stage.
+      await vi.waitFor(() => {
+        const actions = assertActionsOnOneRow();
+        assertActionsInsideFooter(actions);
+        assertActionsClearOfUsage(actions, usageRect());
+      });
     });
   }
 

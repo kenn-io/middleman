@@ -123,6 +123,9 @@ owner:
 - Browser specs live beside their components under `frontend/src`; the browser
   project includes `src/**/*.browser.svelte.ts`, while the jsdom unit project
   also includes GitHub App setup tests (`frontend/vite.config.ts::jsdomUnitTestProject`).
+- Responsive layout tests must await the geometry invariant itself; repeated first-paint
+  measurements do not prove ResizeObserver has delivered its layout update
+  (`frontend/src/RoborevReviewDrawer.footer-layout.browser.svelte.ts:229`).
 - jsdom lacks `ResizeObserver` and the CSS Font Loading API; `frontend/src/test/setup.ts`
   stubs both as inert so kit components that remeasure on resize or font load
   (`AdaptiveActionGrid`, popover auto-reposition) mount in unit tests. Add a stub there,
