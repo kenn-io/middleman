@@ -2,8 +2,9 @@ package githubapp
 
 import (
 	"context"
-	"go.kenn.io/forge/githubapp"
 	"time"
+
+	"go.kenn.io/forge/githubapp"
 )
 
 // MintInstallationToken signs an app JWT with the key at keyPath and

@@ -17,7 +17,7 @@ style that `golangci-lint` / `gofmt` / `oxfmt` already enforce.
 
 ### Good vs Bad Context
 
-BAD (greppable): "`Registry` is defined in `internal/platform/registry.go`."
+BAD (greppable): "`Registry` is defined in `platform/registry.go`."
 WORDY: "Provider identity is always the tuple `(platform, platform_host,
 owner, name)`; code that keys repos by `owner/name/number` alone will silently collide
 across hosts once a self-hosted Forgejo and github.com share an owner."
@@ -82,7 +82,7 @@ cite a code location so it can be verified and so drift is detectable.
   and line shifts. Works for Go (`registry.go::Registry`), TypeScript, and Svelte.
 - `` `path/to/file.go:123` `` — only when the target is genuinely nameless (a specific
   SQL string in a migration, an inline constant, a literal route string).
-- A directory anchor (`` `internal/platform/` ``) is acceptable for claims about a
+- A directory anchor (`` `platform/` ``) is acceptable for claims about a
   package's role rather than a single symbol.
 
 **What needs an anchor:** factual claims — behavior, invariants, the identity of a

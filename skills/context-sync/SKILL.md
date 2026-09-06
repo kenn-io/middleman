@@ -60,7 +60,7 @@ knowledge that changes what future agents should do.
 |------|--------------|----------------|
 | `agent-bootstrap` | `context/agent-bootstrap.md` | `.claude/settings.json`, `.codex/hooks.json` |
 | `config` | `context/config-persistence.md` | `internal/config/` save paths |
-| `platform` | `context/provider-architecture.md`, `context/platform-sync-invariants.md` | `internal/platform/` |
+| `platform` | `context/provider-architecture.md`, `context/platform-sync-invariants.md` | `platform/`, `internal/platformdb/` |
 | `github-sync` | `context/github-sync-invariants.md` | `internal/github/` |
 | `notifications` | `context/notifications-in-activity.md` | notification-owned paths in `internal/github/`, `internal/db/`, `internal/server/`, `frontend/`, and `packages/ui/` |
 | `db` | `context/db-migrations.md` | `internal/db/`, `internal/db/migrations/` |
@@ -74,7 +74,7 @@ knowledge that changes what future agents should do.
 | `docs-authoring` | `context/docs-authoring.md` | user docs, screenshots, and Zensical configuration |
 | `pull-requests` | `context/pull-request-workflow.md` | push and pull-request delivery workflow |
 | `frontend` | `context/ui-design-system.md`, `context/ui-interaction-contracts.md`, `context/vscode-workflow-panel-interaction-spec.md` | `frontend/src/`, `packages/ui/src/` |
-| `inline-review` | `context/inline-review-comments.md` | review-owned paths in `internal/db/`, `internal/github/`, `internal/platform/`, `internal/server/`, and `packages/ui/` |
+| `inline-review` | `context/inline-review-comments.md` | review-owned paths in `internal/db/`, `internal/github/`, `platform/`, `internal/platformdb/`, `internal/server/`, and `packages/ui/` |
 | `repo-browser` | `context/repository-source-browser.md`, `context/platform-sync-invariants.md` | `internal/gitclone/repo_browser.go`, `internal/server/repobrowserapi/`; repository-browser frontend, routes, and tests |
 | `mobile` | `context/mobile-ux.md` | frontend `/m` routes and phone-first components |
 | `kata` | `context/kata-mode.md`, `context/workspace-apis.md` | `internal/kata/`; Kata-owned paths in `internal/server/`, `internal/config/`, and `frontend/`, including shared app and configuration files |

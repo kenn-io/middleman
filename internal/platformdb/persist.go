@@ -2,11 +2,11 @@ package platformdb
 
 import (
 	"encoding/json"
-	"go.kenn.io/forge/platform"
 	"strings"
 	"time"
 
 	"go.kenn.io/forge/internal/db"
+	"go.kenn.io/forge/platform"
 )
 
 // MarshalAssigneesJSON converts a list of assignee usernames to a JSON array string.

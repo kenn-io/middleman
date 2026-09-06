@@ -34,11 +34,11 @@ re-check it directly against code rather than trusting the prose:
 
 - **Provider identity tuple.** Claim that identity is `(platform, platform_host, owner,
   name)` everywhere and routes are provider-aware (`/pulls/{provider}/{owner}/{name}/
-  {number}`, `/host/{platform_host}/...`). Re-check `internal/platform/` (registry,
-  types, persist) and representative `internal/server/` route registrations.
+  {number}`, `/host/{platform_host}/...`). Re-check `platform/` (registry and types),
+  `internal/platformdb/` (persistence), and representative `internal/server/` routes.
 - **Capability gating.** Claim that provider differences go through `Capabilities()` and
   return typed `unsupported_capability` errors with no silent GitHub-only fallback.
-  Re-check `internal/platform/` capability declarations and their call sites before
+  Re-check `platform/` capability declarations and their call sites before
   mutations.
 - **GitHub-only isolation.** Claim that GraphQL bulk fetch / ETag recovery stay in
   `internal/github/` and remain optional around the neutral persistence path. Re-check

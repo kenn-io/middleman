@@ -16,6 +16,7 @@ import (
 )
 
 type NotificationListOptions = platform.NotificationListOptions
+
 type NotificationThread = platform.NotificationThread
 
 func githubRateObserver(tracker *RateTracker) platform.RateObserver {
