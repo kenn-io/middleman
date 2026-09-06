@@ -6,6 +6,7 @@
   import { Chip } from "@kenn-io/kit-ui";
   import LabelRow from "../shared/LabelRow.svelte";
   import WorkspaceIndicator from "../shared/WorkspaceIndicator.svelte";
+  import AgentStatusIndicator from "../shared/AgentStatusIndicator.svelte";
   import SidebarTitlePopover from "./SidebarTitlePopover.svelte";
   import { repoIdentityKey } from "../../utils/repo-label.js";
   import { effectiveActivity } from "../../utils/effective-activity.js";
@@ -65,7 +66,10 @@
   <p class="title">
     <span class="title-text">{issue.Title}</span>
     <LabelRow {labels} compact />
-    <span class="item-number">#{issue.Number}</span>
+    <span class="title-status">
+      <AgentStatusIndicator state={issue.workspace?.agent_state} />
+      <span class="item-number">#{issue.Number}</span>
+    </span>
   </p>
   <div class="meta-row">
     <span class="meta-left">
@@ -150,6 +154,14 @@
     color: var(--text-primary);
     overflow: hidden;
     margin-bottom: 2px;
+  }
+
+  .title-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-left: auto;
+    flex-shrink: 0;
   }
 
   .title-text {

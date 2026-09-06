@@ -40,6 +40,7 @@
   import MobileTriageSearchBar from "../components/mobile/MobileTriageSearchBar.svelte";
   import { SelectDropdown } from "@kenn-io/kit-ui";
   import WorkspaceIndicator from "../components/shared/WorkspaceIndicator.svelte";
+  import AgentStatusIndicator from "../components/shared/AgentStatusIndicator.svelte";
   import CheckIcon from "@lucide/svelte/icons/check";
   import UserRoundIcon from "@lucide/svelte/icons/user-round";
   import {
@@ -940,6 +941,7 @@
                       {/if}
                     {/if}
                   </span>
+                  <AgentStatusIndicator state={item.workspace?.agent_state} />
                   <time
                     title={group.workspaceActivityAt === group.latestTime
                       ? "Recent workspace activity"

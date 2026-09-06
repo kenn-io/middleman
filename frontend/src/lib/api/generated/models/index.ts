@@ -798,6 +798,7 @@ export * from "./workspaceLaunchRequest.ts";
 export * from "./workspaceLaunchSpec.ts";
 export * from "./workspaceLaunchSpecItemType.ts";
 export * from "./workspaceRef.ts";
+export * from "./workspaceRefAgentState.ts";
 export * from "./workspaceRepositorySummary.ts";
 export * from "./workspaceResponse.ts";
 export * from "./workspaceResponseAgentState.ts";

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getShowListAgentStatus } from "./lib/stores/list-agent-status.svelte.js";
   import { onDestroy, setContext, untrack } from "svelte";
   import { Effect } from "effect";
   import type { Attachment } from "svelte/attachments";
@@ -233,6 +234,16 @@
     getPage,
   });
   stores = appComposition.stores;
+  $effect(() => {
+    if (!getShowListAgentStatus()) return;
+    const execution = appRuntime.runCommand(appComposition.listAgentStatusPolling, {
+      operation: "poll list agent status",
+      safeContext: {},
+      onFailure: () => {},
+    });
+    return () => execution.interrupt();
+  });
+
   const roborevPollingExecution = appComposition.stores.roborevDaemon === undefined
     ? undefined
     : appRuntime.runCommand(appComposition.stores.roborevDaemon.pollingEffect, {

@@ -1,3 +1,4 @@
+import { setShowListAgentStatus } from "./lib/stores/list-agent-status.svelte.js";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -337,6 +338,27 @@ describe("app store event wiring", () => {
     expect(reconcileIssuesEffect).not.toHaveBeenCalled();
     expect(reconcileActivityEffect).toHaveBeenCalledTimes(1);
   });
+
+  it.each(["pulls", "issues", "activity"])(
+    "refreshes %s agent states only when list indicators are enabled",
+    async (route) => {
+      compose({ getPage: () => route });
+      setShowListAgentStatus(false);
+      await acceptEvent(captured.store?.options.onWorkspaceStatus?.({ id: "ws-1" }));
+      expect(reconcilePullsEffect).not.toHaveBeenCalled();
+      expect(reconcileIssuesEffect).not.toHaveBeenCalled();
+      expect(reconcileActivityEffect).not.toHaveBeenCalled();
+      setShowListAgentStatus(true);
+      try {
+        await acceptEvent(captured.store?.options.onWorkspaceStatus?.({ id: "ws-1" }));
+        expect(reconcilePullsEffect).toHaveBeenCalledTimes(route === "pulls" ? 1 : 0);
+        expect(reconcileIssuesEffect).toHaveBeenCalledTimes(route === "issues" ? 1 : 0);
+        expect(reconcileActivityEffect).toHaveBeenCalledTimes(route === "activity" ? 1 : 0);
+      } finally {
+        setShowListAgentStatus(false);
+      }
+    },
+  );
 
   it.each([
     { route: "pulls", pulls: 1, issues: 0, activity: 0 },
