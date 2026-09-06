@@ -490,24 +490,38 @@ func TestHandleUpdateSettingsPersistsMCPAndReportsRestartRequired(t *testing.T) 
 func TestHandleUpdateSettingsMergesMCPFields(t *testing.T) {
 	require := require.New(t)
 	assert := assert.New(t)
-	srv, _, cfgPath := setupTestServerWithConfig(t)
+	srv, _, cfgPath := setupTestServerWithConfigContent(t, `
+sync_interval = "5m"
+github_token_env = "KENN_FORGE_GITHUB_TOKEN"
+host = "127.0.0.1"
+port = 8091
 
-	srv.cfg.MCP = config.MCP{Port: 9092, DiffCacheMB: 256}
-	require.NoError(srv.cfg.Save(cfgPath))
+[mcp]
+port = 9092
+diff_cache_mb = 256
+`, &mockGH{})
 
 	rr := testutil.DoJSON(t, srv, http.MethodPut, "/api/v1/settings", map[string]any{
 		"mcp": map[string]any{"enabled": true},
 	})
 
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
-	assert.Equal(config.MCP{Enabled: true, Port: 9092, DiffCacheMB: 256}, srv.cfg.MCP)
+	var response settingsResponse
+	require.NoError(json.NewDecoder(rr.Body).Decode(&response))
+	assert.True(response.MCP.Enabled)
+	assert.Equal(9092, response.MCP.Port)
+	assert.Equal(256, response.MCP.DiffCacheMB)
 
 	rr = testutil.DoJSON(t, srv, http.MethodPut, "/api/v1/settings", map[string]any{
 		"mcp": map[string]any{"port": 0},
 	})
 
 	require.Equal(http.StatusOK, rr.Code, rr.Body.String())
-	assert.Equal(config.MCP{Enabled: true, DiffCacheMB: 256}, srv.cfg.MCP)
+	response = settingsResponse{}
+	require.NoError(json.NewDecoder(rr.Body).Decode(&response))
+	assert.True(response.MCP.Enabled)
+	assert.Zero(response.MCP.Port)
+	assert.Equal(256, response.MCP.DiffCacheMB)
 
 	reloaded, err := config.Load(cfgPath)
 	require.NoError(err)
