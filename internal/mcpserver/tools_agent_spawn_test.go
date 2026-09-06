@@ -63,6 +63,51 @@ func TestSpawnWorkspaceWithAgentCallsDirectServicesAndUsesAuthoritativeEvidence(
 	assert.NotContains(string(raw), `"message_delivered":`)
 }
 
+func TestSpawnWorkspaceWithAgentCustomTargetObservesCanonicalHookAgent(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	backend := successfulSpawnBackend("ws-custom", "runtime-custom", "coding-custom")
+	backend.listLaunchTargetsFn = func(context.Context) ([]LaunchTarget, error) {
+		return []LaunchTarget{{Key: "custom-worker", Kind: "agent", Available: true}}, nil
+	}
+	backend.launchWorkspaceRuntimeFn = func(_ context.Context, workspaceID, target string) (RuntimeSession, error) {
+		assert.Equal("ws-custom", workspaceID)
+		assert.Equal("custom-worker", target)
+		return RuntimeSession{Key: "runtime-custom", TargetKey: target, Kind: "agent", Status: "running"}, nil
+	}
+	backend.getWorkspaceRuntimeFn = func(context.Context, string) (WorkspaceRuntime, error) {
+		return WorkspaceRuntime{Sessions: []RuntimeSession{{
+			Key: "runtime-custom", TargetKey: "custom-worker", Kind: "agent", Status: "running",
+		}}}, nil
+	}
+	backend.listWorkspaceAgentSessionsFn = func(context.Context, string) ([]WorkspaceAgentSession, error) {
+		return []WorkspaceAgentSession{
+			{Agent: "codex", SessionID: "a-other-runtime", RuntimeSessionKey: "runtime-other", TargetKey: "custom-worker"},
+			{Agent: "codex", SessionID: "b-other-target", RuntimeSessionKey: "runtime-custom", TargetKey: "other-worker"},
+			{Agent: "codex", SessionID: "coding-custom", RuntimeSessionKey: "runtime-custom", TargetKey: "custom-worker"},
+		}, nil
+	}
+	submissions := 0
+	backend.submitInitialMessageFn = func(_ context.Context, req InitialMessageRequest) (InitialMessageStatus, error) {
+		submissions++
+		assert.Equal("custom-worker", req.TargetKey)
+		return InitialMessageStatus{State: "delivered", MessageBytes: len(req.Message)}, nil
+	}
+	s := newMCPTestServer(t, backend)
+	input := prSpawnInput("start")
+	input.AgentTarget = "custom-worker"
+
+	out, err := s.spawnWorkspaceWithAgent(t.Context(), input)
+
+	require.NoError(err)
+	assert.Equal(1, submissions)
+	assert.Equal("coding_session_observed", out.Stage)
+	require.NotNil(out.CodingSession)
+	assert.Equal("coding-custom", out.CodingSession.SessionID)
+	assert.Equal("codex", out.CodingSession.Agent)
+	assert.Equal("custom-worker", out.CodingSession.TargetKey)
+}
+
 func TestSpawnWorkspaceWithAgentSubmitsPromptBeforeHookObservation(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)

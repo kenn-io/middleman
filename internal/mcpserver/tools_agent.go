@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"go.kenn.io/kit/agenthook"
 )
 
 type listAgentTargetsInput struct{}
@@ -74,8 +73,9 @@ type workspaceAgentRuntimeRow struct {
 func (s *Server) registerAgentTools() {
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name: "kenn_forge_list_agent_targets",
-		Description: "List configured launch targets that can report supported coding-agent hook sessions. " +
-			"Unavailable targets remain visible, but command arguments are never returned.",
+		Description: "List configured coding-agent launch targets, including custom targets. " +
+			"Unavailable targets remain visible, but command arguments are never returned. " +
+			"Handoff completion requires the launched runtime to report a supported coding-agent hook session.",
 	}, wrapTool(s.listAgentTargets))
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name: "kenn_forge_list_workspace_agent_sessions",
@@ -123,17 +123,10 @@ func (s *Server) listAgentTargets(
 	if err != nil {
 		return listAgentTargetsOutput{}, err
 	}
-	supported := make(map[string]struct{})
-	for _, profile := range agenthook.Profiles() {
-		supported[string(profile.Agent)] = struct{}{}
-	}
 	out := listAgentTargetsOutput{Targets: make([]agentTargetRow, 0)}
 	for index, target := range targets {
 		key := strings.ToLower(strings.TrimSpace(target.Key))
 		if target.Kind != "agent" {
-			continue
-		}
-		if _, ok := supported[key]; !ok {
 			continue
 		}
 		out.Targets = append(out.Targets, agentTargetRow{

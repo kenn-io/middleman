@@ -102,7 +102,10 @@ func TestWorkspaceAgentActivityFlowsThroughHTTPResponsesE2E(t *testing.T) {
 	require.NotNil(sessionsResponse.JSON200)
 	require.NotNil(sessionsResponse.JSON200.Sessions)
 	require.Len(sessionsResponse.JSON200.Sessions, 1)
-	assert.Nil(sessionsResponse.JSON200.Sessions[0].InitialMessage)
+	require.NotNil(sessionsResponse.JSON200.Sessions[0].InitialMessage)
+	assert.Equal("delivered", sessionsResponse.JSON200.Sessions[0].InitialMessage.State)
+	assert.Equal("hook-agent", sessionsResponse.JSON200.Sessions[0].InitialMessage.TargetKey)
+	assert.Equal(int64(11), sessionsResponse.JSON200.Sessions[0].InitialMessage.MessageBytes)
 
 	getResponse, err := fixture.client.HTTP.GetWorkspaceWithResponse(ctx, ws.Id)
 	require.NoError(err)

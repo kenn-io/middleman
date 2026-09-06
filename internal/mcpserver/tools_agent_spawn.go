@@ -206,7 +206,7 @@ func (s *Server) prepareAgentHandoff(
 	target, ok := findAgentTarget(targets.Targets, in.AgentTarget)
 	if !ok {
 		return Workspace{}, RuntimeSession{}, fmt.Errorf(
-			"agent_target %q is not a supported coding-agent target", in.AgentTarget,
+			"agent_target %q is not a configured coding-agent target", in.AgentTarget,
 		)
 	}
 	if !target.Available {
@@ -575,7 +575,7 @@ func (s *Server) waitForCodingSession(
 		}
 		for _, session := range response.Sessions {
 			if session.RuntimeSessionKey == runtimeSessionKey &&
-				session.TargetKey == targetKey && session.Agent == targetKey {
+				session.TargetKey == targetKey {
 				return session, nil
 			}
 		}

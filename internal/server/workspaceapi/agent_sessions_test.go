@@ -52,7 +52,7 @@ func TestListWorkspaceAgentSessionsProjectsOnlySupportedLiveAgentReports(t *test
 	runtime := localruntime.NewManager(localruntime.Options{
 		Targets: []localruntime.LaunchTarget{
 			{
-				Key: "codex", Label: "Codex", Kind: localruntime.LaunchTargetAgent,
+				Key: "custom-worker", Label: "Custom worker", Kind: localruntime.LaunchTargetAgent,
 				Source: "test", Command: helperCommand, Available: true,
 			},
 			{
@@ -68,7 +68,7 @@ func TestListWorkspaceAgentSessionsProjectsOnlySupportedLiveAgentReports(t *test
 		runtime.StopWorkspace(t.Context(), workspaceID)
 		runtime.Shutdown()
 	})
-	agentRuntime, err := runtime.Launch(ctx, workspaceID, worktree, "codex")
+	agentRuntime, err := runtime.Launch(ctx, workspaceID, worktree, "custom-worker")
 	require.NoError(err)
 	shellRuntime, err := runtime.Launch(ctx, workspaceID, worktree, "shell")
 	require.NoError(err)
@@ -101,7 +101,7 @@ func TestListWorkspaceAgentSessionsProjectsOnlySupportedLiveAgentReports(t *test
 
 	require.NoError(database.UpsertWorkspaceRuntimeSession(ctx, &db.WorkspaceRuntimeSession{
 		WorkspaceID: workspaceID, SessionKey: agentRuntime.Key,
-		TargetKey: "codex", Label: "Codex", Kind: "agent", Scope: "session",
+		TargetKey: "custom-worker", Label: "Custom worker", Kind: "agent", Scope: "session",
 		CreatedAt: agentRuntime.CreatedAt,
 	}))
 	handler := New(Deps{
@@ -110,7 +110,7 @@ func TestListWorkspaceAgentSessionsProjectsOnlySupportedLiveAgentReports(t *test
 	})
 	_, reserved := handler.reserveInitialMessageAttempt(
 		workspaceID, agentRuntime.Key,
-		initialMessageAttempt{TargetKey: "codex", Message: "review this!"},
+		initialMessageAttempt{TargetKey: "custom-worker", Message: "review this!"},
 	)
 	require.True(reserved)
 	handler.finishInitialMessageAttempt(workspaceID, agentRuntime.Key, initialMessageDelivered)
@@ -143,11 +143,12 @@ func TestListWorkspaceAgentSessionsProjectsOnlySupportedLiveAgentReports(t *test
 	require.Len(response.Sessions, 2)
 	assert.Equal("claude", response.Sessions[0].Agent)
 	assert.Equal(agentactivity.StateDone, response.Sessions[0].State)
-	assert.Nil(response.Sessions[0].InitialMessage)
+	require.NotNil(response.Sessions[0].InitialMessage)
+	assert.Equal(initialMessageDelivered, response.Sessions[0].InitialMessage.State)
 	assert.Equal("codex", response.Sessions[1].Agent)
 	assert.Equal("shared-session", response.Sessions[1].SessionID)
 	assert.Equal(agentRuntime.Key, response.Sessions[1].RuntimeSessionKey)
-	assert.Equal("codex", response.Sessions[1].TargetKey)
+	assert.Equal("custom-worker", response.Sessions[1].TargetKey)
 	assert.Equal(agentactivity.StateWorking, response.Sessions[1].State)
 	assert.Equal(time.UTC, response.Sessions[1].UpdatedAt.Location())
 	require.NotNil(response.Sessions[1].InitialMessage)

@@ -103,8 +103,12 @@ deleted before daemon shutdown.
 
 ## Coding-agent handoff
 
-Call `kenn_forge_list_agent_targets` to discover available coding agents. Then
-call `kenn_forge_spawn_workspace_with_agent` with one source:
+Call `kenn_forge_list_agent_targets` to discover configured coding agents,
+including custom targets. Use the returned target key as `agent_target`; it
+does not need to match the agent name reported by hooks. The launched agent
+must report a supported hook session for the handoff to complete.
+
+Call `kenn_forge_spawn_workspace_with_agent` with one source:
 
 - a provider-aware pull request or issue; or
 - a provider-aware repository with an optional ad-hoc branch.
