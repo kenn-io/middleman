@@ -109,7 +109,7 @@ func (s *Handler) ListWorkspaceAgentSessionsService(
 		}
 		if attempt, found := s.initialMessageAttempt(
 			summary.ID, report.RuntimeSessionKey,
-		); found && attempt.TargetKey == live.TargetKey && report.Agent == live.TargetKey {
+		); found && attempt.TargetKey == live.TargetKey {
 			message := initialMessageAttemptResult(attempt)
 			result.InitialMessage = &message
 		}

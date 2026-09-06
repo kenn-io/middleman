@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestListAgentTargetsFiltersSupportedHookAgentsWithoutCommands(t *testing.T) {
+func TestListAgentTargetsIncludesCustomAgentsWithoutCommands(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	backend := &fakeBackend{listLaunchTargetsFn: func(context.Context) ([]LaunchTarget, error) {
@@ -27,10 +27,12 @@ func TestListAgentTargetsFiltersSupportedHookAgentsWithoutCommands(t *testing.T)
 	out, err := s.listAgentTargets(t.Context(), listAgentTargetsInput{})
 
 	require.NoError(err)
-	require.Len(out.Targets, 2)
+	require.Len(out.Targets, 4)
 	assert.Equal("codex", out.Targets[0].Key)
 	assert.False(out.Targets[0].Available)
-	assert.Equal("gemini", out.Targets[1].Key)
+	assert.Equal("custom", out.Targets[1].Key)
+	assert.Equal("gemini", out.Targets[2].Key)
+	assert.Equal("opencode", out.Targets[3].Key)
 	raw, err := json.Marshal(out)
 	require.NoError(err)
 	assert.NotContains(string(raw), "command")

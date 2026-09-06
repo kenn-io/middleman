@@ -103,6 +103,9 @@
   receives a bounded, cancellation-independent read
   (`internal/mcpserver/tools_agent_spawn.go::Server.resolveOrCreatePRWorkspace`,
   `internal/mcpserver/tools_agent_spawn.go::Server.recoverInitialMessageStatus`).
+- Configured agent target keys are not hook agent identities; custom targets
+  must remain launchable and handoffs match the live runtime and target key
+  (`internal/mcpserver/tools_agent_spawn.go::Server.waitForCodingSession`).
 - Agent-session inspection returns live agent runtimes separately from
   hook-authoritative sessions. `hook_observed=false` distinguishes a launched
   runtime awaiting its first hook from a workspace with no agent runtime
