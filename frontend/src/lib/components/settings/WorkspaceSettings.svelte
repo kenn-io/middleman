@@ -1,5 +1,6 @@
 <script lang="ts">
   import { SelectDropdown, type SelectDropdownOption } from "@kenn-io/kit-ui";
+  import { getShowListAgentStatus, setShowListAgentStatus } from "../../stores/list-agent-status.svelte.js";
   import { Effect } from "effect";
   import type { Settings } from "../../api/types.js";
 
@@ -128,6 +129,23 @@
     );
   }
 </script>
+
+<div class="setting-row">
+  <div class="setting-copy">
+    <span class="setting-label">Show agent status in lists</span>
+    <span class="setting-description">Show Working, Approval, Input, and Done in PR, Activity, and Issue lists. Saved in this browser.</span>
+  </div>
+  <button
+    class={["toggle-btn", getShowListAgentStatus() && "toggle-on"]}
+    type="button"
+    onclick={() => setShowListAgentStatus(!getShowListAgentStatus())}
+    aria-label="Show agent status in lists"
+    aria-pressed={getShowListAgentStatus()}
+  >
+    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+  </button>
+</div>
+
 
 <div class="settings-list">
   <div class="setting-row">

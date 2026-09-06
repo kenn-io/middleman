@@ -1,4 +1,6 @@
+import { getShowListAgentStatus } from "./stores/list-agent-status.svelte.js";
 import { Effect } from "effect";
+import { pollWhileVisible } from "./effect/poll-while-visible.js";
 import { ApiProblemError } from "./api/effect-errors.js";
 import { createRoborevClient } from "./api/roborev/client.js";
 import type { RoborevClient } from "./api/roborev/client.js";
@@ -54,6 +56,7 @@ export interface AppStoreOptions {
 
 export interface AppStoreComposition {
   readonly stores: StoreInstances;
+  readonly listAgentStatusPolling: Effect.Effect<void, never, AppServices>;
   readonly roborevClient?: RoborevClient;
 }
 
@@ -216,7 +219,7 @@ export function createAppStores(options: AppStoreOptions): AppStoreComposition {
     );
   }
 
-  function refreshVisibleData() {
+  function refreshVisibleData(refreshDetail = true): Effect.Effect<void, ProviderEventsError, AppServices> {
     switch (gp()) {
       case "pulls":
       case "mobile-pulls":
@@ -227,10 +230,13 @@ export function createAppStores(options: AppStoreOptions): AppStoreComposition {
       case "activity":
       case "mobile-activity":
         return observeHubFailure(
-          Effect.all([activityStore.reconcileActivityEffect(), refreshSelectedActivityDetail()], {
-            concurrency: "unbounded",
-            discard: true,
-          }),
+          Effect.all(
+            [activityStore.reconcileActivityEffect(), ...(refreshDetail ? [refreshSelectedActivityDetail()] : [])],
+            {
+              concurrency: "unbounded",
+              discard: true,
+            },
+          ),
         );
       case "focus":
         return observeHubFailure(
@@ -277,6 +283,7 @@ export function createAppStores(options: AppStoreOptions): AppStoreComposition {
       getBasePath: () => eventBasePath,
     }),
     onDataChanged: refreshVisibleData,
+    onWorkspaceStatus: () => (getShowListAgentStatus() ? refreshVisibleData(false) : Effect.void),
     onSyncStatus: (status) => Effect.sync(() => syncStore.setSyncStatus(status)),
     onHubConnectionChanged: ({ connected }) => {
       if (!connected) {
@@ -449,5 +456,11 @@ export function createAppStores(options: AppStoreOptions): AppStoreComposition {
     si.roborevDaemon = daemon;
   }
 
-  return { stores: si, ...(roborevClient !== undefined && { roborevClient }) };
+  const listAgentStatusPolling = pollWhileVisible(
+    Effect.suspend(() => refreshVisibleData(false)).pipe(Effect.catch(() => Effect.void)),
+    "5 seconds",
+    { immediate: true },
+  );
+
+  return { stores: si, listAgentStatusPolling, ...(roborevClient !== undefined && { roborevClient }) };
 }

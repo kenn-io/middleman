@@ -21,8 +21,9 @@ type commitsResponse = httpapi.CommitsResponse
 // WorkspaceRef is the lightweight link from item detail APIs back to an
 // existing kenn-forge workspace.
 type WorkspaceRef struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
+	ID         string  `json:"id"`
+	Status     string  `json:"status"`
+	AgentState *string `json:"agent_state,omitempty" enum:"idle,working,input,approval,done" doc:"Hook-reported state of live agent sessions in the linked workspace."`
 }
 
 type workspaceResponse struct {

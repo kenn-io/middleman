@@ -46,6 +46,7 @@
   import ItemKindChip from "./shared/ItemKindChip.svelte";
   import ItemStateChip from "./shared/ItemStateChip.svelte";
   import WorkspaceIndicator from "./shared/WorkspaceIndicator.svelte";
+  import AgentStatusIndicator from "./shared/AgentStatusIndicator.svelte";
   import ArrowUpRightIcon from "@lucide/svelte/icons/arrow-up-right";
   import CheckIcon from "@lucide/svelte/icons/check";
   import ChevronsDownUpIcon from "@lucide/svelte/icons/chevrons-down-up";
@@ -805,7 +806,10 @@
                       />
                     {/if}
                   {/if}
-                  <span class="compact-time">{relativeTime(row.latest)}</span>
+                  <span class="compact-status">
+                    <AgentStatusIndicator state={row.representative.workspace?.agent_state} />
+                    <span class="compact-time">{relativeTime(row.latest)}</span>
+                  </span>
                 </span>
                 <span class="compact-title">
                   {#if isDefaultBranchActivity(row.representative)}
@@ -848,7 +852,10 @@
                         <ItemStateChip state={row.item_state} />
                       {/if}
                     {/if}
-                    <span class="compact-time">{relativeTime(row.created_at)}</span>
+                    <span class="compact-status">
+                      <AgentStatusIndicator state={row.workspace?.agent_state} />
+                      <span class="compact-time">{relativeTime(row.created_at)}</span>
+                    </span>
                   </span>
                   <span class="compact-title">
                     {isDefaultBranchActivity(row) ? branchActivityTitle(row) : row.item_title}
@@ -946,6 +953,7 @@
                       />
                     {/if}
                     <span class="item-title">{row.representative.item_title}</span>
+                    <AgentStatusIndicator state={row.representative.workspace?.agent_state} />
                   {/if}
                 </span>
                 <span class="cell cell--time col-when"
@@ -1005,6 +1013,7 @@
                       <WorkspaceIndicator status={row.workspace.status} size={12} />
                     {/if}
                     <span class="item-title">{row.item_title}</span>
+                    <AgentStatusIndicator state={row.workspace?.agent_state} />
                   {/if}
                 </span>
                 <span class="cell cell--time col-when">{relativeTime(row.created_at)}</span>
@@ -1249,6 +1258,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .compact-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-left: auto;
   }
 
   .compact-time {

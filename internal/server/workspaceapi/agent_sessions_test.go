@@ -156,6 +156,14 @@ func TestListWorkspaceAgentSessionsProjectsOnlySupportedLiveAgentReports(t *test
 	assert.Equal(12, response.Sessions[1].InitialMessage.MessageBytes)
 	require.NotNil(response.Sessions[1].InitialMessage.DeliveredAt)
 	assert.Equal(time.UTC, response.Sessions[1].InitialMessage.DeliveredAt.Location())
+
+	// Item lists use the same aggregate state and live-runtime filtering.
+	summary := &db.WorkspaceSummary{ID: workspaceID, WorktreePath: worktree, Status: "ready"}
+	ref := handler.workspaceReference(summary)
+	require.NotNil(ref.AgentState)
+	assert.Equal("working", *ref.AgentState)
+	runtime.StopWorkspace(ctx, workspaceID)
+	assert.Nil(handler.workspaceReference(summary).AgentState)
 }
 
 func TestWorkspaceAgentSessionHelper(t *testing.T) {

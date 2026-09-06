@@ -893,27 +893,54 @@ func (e WorkspaceLaunchSpecItemType) Valid() bool {
 	}
 }
 
+// Defines values for WorkspaceRefAgentState.
+const (
+	WorkspaceRefAgentStateApproval WorkspaceRefAgentState = "approval"
+	WorkspaceRefAgentStateDone     WorkspaceRefAgentState = "done"
+	WorkspaceRefAgentStateIdle     WorkspaceRefAgentState = "idle"
+	WorkspaceRefAgentStateInput    WorkspaceRefAgentState = "input"
+	WorkspaceRefAgentStateWorking  WorkspaceRefAgentState = "working"
+)
+
+// Valid indicates whether the value is a known member of the WorkspaceRefAgentState enum.
+func (e WorkspaceRefAgentState) Valid() bool {
+	switch e {
+	case WorkspaceRefAgentStateApproval:
+		return true
+	case WorkspaceRefAgentStateDone:
+		return true
+	case WorkspaceRefAgentStateIdle:
+		return true
+	case WorkspaceRefAgentStateInput:
+		return true
+	case WorkspaceRefAgentStateWorking:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkspaceResponseAgentState.
 const (
-	Approval WorkspaceResponseAgentState = "approval"
-	Done     WorkspaceResponseAgentState = "done"
-	Idle     WorkspaceResponseAgentState = "idle"
-	Input    WorkspaceResponseAgentState = "input"
-	Working  WorkspaceResponseAgentState = "working"
+	WorkspaceResponseAgentStateApproval WorkspaceResponseAgentState = "approval"
+	WorkspaceResponseAgentStateDone     WorkspaceResponseAgentState = "done"
+	WorkspaceResponseAgentStateIdle     WorkspaceResponseAgentState = "idle"
+	WorkspaceResponseAgentStateInput    WorkspaceResponseAgentState = "input"
+	WorkspaceResponseAgentStateWorking  WorkspaceResponseAgentState = "working"
 )
 
 // Valid indicates whether the value is a known member of the WorkspaceResponseAgentState enum.
 func (e WorkspaceResponseAgentState) Valid() bool {
 	switch e {
-	case Approval:
+	case WorkspaceResponseAgentStateApproval:
 		return true
-	case Done:
+	case WorkspaceResponseAgentStateDone:
 		return true
-	case Idle:
+	case WorkspaceResponseAgentStateIdle:
 		return true
-	case Input:
+	case WorkspaceResponseAgentStateInput:
 		return true
-	case Working:
+	case WorkspaceResponseAgentStateWorking:
 		return true
 	default:
 		return false
@@ -5500,9 +5527,14 @@ type WorkspaceLaunchSpecItemType string
 
 // WorkspaceRef defines model for WorkspaceRef.
 type WorkspaceRef struct {
-	Id     string `json:"id"`
-	Status string `json:"status"`
+	// AgentState Hook-reported state of live agent sessions in the linked workspace.
+	AgentState *WorkspaceRefAgentState `json:"agent_state,omitempty"`
+	Id         string                  `json:"id"`
+	Status     string                  `json:"status"`
 }
+
+// WorkspaceRefAgentState Hook-reported state of live agent sessions in the linked workspace.
+type WorkspaceRefAgentState string
 
 // WorkspaceRepositorySummary defines model for WorkspaceRepositorySummary.
 type WorkspaceRepositorySummary struct {

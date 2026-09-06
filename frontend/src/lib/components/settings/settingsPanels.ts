@@ -44,10 +44,11 @@ export const SETTINGS_PANELS: SettingsPanelMeta[] = [
   {
     id: "settings-workspaces",
     label: "Workspaces",
-    title: "Workspace creation",
+    title: "Workspaces",
     group: "Workspace",
-    description: "Behavior when creating workspaces from provider items",
-    keywords: "workspace create pull request issue assign self assignee ownership",
+    description: "Workspace creation and list indicators",
+    keywords:
+      "workspace create pull request issue assign self assignee ownership agent status working approval input done lists activity",
   },
   {
     id: "settings-terminal",

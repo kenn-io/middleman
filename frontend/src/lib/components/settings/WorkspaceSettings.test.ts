@@ -1,3 +1,4 @@
+import { getShowListAgentStatus, setShowListAgentStatus } from "../../stores/list-agent-status.svelte.js";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { Effect, Layer } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -50,7 +51,19 @@ describe("WorkspaceSettings", () => {
 
   afterEach(() => {
     cleanup();
+    setShowListAgentStatus(false);
     mockPersistSettings.mockReset();
+  });
+
+  it("persists the list agent status toggle in this browser", async () => {
+    setShowListAgentStatus(false);
+    render(SettingsRuntimeHarness, {
+      props: { component: WorkspaceSettings, componentProps: { onUpdate: vi.fn() } },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Show agent status in lists" }));
+    expect(getShowListAgentStatus()).toBe(true);
+    expect(localStorage.getItem("kenn-forge:show-list-agent-status")).toBe("true");
+    expect(mockPersistSettings).not.toHaveBeenCalled();
   });
 
   it("saves automatic assignment for new workspace items", async () => {

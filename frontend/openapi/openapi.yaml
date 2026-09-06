@@ -9251,6 +9251,15 @@ components:
     WorkspaceRef:
       additionalProperties: false
       properties:
+        agent_state:
+          description: Hook-reported state of live agent sessions in the linked workspace.
+          enum:
+            - idle
+            - working
+            - input
+            - approval
+            - done
+          type: string
         id:
           type: string
         status:

@@ -113,8 +113,19 @@ func TestWorkspaceAgentActivityFlowsThroughHTTPResponsesE2E(t *testing.T) {
 	require.NotNil(getResponse.JSON200)
 	require.NotNil(getResponse.JSON200.AgentState)
 	require.NotNil(getResponse.JSON200.AgentStateUpdatedAt)
-	assert.Equal(generated.Working, *getResponse.JSON200.AgentState)
+	assert.Equal(generated.WorkspaceResponseAgentStateWorking, *getResponse.JSON200.AgentState)
 	assert.Equal(time.UTC, getResponse.JSON200.AgentStateUpdatedAt.Location())
+
+	pullsResponse, err := fixture.client.HTTP.ListPullsWithResponse(ctx, nil)
+	require.NoError(err)
+	require.Equal(http.StatusOK, pullsResponse.StatusCode())
+	require.NotNil(pullsResponse.JSON200)
+	require.Len(*pullsResponse.JSON200, 1)
+	linkedWorkspace := (*pullsResponse.JSON200)[0].Workspace
+	require.NotNil(linkedWorkspace)
+	require.NotNil(linkedWorkspace.AgentState)
+	assert.Equal(ws.Id, linkedWorkspace.Id)
+	assert.Equal(generated.WorkspaceRefAgentStateWorking, *linkedWorkspace.AgentState)
 
 	require.NoError(os.WriteFile(
 		filepath.Join(ws.WorktreePath, "activity.txt"), []byte("activity\n"), 0o644,
@@ -128,7 +139,7 @@ func TestWorkspaceAgentActivityFlowsThroughHTTPResponsesE2E(t *testing.T) {
 	require.Equal(http.StatusOK, pushResponse.StatusCode(), string(pushResponse.Body))
 	require.NotNil(pushResponse.JSON200)
 	require.NotNil(pushResponse.JSON200.AgentState)
-	assert.Equal(generated.Working, *pushResponse.JSON200.AgentState)
+	assert.Equal(generated.WorkspaceResponseAgentStateWorking, *pushResponse.JSON200.AgentState)
 
 	reportHook("codex", "live-agent", launch.JSON200.Key, ws.WorktreePath, "Stop")
 	getResponse, err = fixture.client.HTTP.GetWorkspaceWithResponse(ctx, ws.Id)
@@ -136,7 +147,7 @@ func TestWorkspaceAgentActivityFlowsThroughHTTPResponsesE2E(t *testing.T) {
 	require.Equal(http.StatusOK, getResponse.StatusCode())
 	require.NotNil(getResponse.JSON200)
 	require.NotNil(getResponse.JSON200.AgentState)
-	assert.Equal(generated.Done, *getResponse.JSON200.AgentState)
+	assert.Equal(generated.WorkspaceResponseAgentStateDone, *getResponse.JSON200.AgentState)
 
 	stopResponse, err := fixture.client.HTTP.StopWorkspaceRuntimeSessionWithResponse(
 		ctx, ws.Id, launch.JSON200.Key,

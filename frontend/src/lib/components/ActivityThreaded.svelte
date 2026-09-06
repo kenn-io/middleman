@@ -29,6 +29,7 @@
   import ItemKindChip from "./shared/ItemKindChip.svelte";
   import ItemStateChip from "./shared/ItemStateChip.svelte";
   import WorkspaceIndicator from "./shared/WorkspaceIndicator.svelte";
+  import AgentStatusIndicator from "./shared/AgentStatusIndicator.svelte";
   import { createProgressiveMountController } from "../utils/progressive-mount.js";
 
   const { grouping, activity } = getStores();
@@ -919,6 +920,7 @@
               <WorkspaceIndicator status={itemGroup.workspace.status} size={12} />
             {/if}
             <span class="item-title">{itemGroup.itemTitle}</span>
+            <AgentStatusIndicator state={itemGroup.workspace?.agent_state} />
           </span>
           <span
             class="cell cell--time"
