@@ -115,6 +115,8 @@
   let rendererParked = false;
   let terminalSession: TerminalSessionController | null = null;
   let connectionGeneration = 0;
+  let imagePasteQueue = Promise.resolve();
+  let imagePasteQueueGeneration = -1;
   let unregisterTextureAtlasParticipant: (() => void) | null = null;
   let requestTerminalRefresh = (): void => {};
   let requestTerminalResize = (): void => {};
@@ -544,17 +546,29 @@
     }
   }
 
+  function enqueueImagePaste(
+    session: TerminalSessionController,
+    generation: number,
+    paste: () => Promise<void>,
+  ): void {
+    if (imagePasteQueueGeneration !== generation) {
+      imagePasteQueue = Promise.resolve();
+      imagePasteQueueGeneration = generation;
+    }
+    imagePasteQueue = imagePasteQueue.then(async () => {
+      if (terminalSessionIsCurrent(session, generation)) await paste();
+    }).catch((error: unknown) => {
+      const detail = error instanceof Error ? error.message : "Unknown paste error.";
+      showFlash(`Could not paste terminal image. ${detail}`, { tone: "danger" });
+    });
+  }
+
   async function handleMacControlV(
+    clipboardPayload: Promise<Blob[] | null>,
     session: TerminalSessionController,
     generation: number,
   ): Promise<void> {
-    let images: Blob[] | null;
-    try {
-      images = await imageOnlyClipboardPayload();
-    } catch {
-      replayControlV(session, generation);
-      return;
-    }
+    const images = await clipboardPayload;
     if (images === null) {
       replayControlV(session, generation);
       return;
@@ -569,7 +583,9 @@
     const session = terminalSession;
     if (!session?.isConnected()) return true;
     const generation = connectionGeneration;
-    void handleMacControlV(session, generation);
+    // Start the read during the browser gesture, but reserve its paste order now.
+    const clipboardPayload = imageOnlyClipboardPayload().catch(() => null);
+    enqueueImagePaste(session, generation, () => handleMacControlV(clipboardPayload, session, generation));
     return false;
   }
 
@@ -1050,7 +1066,7 @@
     const generation = connectionGeneration;
     event.preventDefault();
     event.stopImmediatePropagation();
-    void uploadAndPasteImages(images, session, generation);
+    enqueueImagePaste(session, generation, () => uploadAndPasteImages(images, session, generation));
   }
 
   function handleTerminalMessage(data: string | Uint8Array): TerminalMessageDecision {

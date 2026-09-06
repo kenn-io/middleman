@@ -1870,6 +1870,88 @@ describe("TerminalPane", () => {
     expect(mockShowFlash).toHaveBeenCalledWith("2 images uploaded; paths pasted into terminal.");
   });
 
+  it.each([201, 500])("queues a second image paste behind a pending upload returning %s", async (status) => {
+    const firstUpload = deferred<Response>();
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(firstUpload.promise)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ path: "/remote/second.png" }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container } = render(TerminalPane, { props: { workspaceId: "ws-123" } });
+    await waitFor(() => expect(mockSockets).toHaveLength(1));
+    xtermInstances[0]!.modes.bracketedPasteMode = true;
+    mockSockets[0]!.sent = [];
+    const terminalContainer = container.querySelector(".terminal-container")!;
+    for (const name of ["first", "second"]) {
+      const event = new Event("paste", { bubbles: true, cancelable: true }) as ClipboardEvent;
+      Object.defineProperty(event, "clipboardData", {
+        value: {
+          getData: () => "",
+          items: [
+            {
+              kind: "file",
+              type: "image/png",
+              getAsFile: () => new File([name], `${name}.png`, { type: "image/png" }),
+            },
+          ],
+        },
+      });
+      terminalContainer.dispatchEvent(event);
+    }
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(mockSockets[0]!.sent.filter((frame) => typeof frame !== "string")).toHaveLength(0);
+    firstUpload.resolve(new Response(JSON.stringify({ path: "/remote/first.png" }), { status }));
+    await waitFor(() => {
+      const frames = mockSockets[0]!.sent.flatMap((frame, index) =>
+        typeof frame === "string" ? [] : [sentText(mockSockets[0]!, index)],
+      );
+      expect(frames).toEqual(
+        status === 201
+          ? ["\x1b[200~/remote/first.png\x1b[201~", "\x1b[200~/remote/second.png\x1b[201~"]
+          : ["\x1b[200~/remote/second.png\x1b[201~"],
+      );
+    });
+  });
+
+  it("reserves macOS image paste order before the clipboard read completes", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    Object.defineProperty(window, "isSecureContext", { configurable: true, value: true });
+    const clipboardRead = deferred<ClipboardItem[]>();
+    const read = vi.fn(() => clipboardRead.promise);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { read } });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ path: "/remote/first.png" }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ path: "/remote/second.png" }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container } = render(TerminalPane, { props: { workspaceId: "ws-123" } });
+    await waitFor(() => expect(mockSockets).toHaveLength(1));
+    xtermInstances[0]!.modes.bracketedPasteMode = true;
+    mockSockets[0]!.sent = [];
+    xtermCustomKeyEventHandlers[0]!(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }));
+    expect(read).toHaveBeenCalledTimes(1);
+    const event = new Event("paste", { bubbles: true, cancelable: true }) as ClipboardEvent;
+    const second = new File(["second"], "second.png", { type: "image/png" });
+    Object.defineProperty(event, "clipboardData", {
+      value: {
+        getData: () => "",
+        items: [{ kind: "file", type: "image/png", getAsFile: () => second }],
+      },
+    });
+    container.querySelector(".terminal-container")!.dispatchEvent(event);
+    expect(fetchMock).not.toHaveBeenCalled();
+    const first = new Blob(["first"], { type: "image/png" });
+    clipboardRead.resolve([{ types: ["image/png"], getType: async () => first } as unknown as ClipboardItem]);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls.map((call) => call[1].body)).toEqual([first, second]);
+    await waitFor(() => {
+      const frames = mockSockets[0]!.sent.flatMap((frame, index) =>
+        typeof frame === "string" ? [] : [sentText(mockSockets[0]!, index)],
+      );
+      expect(frames).toEqual(["\x1b[200~/remote/first.png\x1b[201~", "\x1b[200~/remote/second.png\x1b[201~"]);
+    });
+  });
+
   it("keeps text precedence when clipboard data also contains an image", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
