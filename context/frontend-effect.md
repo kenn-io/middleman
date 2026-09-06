@@ -48,7 +48,7 @@ service is the supported tool here.
   likewise one uninterruptible handoff.
 - Workflow Actions is a plain app-scoped store that reads on demand and applies
   server events; it owns no polling loops, queues, or reconciliation. Dispatch
-  follow-through (locating the run, watching it finish) lives on the server and
+  follow-through (watching the returned run ID finish) lives on the server and
   arrives as `workflow_dispatch_progress` events keyed by `dispatch_id`
   (`frontend/src/lib/stores/workflow-actions.svelte.ts::applyDispatchProgress`,
   `internal/server/workflowapi/dispatch_follow.go::Handler.followDispatch`).

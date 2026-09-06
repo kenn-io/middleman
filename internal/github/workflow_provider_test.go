@@ -60,6 +60,16 @@ func (f *workflowProviderFake) ListManualWorkflowRuns(context.Context, string, s
 	f.calls = append(f.calls, "runs")
 	return f.runs, nil
 }
+func (f *workflowProviderFake) GetManualWorkflowRun(_ context.Context, _, _ string, runID int64) (*gh.WorkflowRun, error) {
+	f.calls = append(f.calls, "run")
+	for _, run := range f.runs.Items {
+		if run.GetID() == runID {
+			return run, nil
+		}
+	}
+	return nil, platform.ErrNotFound
+}
+
 func (f *workflowProviderFake) ListManualWorkflowJobs(context.Context, string, string, int64) ([]*gh.WorkflowJob, error) {
 	f.calls = append(f.calls, "jobs")
 	return f.jobs, nil
@@ -85,6 +95,9 @@ type workflowRunOnlyFake struct{ Client }
 
 func (*workflowRunOnlyFake) ListManualWorkflowRuns(context.Context, string, string, int64, platform.WorkflowRunQuery) (platform.Page[*gh.WorkflowRun], error) {
 	return platform.Page[*gh.WorkflowRun]{}, nil
+}
+func (*workflowRunOnlyFake) GetManualWorkflowRun(context.Context, string, string, int64) (*gh.WorkflowRun, error) {
+	return nil, platform.ErrNotFound
 }
 func (*workflowRunOnlyFake) ListManualWorkflowJobs(context.Context, string, string, int64) ([]*gh.WorkflowJob, error) {
 	return nil, nil
@@ -206,6 +219,11 @@ func TestGitHubWorkflowProviderAbortsCatalogOnFatalDefinitionErrors(t *testing.T
 				Request:    httptest.NewRequest(http.MethodGet, "https://api.github.com/repos/acme/widgets/contents/workflow.yml", nil),
 			},
 			Message: "bad credentials",
+		}},
+		{name: "forbidden", err: &gh.ErrorResponse{
+			Response: &http.Response{StatusCode: http.StatusForbidden,
+				Request: httptest.NewRequest(http.MethodGet, "https://api.github.com/repos/acme/widgets/contents/workflow.yml", nil)},
+			Message: "Resource not accessible by integration",
 		}},
 		{name: "server failure", err: &gh.ErrorResponse{
 			Response: &http.Response{
@@ -344,6 +362,10 @@ func TestGitHubWorkflowProviderNormalizesRunsJobsAndDispatch(t *testing.T) {
 			UpdatedAt: updated.UTC(), WebURL: "https://example.test/runs/100",
 		}},
 	}, page)
+	run, err := provider.GetWorkflowRun(t.Context(), platform.RepoRef{Owner: "acme", Name: "widgets"}, "100")
+	require.NoError(err)
+	assert.Equal(page.Items[0], run)
+
 	jobs, err := provider.ListWorkflowRunJobs(t.Context(), platform.RepoRef{Owner: "acme", Name: "widgets"}, "100")
 	require.NoError(err)
 	assert.Equal([]platform.WorkflowRunJob{{
@@ -410,12 +432,14 @@ func TestRoutedClientRoutesWorkflowOperationsByRepository(t *testing.T) {
 	require.NoError(err)
 	_, err = routed.ListManualWorkflowRuns(t.Context(), "acme", "widgets", 42, platform.WorkflowRunQuery{})
 	require.NoError(err)
+	_, err = routed.GetManualWorkflowRun(t.Context(), "acme", "widgets", 99)
+	require.ErrorIs(err, platform.ErrNotFound)
 	_, err = routed.ListManualWorkflowJobs(t.Context(), "acme", "widgets", 99)
 	require.NoError(err)
 	_, err = routed.DispatchManualWorkflow(t.Context(), "acme", "widgets", 42, gh.CreateWorkflowDispatchEventRequest{Ref: "main"})
 	require.NoError(err)
 	assert.Equal([]string{
-		"workflows", "definition:release.yml@main", "environments", "runs", "jobs", "dispatch",
+		"workflows", "definition:release.yml@main", "environments", "runs", "run", "jobs", "dispatch",
 	}, exact.calls)
 	assert.Empty(fallback.calls)
 }
@@ -438,6 +462,8 @@ func TestRoutedClientWorkflowMethodsRejectClientsWithoutOptionalInterfaces(t *te
 	_, err = routed.ListRepositoryEnvironments(t.Context(), "acme", "widgets")
 	require.ErrorIs(err, platform.ErrUnsupportedCapability)
 	_, err = routed.ListManualWorkflowRuns(t.Context(), "acme", "widgets", 42, platform.WorkflowRunQuery{})
+	require.ErrorIs(err, platform.ErrUnsupportedCapability)
+	_, err = routed.GetManualWorkflowRun(t.Context(), "acme", "widgets", 99)
 	require.ErrorIs(err, platform.ErrUnsupportedCapability)
 	_, err = routed.ListManualWorkflowJobs(t.Context(), "acme", "widgets", 99)
 	require.ErrorIs(err, platform.ErrUnsupportedCapability)

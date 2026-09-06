@@ -260,7 +260,6 @@ func (h *Handler) dispatch(ctx context.Context, input *workflowDispatchInput) (*
 		ExpectedDefinitionSHA: input.Body.ExpectedDefinitionSHA,
 	}
 	dispatchID := newDispatchID()
-	startedAt := time.Now()
 	var result platform.WorkflowDispatchResult
 	matched, err := h.resolver.GuardRepositoryRouteFence(ctx, *resolved.repo, resolved.fence, func() error {
 		availability := h.operations(*resolved.repo).DispatchWorkflow
@@ -298,7 +297,7 @@ func (h *Handler) dispatch(ctx context.Context, input *workflowDispatchInput) (*
 	}
 	follow := dispatchFollow{
 		repo: *resolved.repo, ref: ref, request: request, result: result,
-		dispatchID: dispatchID, startedAt: startedAt,
+		dispatchID: dispatchID,
 	}
 	if runReader, readerErr := registry.WorkflowRunReader(httpapi.ProviderKind(*resolved.repo), httpapi.ProviderHost(*resolved.repo)); readerErr == nil {
 		follow.reader = runReader

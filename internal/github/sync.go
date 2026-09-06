@@ -1999,6 +1999,7 @@ type githubWorkflowCatalogClient interface {
 }
 
 type githubWorkflowRunClient interface {
+	GetManualWorkflowRun(context.Context, string, string, int64) (*gh.WorkflowRun, error)
 	ListManualWorkflowRuns(context.Context, string, string, int64, platform.WorkflowRunQuery) (platform.Page[*gh.WorkflowRun], error)
 	ListManualWorkflowJobs(context.Context, string, string, int64) ([]*gh.WorkflowJob, error)
 }
@@ -2288,7 +2289,7 @@ func workflowDefinitionReadMustAbort(err error) bool {
 	if status == http.StatusNotFound {
 		return false
 	}
-	if status == http.StatusUnauthorized || status >= http.StatusInternalServerError {
+	if status == http.StatusUnauthorized || status == http.StatusForbidden || status >= http.StatusInternalServerError {
 		return true
 	}
 	_, transportFailure := errors.AsType[*url.Error](err)
@@ -2405,6 +2406,22 @@ func (p *gitHubClientProvider) ListWorkflowRuns(
 		result.Items = append(result.Items, normalizeGitHubWorkflowRun(run))
 	}
 	return result, nil
+}
+
+func (p *gitHubClientProvider) GetWorkflowRun(ctx context.Context, ref platform.RepoRef, rawRunID string) (platform.WorkflowRun, error) {
+	client, ok := p.client.(githubWorkflowRunClient)
+	if !ok {
+		return platform.WorkflowRun{}, platform.UnsupportedCapability(platform.KindGitHub, p.host, "read_workflow_runs")
+	}
+	runID, err := parseGitHubWorkflowID(p.host, "run_id", rawRunID)
+	if err != nil {
+		return platform.WorkflowRun{}, err
+	}
+	run, err := client.GetManualWorkflowRun(ctx, ref.Owner, ref.Name, runID)
+	if err != nil {
+		return platform.WorkflowRun{}, err
+	}
+	return normalizeGitHubWorkflowRun(run), nil
 }
 
 func (p *gitHubClientProvider) ListWorkflowRunJobs(

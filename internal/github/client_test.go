@@ -2087,6 +2087,8 @@ func TestWorkflowTransportShape(t *testing.T) {
 				w.Header().Set("Link", `<`+serverURL(r)+`?page=2>; rel="next"`)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"jobs": []any{map[string]any{"id": 99}}})
+		case r.URL.Path == "/api/v3/repos/acme/widgets/actions/runs/123":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 123, "status": "completed", "conclusion": "success"})
 		case strings.HasSuffix(r.URL.Path, "/runs"):
 			if r.URL.Query().Get("page") == "2" {
 				w.Header().Set("Link", `<`+serverURL(r)+`?page=3>; rel="next"`)
@@ -2152,6 +2154,12 @@ func TestWorkflowTransportShape(t *testing.T) {
 	require.NoError(err)
 	assert.Empty(finalPage.NextCursor)
 	assert.True(finalPage.Exhausted)
+	run, err := client.GetManualWorkflowRun(t.Context(), "acme", "widgets", 123)
+	require.NoError(err)
+	assert.Equal(int64(123), run.GetID())
+	assert.Equal("success", run.GetConclusion())
+	assert.Contains(readPaths, "GET /api/v3/repos/acme/widgets/actions/runs/123")
+
 	jobs, err := client.ListManualWorkflowJobs(t.Context(), "acme", "widgets", 99)
 	require.NoError(err)
 	require.Len(jobs, 2)
@@ -2181,7 +2189,7 @@ func TestWorkflowTransportShape(t *testing.T) {
 		"POST /api/v3/repos/acme/widgets/actions/workflows/42/dispatches",
 		"POST /api/v3/repos/acme/widgets/actions/workflows/42/dispatches",
 	}, writePaths)
-	assert.Equal(9, readTracker.RequestsThisHour())
+	assert.Equal(10, readTracker.RequestsThisHour())
 	assert.Equal(4900, readTracker.Remaining())
 	assert.Equal(2, writeTracker.RequestsThisHour())
 	assert.Equal(4800, writeTracker.Remaining())

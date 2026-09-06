@@ -371,7 +371,7 @@ export function createWorkflowActionsStore(options: WorkflowActionsStoreOptions)
   }
 
   function loadJobs(ref: ProviderRouteRef, runId: string): void {
-    if (!enabled) return;
+    if (!enabled || snapshotFor(ref).jobs[runId] !== undefined) return;
     update(ref, (snapshot) => ({
       ...snapshot,
       loading: {

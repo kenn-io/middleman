@@ -3511,6 +3511,12 @@ func (c *liveClient) ListManualWorkflowRuns(
 	return result, nil
 }
 
+func (c *liveClient) GetManualWorkflowRun(ctx context.Context, owner, repo string, runID int64) (*gh.WorkflowRun, error) {
+	run, resp, err := c.gh.Actions.GetWorkflowRunByID(ctx, owner, repo, runID)
+	c.trackRate(resp)
+	return run, err
+}
+
 func (c *liveClient) ListManualWorkflowJobs(
 	ctx context.Context, owner, repo string, runID int64,
 ) ([]*gh.WorkflowJob, error) {

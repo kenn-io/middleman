@@ -39,7 +39,8 @@ type workflowTestProvider struct {
 	dispatches        []platform.WorkflowDispatchRequest
 	onCatalog         func()
 	runQueries        []platform.WorkflowRunQuery
-	followRuns        func(call int) platform.Page[platform.WorkflowRun]
+	followRun         func(call int) (platform.WorkflowRun, error)
+	runIDs            []string
 }
 
 func (p *workflowTestProvider) Platform() platform.Kind             { return platform.KindGitHub }
@@ -61,13 +62,17 @@ func (p *workflowTestProvider) ListWorkflowEnvironments(context.Context, platfor
 }
 func (p *workflowTestProvider) ListWorkflowRuns(_ context.Context, _ platform.RepoRef, query platform.WorkflowRunQuery) (platform.Page[platform.WorkflowRun], error) {
 	p.runQueries = append(p.runQueries, query)
-	if p.followRuns != nil && query.Cursor == "" {
-		return p.followRuns(len(p.runQueries)), nil
-	}
 	if query.PerPage != 20 || query.Cursor != "cursor-1" || query.WorkflowID != "release.yml" || query.Event != "workflow_dispatch" || query.Branch != "main" {
 		return platform.Page[platform.WorkflowRun]{}, &platform.Error{Code: platform.ErrCodeInvalidArgument, Provider: platform.KindGitHub, PlatformHost: platform.DefaultGitHubHost, Field: "query", Err: errors.New("query mismatch")}
 	}
 	return p.runs, p.runsErr
+}
+func (p *workflowTestProvider) GetWorkflowRun(_ context.Context, _ platform.RepoRef, runID string) (platform.WorkflowRun, error) {
+	p.runIDs = append(p.runIDs, runID)
+	if p.followRun != nil {
+		return p.followRun(len(p.runIDs))
+	}
+	return platform.WorkflowRun{}, platform.ErrNotFound
 }
 func (p *workflowTestProvider) ListWorkflowRunJobs(context.Context, platform.RepoRef, string) ([]platform.WorkflowRunJob, error) {
 	return p.jobs, p.jobsErr
@@ -126,8 +131,7 @@ func workflowFixtureWithRuntime(t *testing.T, provider *workflowTestProvider, op
 		Runtime:        &workflowTestRuntime{},
 	})
 	handler.follow = dispatchFollowConfig{
-		locateInitialDelay: 0, locateInterval: time.Millisecond, locateTimeout: 50 * time.Millisecond,
-		clockSkew: 5 * time.Second, watchInterval: time.Millisecond, watchTimeout: 50 * time.Millisecond,
+		watchInterval: time.Millisecond, watchTimeout: 50 * time.Millisecond,
 	}
 	mux := http.NewServeMux()
 	config := huma.DefaultConfig("workflow test", "0")
@@ -587,63 +591,41 @@ func TestWorkflowDispatchResponseCarriesDispatchIDAndKnownRun(t *testing.T) {
 	}
 }
 
-func TestWorkflowDispatchFollowThroughLocatesAndWatchesRun(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
-	dispatchedAt := time.Now()
-	staleRun := platform.WorkflowRun{ID: "old-run", WorkflowID: "release.yml", Actor: "maintainer", Status: "completed", Conclusion: "success", CreatedAt: dispatchedAt.Add(-time.Hour)}
-	otherActorRun := platform.WorkflowRun{ID: "someone-else", WorkflowID: "release.yml", Actor: "colleague", Status: "queued", CreatedAt: dispatchedAt.Add(time.Second)}
-	newRun := platform.WorkflowRun{ID: "new-run", WorkflowID: "release.yml", Actor: "maintainer", Status: "queued", CreatedAt: dispatchedAt.Add(time.Second)}
-	provider := &workflowTestProvider{
-		caps:     platform.Capabilities{ReadWorkflows: true, ReadWorkflowRuns: true, WorkflowDispatch: true},
-		catalog:  []platform.WorkflowDefinition{workflowDefinitionFixture()},
-		dispatch: platform.WorkflowDispatchResult{Accepted: true, Actor: "maintainer"},
-	}
-	provider.followRuns = func(call int) platform.Page[platform.WorkflowRun] {
-		switch call {
-		case 1:
-			return platform.Page[platform.WorkflowRun]{Items: []platform.WorkflowRun{staleRun, otherActorRun}}
-		case 2:
-			return platform.Page[platform.WorkflowRun]{Items: []platform.WorkflowRun{newRun, staleRun, otherActorRun}}
-		case 3:
-			progressed := newRun
-			progressed.Status = "in_progress"
-			progressed.UpdatedAt = dispatchedAt.Add(2 * time.Second)
-			return platform.Page[platform.WorkflowRun]{Items: []platform.WorkflowRun{progressed}}
-		default:
-			finished := newRun
-			finished.Status, finished.Conclusion = "completed", "success"
-			finished.UpdatedAt = dispatchedAt.Add(3 * time.Second)
-			return platform.Page[platform.WorkflowRun]{Items: []platform.WorkflowRun{finished}}
-		}
-	}
-	mux, _, handler := workflowFixtureWithRuntime(t, provider, httpapi.OperationAvailability{Available: true})
-
-	status, body := workflowRequest(t, mux, http.MethodPost, "/actions/github/acme/widget/workflows/release.yml/dispatch", map[string]any{"ref": "main", "expected_definition_sha": "definition-v1", "inputs": map[string]any{"version": "1"}})
-	require.Equal(http.StatusAccepted, status)
-	dispatchID := body["dispatch_id"].(string)
-	require.NotEmpty(dispatchID)
-
-	events := publishedDispatchEvents(handler)
-	require.Len(events, 3, "located, updated, then terminal updated")
-	for _, event := range events {
-		assert.Equal(dispatchID, event.DispatchID)
-		assert.Equal("release.yml", event.WorkflowID)
-		assert.Equal("acme", event.Owner)
-		assert.Equal("widget", event.Name)
-		require.NotNil(event.Run)
-		assert.Equal("new-run", event.Run.ID)
-	}
-	assert.Equal("located", events[0].Status)
-	assert.Equal("queued", events[0].Run.Status)
-	assert.Equal("updated", events[1].Status)
-	assert.Equal("in_progress", events[1].Run.Status)
-	assert.Equal("updated", events[2].Status)
-	assert.Equal("success", events[2].Run.Conclusion)
-	for _, query := range provider.runQueries {
-		assert.Equal("workflow_dispatch", query.Event)
-		assert.Equal("main", query.Branch)
-		assert.Equal("release.yml", query.WorkflowID)
+func TestWorkflowDispatchFollowThroughWatchesReturnedRunID(t *testing.T) {
+	for _, ref := range []string{"main", "v1.2.3"} {
+		t.Run(ref, func(t *testing.T) {
+			assert := assert.New(t)
+			provider := &workflowTestProvider{
+				caps:     platform.Capabilities{ReadWorkflows: true, ReadWorkflowRuns: true, WorkflowDispatch: true},
+				catalog:  []platform.WorkflowDefinition{workflowDefinitionFixture()},
+				dispatch: platform.WorkflowDispatchResult{Accepted: true, Actor: "maintainer", Run: &platform.WorkflowRun{ID: "scheduled-run"}},
+			}
+			provider.followRun = func(call int) (platform.WorkflowRun, error) {
+				run := platform.WorkflowRun{ID: "scheduled-run", WorkflowID: "release.yml", Ref: ref, Status: "queued"}
+				if call == 2 {
+					run.Status = "in_progress"
+				}
+				if call >= 3 {
+					run.Status, run.Conclusion = "completed", "success"
+				}
+				return run, nil
+			}
+			mux, _, handler := workflowFixtureWithRuntime(t, provider, httpapi.OperationAvailability{Available: true})
+			status, body := workflowRequest(t, mux, http.MethodPost, "/actions/github/acme/widget/workflows/release.yml/dispatch", map[string]any{"ref": ref, "expected_definition_sha": "definition-v1", "inputs": map[string]any{"version": "1"}})
+			require.Equal(t, http.StatusAccepted, status)
+			events := publishedDispatchEvents(handler)
+			require.Len(t, events, 3)
+			for _, event := range events {
+				assert.Equal(body["dispatch_id"], event.DispatchID)
+				require.NotNil(t, event.Run)
+				assert.Equal("scheduled-run", event.Run.ID)
+			}
+			assert.Equal("queued", events[0].Run.Status)
+			assert.Equal("in_progress", events[1].Run.Status)
+			assert.Equal("success", events[2].Run.Conclusion)
+			assert.Equal([]string{"scheduled-run", "scheduled-run", "scheduled-run"}, provider.runIDs)
+			assert.Empty(provider.runQueries)
+		})
 	}
 }
 
@@ -655,7 +637,6 @@ func TestWorkflowDispatchFollowThroughReportsUnresolvedRun(t *testing.T) {
 		catalog:  []platform.WorkflowDefinition{workflowDefinitionFixture()},
 		dispatch: platform.WorkflowDispatchResult{Accepted: true, Actor: "maintainer"},
 	}
-	provider.followRuns = func(int) platform.Page[platform.WorkflowRun] { return platform.Page[platform.WorkflowRun]{} }
 	mux, _, handler := workflowFixtureWithRuntime(t, provider, httpapi.OperationAvailability{Available: true})
 
 	status, body := workflowRequest(t, mux, http.MethodPost, "/actions/github/acme/widget/workflows/release.yml/dispatch", map[string]any{"ref": "main", "expected_definition_sha": "definition-v1", "inputs": map[string]any{"version": "1"}})
@@ -666,7 +647,8 @@ func TestWorkflowDispatchFollowThroughReportsUnresolvedRun(t *testing.T) {
 	assert.Equal("unresolved", events[0].Status)
 	assert.Equal(body["dispatch_id"], events[0].DispatchID)
 	assert.Nil(events[0].Run)
-	assert.Greater(len(provider.runQueries), 1, "keeps looking until the locate window closes")
+	assert.Empty(provider.runQueries, "a missing run ID must not trigger a search")
+	assert.Empty(provider.runIDs)
 }
 
 func TestWorkflowDispatchFollowThroughSkipsLocateWhenProviderNamesRun(t *testing.T) {
@@ -702,13 +684,13 @@ func TestWorkflowDispatchFollowThroughEnrichesPartialNamedRun(t *testing.T) {
 			ID: "run-9", WorkflowID: "release.yml", Actor: "maintainer",
 		}},
 	}
-	provider.followRuns = func(call int) platform.Page[platform.WorkflowRun] {
+	provider.followRun = func(call int) (platform.WorkflowRun, error) {
 		if call >= 2 {
 			finished := listed
 			finished.Status, finished.Conclusion = "completed", "success"
-			return platform.Page[platform.WorkflowRun]{Items: []platform.WorkflowRun{finished}}
+			return finished, nil
 		}
-		return platform.Page[platform.WorkflowRun]{Items: []platform.WorkflowRun{listed}}
+		return listed, nil
 	}
 	mux, _, handler := workflowFixtureWithRuntime(t, provider, httpapi.OperationAvailability{Available: true})
 

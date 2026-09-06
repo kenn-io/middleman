@@ -64,6 +64,10 @@ func (p testWorkflowProvider) ListWorkflowRuns(
 	return Page[WorkflowRun]{}, nil
 }
 
+func (p testWorkflowProvider) GetWorkflowRun(context.Context, RepoRef, string) (WorkflowRun, error) {
+	return WorkflowRun{}, nil
+}
+
 func (p testWorkflowProvider) ListWorkflowRunJobs(
 	context.Context, RepoRef, string,
 ) ([]WorkflowRunJob, error) {

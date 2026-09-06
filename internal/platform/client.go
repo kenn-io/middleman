@@ -127,6 +127,7 @@ type WorkflowCatalogReader interface {
 }
 
 type WorkflowRunReader interface {
+	GetWorkflowRun(context.Context, RepoRef, string) (WorkflowRun, error)
 	ListWorkflowRuns(context.Context, RepoRef, WorkflowRunQuery) (Page[WorkflowRun], error)
 	ListWorkflowRunJobs(context.Context, RepoRef, string) ([]WorkflowRunJob, error)
 }

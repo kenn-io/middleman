@@ -1245,6 +1245,18 @@ func (c *RoutedClient) ListRepositoryEnvironments(ctx context.Context, owner, re
 	return workflowClient.ListRepositoryEnvironments(ctx, owner, repo)
 }
 
+func (c *RoutedClient) GetManualWorkflowRun(ctx context.Context, owner, repo string, runID int64) (*gh.WorkflowRun, error) {
+	client, err := c.routeForRepoContext(ctx, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	workflowClient, ok := client.(githubWorkflowRunClient)
+	if !ok {
+		return nil, platform.UnsupportedCapability(platform.KindGitHub, c.routes.host, "read_workflow_runs")
+	}
+	return workflowClient.GetManualWorkflowRun(ctx, owner, repo, runID)
+}
+
 func (c *RoutedClient) ListManualWorkflowRuns(ctx context.Context, owner, repo string, workflowID int64, query platform.WorkflowRunQuery) (platform.Page[*gh.WorkflowRun], error) {
 	client, err := c.routeForRepo(owner, repo)
 	if err != nil {

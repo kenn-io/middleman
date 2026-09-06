@@ -144,6 +144,42 @@ describe("workflow actions store", () => {
     expect(store.getRuns(ref).map((item) => item.id)).toEqual(["run-old"]);
   });
 
+  it.each([{ jobs: [] }, { jobs: [{ id: "job-1", name: "Build", status: "in_progress", conclusion: "", steps: [] }] }])(
+    "reuses successful job responses, including empty results: %j",
+    async ({ jobs }) => {
+      api = createMockApiFetch([
+        (request) => (request.url.pathname.endsWith("/runs/run-1/jobs") ? jsonResponse({ repo, items: jobs }) : null),
+      ]);
+      globalThis.fetch = api.fetch;
+      store.loadJobs(ref, "run-1");
+      await settle();
+      expect(store.getJobs(ref, "run-1")).toEqual(jobs);
+      store.loadJobs(ref, "run-1");
+      await settle();
+      expect(api.requests).toHaveLength(1);
+    },
+  );
+
+  it("retries a jobs read after a failed response", async () => {
+    let reads = 0;
+    api = createMockApiFetch([
+      (request) => {
+        if (!request.url.pathname.endsWith("/runs/run-1/jobs")) return null;
+        reads += 1;
+        return reads === 1
+          ? jsonResponse({ code: "internalError", title: "Read failed", status: 500, type: "about:blank" }, 500)
+          : jsonResponse({ repo, items: [] });
+      },
+    ]);
+    globalThis.fetch = api.fetch;
+    store.loadJobs(ref, "run-1");
+    await settle();
+    store.loadJobs(ref, "run-1");
+    await settle();
+    expect(reads).toBe(2);
+    expect(store.getSnapshot(ref)?.jobs["run-1"]).toEqual([]);
+  });
+
   it("moves a dispatch from pending to locating and lets server progress events finish it", async () => {
     store.loadCatalog(ref);
     await settle();

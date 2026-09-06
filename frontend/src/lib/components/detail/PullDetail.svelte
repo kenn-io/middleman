@@ -1338,7 +1338,7 @@
     actionMenuOpen = false;
   }
 
-  let workflowDialogWorkflow = $state<WorkflowDefinition | null>(null);
+  let workflowDialogWorkflowId = $state<string | null>(null);
   let actionMenuTriggerEl = $state<HTMLButtonElement>();
   const captureActionMenuTrigger: Attachment<HTMLButtonElement> = (button) => {
     actionMenuTriggerEl = button;
@@ -1356,6 +1356,12 @@
       ? workflowActions.getCatalog(routeRef)?.workflows ?? []
       : [],
   );
+  const workflowDialogWorkflow = $derived(
+    workflowCatalog.find((workflow) => workflow.id === workflowDialogWorkflowId) ?? null,
+  );
+  $effect(() => {
+    if (workflowDialogWorkflowId !== null && workflowDialogWorkflow === null) workflowDialogWorkflowId = null;
+  });
   const workflowProviderLabel = $derived(
     `${providerDisplayLabel(detailStore.getDetail()?.repo?.provider ?? provider)} Actions`,
   );
@@ -1384,7 +1390,7 @@
 
   function openWorkflowDialog(workflow: WorkflowDefinition): void {
     if (!workflowCatalogDemandEnabled || !workflow.available) return;
-    workflowDialogWorkflow = workflow;
+    workflowDialogWorkflowId = workflow.id;
     closeActionMenu();
   }
 
@@ -1417,7 +1423,7 @@
     if (workflow && workflowActions.getSnapshot(routeRef)?.catalogRefreshErrors[workflow.id] !== undefined) {
       workflowActions.clearCatalogRefreshError(routeRef, workflow.id);
     }
-    workflowDialogWorkflow = null;
+    workflowDialogWorkflowId = null;
   }
 
   function loadWorkflowCatalog(ref: ProviderRouteRef | null): Attachment {
@@ -1425,7 +1431,7 @@
       if (!ref) return;
       untrack(() => workflowActions.loadCatalog(ref));
       return () => {
-        workflowDialogWorkflow = null;
+        workflowDialogWorkflowId = null;
         closeActionMenu();
       };
     };

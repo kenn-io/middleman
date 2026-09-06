@@ -374,6 +374,19 @@ func (c *e2eWorkflowClient) ListManualWorkflowRuns(
 	return page, nil
 }
 
+func (c *e2eWorkflowClient) GetManualWorkflowRun(_ context.Context, owner, repo string, runID int64) (*gh.WorkflowRun, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if owner == "acme" && repo == "widgets" {
+		for _, run := range c.runs {
+			if run.GetID() == runID {
+				return cloneE2EWorkflowRun(run), nil
+			}
+		}
+	}
+	return nil, platform.ErrNotFound
+}
+
 func (c *e2eWorkflowClient) ListManualWorkflowJobs(
 	_ context.Context, owner, repo string, runID int64,
 ) ([]*gh.WorkflowJob, error) {

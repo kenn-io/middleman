@@ -191,10 +191,8 @@ and the root event stream.
 
 ## Event Replay
 
-- Workflow dispatch follow-through is server-owned background work: after a
-  provider accepts a dispatch, a tracked goroutine locates the run and watches it
-  to completion, publishing `workflow_dispatch_progress` events keyed by the
-  response's `dispatch_id`. Clients never poll workflow runs
+- Workflow dispatch progress belongs to the server and the returned run ID;
+  an accepted dispatch without an ID reports tracking unresolved and never starts a search
   (`internal/server/workflowapi/dispatch_follow.go::Handler.followDispatch`).
 - SSE event IDs are process-scoped replay cursors, not durable sequence
   numbers. Reconnects may replay only IDs retained by the current process's

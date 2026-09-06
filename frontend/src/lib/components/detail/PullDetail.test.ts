@@ -834,6 +834,21 @@ describe("PullDetail provider workflow actions", () => {
       }),
     );
     const reload = await screen.findByRole("button", { name: "Reload workflows" });
+    rendered.api.GET.mockResolvedValue({
+      data: {
+        repo: pullDetail().repo,
+        environments: [],
+        workflows: [
+          {
+            ...releaseWorkflow,
+            definition_sha: "release-definition-v2",
+            inputs: [
+              { name: "version", type: "string", required: true, description: "Release version", has_default: false },
+            ],
+          },
+        ],
+      },
+    });
     await fireEvent.click(reload);
 
     expect(refreshCatalog).toHaveBeenCalledWith(
@@ -846,6 +861,34 @@ describe("PullDetail provider workflow actions", () => {
       "release.yml",
     );
     expect(rendered.api.POST).toHaveBeenCalledTimes(1);
+    const version = await screen.findByRole("textbox", { name: /version/i });
+    await fireEvent.input(version, { target: { value: "1.2.3" } });
+    rendered.api.POST.mockResolvedValue({ data: { accepted: true, dispatch_id: "dispatch-2" } });
+    await fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Run workflow" })).getByRole("button", { name: "Run workflow" }),
+    );
+    await waitFor(() => expect(rendered.api.POST).toHaveBeenCalledTimes(2));
+    expect(rendered.api.POST).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: {
+          expected_definition_sha: "release-definition-v2",
+          ref: "feature",
+          inputs: { version: "1.2.3" },
+        },
+      }),
+    );
+  });
+
+  it("closes an open workflow dialog when the refreshed catalog removes that workflow", async () => {
+    const rendered = await openReleaseWorkflow(pullDetail());
+    rendered.api.GET.mockResolvedValue({ data: { repo: pullDetail().repo, environments: [], workflows: [] } });
+    rendered.workflowActions.refreshCatalog(
+      { provider: "github", platformHost: "github.com", owner: "acme", name: "widget", repoPath: "acme/widget" },
+      "release.yml",
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Run workflow" })).toBeNull());
+    expect(rendered.api.POST).not.toHaveBeenCalled();
   });
 
   it("closes the confirmation without dispatch when Actions mode is disabled", async () => {
