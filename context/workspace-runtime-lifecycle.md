@@ -54,6 +54,13 @@ Rules:
   whose runtime row was pruned does not outlive it
   (`internal/server/workspaceapi/lifecycle.go::Handler.reconcileAgentActivityReports`).
 
+- Retry resumes setup in place and retains branch, worktree, and runtime records;
+  restarting a terminal must never erase local commits or dirty files
+  (`internal/workspace/manager.go::Manager.RequestRetry`).
+- A saved branch may have advanced beyond its original provider head. Reattach it
+  without resetting commits, and preserve it if later setup fails
+  (`internal/workspace/manager.go::Manager.SetupWithOptions`).
+
 ## Provider-Backed Lifecycle Facts
 
 Provider-backed workspace execution is local, but its provider facts remain
@@ -177,13 +184,18 @@ create a local process, PTY, or durable transport session
 
 ## Tmux Persistence Rules
 
-Persisted tmux-backed runtime rows are only valid while the backing tmux session
-still exists.
-
-- Restore persisted runtime tmux sessions on startup only when the backing tmux
-  session is still present.
-- Treat "tmux session is no longer running" and equivalent dead-server cases as
-  gone state to be cleaned up, not as a reason to preserve stale runtime rows.
+- Startup must attempt agent recovery before pruning missing runtime rows or
+  their hook reports; those two records jointly identify the saved conversation
+  (`internal/server/workspaceapi/lifecycle.go::Handler.RestoreRuntimeSessions`).
+- Missing tmux agents resume the newest matching Codex, Claude, or Pi hook session
+  by exact ID, preserving configured flags and runtime identity without replaying
+  the initial prompt (`internal/server/workspaceapi/agent_resume.go::Handler.resumeWorkspaceAgent`).
+- Recovery never resets worktrees or starts a fresh conversation on failure;
+  unsupported or failed attempts use ordinary missing-runtime cleanup
+  (`internal/server/workspaceapi/lifecycle.go::Handler.RestoreRuntimeSessions`).
+- Restore ready workspaces' base terminals before agent recovery, so the first
+  resumed agent does not make other missing bases appear to be individual exits
+  (`internal/server/workspaceapi/agent_resume.go::Handler.restoreWorkspaceTerminals`).
 - During explicit delete or stop flows, forgetting the persisted row is part of
   cleanup.
 - Removal of a created runtime backend is attempted when launch or persistence

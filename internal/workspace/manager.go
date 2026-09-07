@@ -1395,6 +1395,7 @@ func (m *Manager) SetupWithOptions(
 		ctx, ws, launchSpec, validateCloneRoute,
 	)
 	branch, reusedWorktree := reuse.branch, reuse.reused
+	preserveWorktree := reusedWorktree
 	var gitDir string
 	commonDir, managedClone := reuse.commonDir, reuse.managedClone
 	if err != nil {
@@ -1432,6 +1433,16 @@ func (m *Manager) SetupWithOptions(
 		}
 
 		gitDir = gitSetupDir.path
+		savedBranch := ws.WorkspaceBranch
+		if savedBranch == workspaceBranchUnknown {
+			savedBranch = ws.GitHeadRef
+		}
+		if savedBranch != "" {
+			preserveWorktree, err = localBranchExists(ctx, gitDir, savedBranch)
+			if err != nil {
+				return m.failSetup(ctx, ws.ID, workspaceSetupStageWorktree, err)
+			}
+		}
 		branch, err = m.addWorktree(
 			ctx, gitSetupDir, ws, workspaceGitFetchOptions{
 				launchSpec: launchSpec, validateRoute: validateCloneRoute,
@@ -1452,7 +1463,7 @@ func (m *Manager) SetupWithOptions(
 			branchErr = clearBranchUpstream(ctx, ws.WorktreePath, currentBranch)
 		}
 		if branchErr != nil {
-			if !reusedWorktree {
+			if !preserveWorktree {
 				m.rollbackWorktree(ctx, gitDir, ws, branch)
 			}
 			return m.failSetup(
@@ -1485,7 +1496,7 @@ func (m *Manager) SetupWithOptions(
 		routeErr = m.verifyWorkspaceRepository(ctx, ws)
 	}
 	if routeErr != nil {
-		if !reusedWorktree {
+		if !preserveWorktree {
 			m.rollbackWorktree(ctx, gitDir, ws, branch)
 		}
 		return m.failSetup(ctx, ws.ID, workspaceSetupStageWorktree, routeErr)
@@ -1499,7 +1510,7 @@ func (m *Manager) SetupWithOptions(
 		if err := m.updateWorkspaceBranch(
 			ctx, ws.ID, persistedBranch,
 		); err != nil {
-			if !reusedWorktree {
+			if !preserveWorktree {
 				m.rollbackWorktree(ctx, gitDir, ws, branch)
 			}
 			return m.failSetup(
@@ -1529,9 +1540,13 @@ func (m *Manager) SetupWithOptions(
 		copy.WorkspaceBranch = persistedBranch
 		terminalWorkspace = &copy
 	}
-	err = m.newTerminalSession(ctx, terminalWorkspace)
+	if preserveWorktree {
+		err = m.EnsureTerminal(ctx, terminalWorkspace)
+	} else {
+		err = m.newTerminalSession(ctx, terminalWorkspace)
+	}
 	if err != nil {
-		if !reusedWorktree {
+		if !preserveWorktree {
 			m.rollbackWorktree(ctx, gitDir, ws, branch)
 		}
 		return m.failSetup(
@@ -2261,15 +2276,15 @@ func existingWorkspacePersistedBranch(
 	if workspaceRequiresExistingDirectory(ws) {
 		return currentBranch, currentBranch == ws.GitHeadRef, nil
 	}
+	if ws.WorkspaceBranch != "" && ws.WorkspaceBranch != workspaceBranchUnknown {
+		return ws.WorkspaceBranch, currentBranch == ws.WorkspaceBranch, nil
+	}
 	if ws.ItemType == db.WorkspaceItemTypePullRequest &&
 		isSyntheticPRWorktreeBranch(ws.ItemNumber, currentBranch) {
 		ok, err := existingWorkspaceHeadMatchesCurrentHead(
 			ctx, gitDir, remote, ws, currentBranch, useMergeRequestHeadRef,
 		)
 		return currentBranch, ok, err
-	}
-	if ws.WorkspaceBranch != "" && ws.WorkspaceBranch != workspaceBranchUnknown {
-		return ws.WorkspaceBranch, currentBranch == ws.WorkspaceBranch, nil
 	}
 	if currentBranch != "" && currentBranch == ws.GitHeadRef {
 		if ws.ItemType == db.WorkspaceItemTypePullRequest {
@@ -3072,6 +3087,18 @@ func (m *Manager) addWorktreeLocked(
 	ws *Workspace,
 	fetchOptions workspaceGitFetchOptions,
 ) (string, error) {
+	if branch := ws.WorkspaceBranch; branch != "" && branch != workspaceBranchUnknown {
+		exists, err := localBranchExists(ctx, gitDir.path, branch)
+		if err != nil {
+			return "", err
+		}
+		if exists {
+			if err := m.runOwnedGitWorktreeAdd(ctx, gitDir.path, ws, branch); err != nil {
+				return "", err
+			}
+			return branch, nil
+		}
+	}
 	if workspaceUsesOriginHead(ws) {
 		return m.addIssueWorktree(ctx, gitDir, ws)
 	}
@@ -3236,6 +3263,16 @@ func (m *Manager) addIssueWorktree(
 			return "", err
 		}
 		return "", nil
+	}
+	exists, err := localBranchExists(ctx, gitDir.path, workspaceBranch)
+	if err != nil {
+		return "", err
+	}
+	if exists {
+		if err := m.runOwnedGitWorktreeAdd(ctx, gitDir.path, ws, workspaceBranch); err != nil {
+			return "", err
+		}
+		return workspaceBranch, nil
 	}
 	startRef := workspaceStartRef(ws, gitDir.remote)
 	if _, err := m.runOwnedGitWorktreeAddCreatingBranch(
@@ -3671,10 +3708,7 @@ func (m *Manager) RequestRetry(
 		return m.queueRetryOrStartErrored(ctx, id)
 	}
 
-	if err := m.prepareWorkspaceRetry(ctx, ws); err != nil {
-		m.consumeQueuedRetry(ws.ID)
-		return nil, false, err
-	}
+	m.markRetryStarted(ctx, ws)
 	return ws, true, nil
 }
 
@@ -3705,10 +3739,7 @@ func (m *Manager) StartQueuedRetryIfErrored(
 		return ws, false, nil
 	}
 
-	if err := m.prepareWorkspaceRetry(ctx, ws); err != nil {
-		m.consumeQueuedRetry(ws.ID)
-		return nil, false, err
-	}
+	m.markRetryStarted(ctx, ws)
 	return ws, true, nil
 }
 
@@ -3759,51 +3790,8 @@ func (m *Manager) startWorkspaceRetry(
 		return m.queueRetryOrStartErrored(ctx, ws.ID)
 	}
 
-	if err := m.prepareWorkspaceRetry(ctx, ws); err != nil {
-		m.consumeQueuedRetry(ws.ID)
-		return nil, false, err
-	}
+	m.markRetryStarted(ctx, ws)
 	return ws, true, nil
-}
-
-func (m *Manager) prepareWorkspaceRetry(
-	ctx context.Context, ws *Workspace,
-) error {
-	var cleanupErr error
-	if workspaceRequiresExistingDirectory(ws) {
-		cleanupErr = m.cleanupTmuxSession(ctx, ws)
-	} else {
-		cleanupErr = m.cleanupWorkspaceArtifactsForRetry(ctx, ws)
-	}
-	if cleanupErr != nil {
-		return m.failSetup(
-			ctx,
-			ws.ID, workspaceSetupStageSetup,
-			fmt.Errorf(
-				"cleanup workspace artifacts before retry: %w", cleanupErr,
-			),
-		)
-	}
-	retryBranch := retryWorkspaceBranch(ws)
-	if err := m.updateWorkspaceBranch(ctx, ws.ID, retryBranch); err != nil {
-		return m.failSetup(
-			ctx,
-			ws.ID, workspaceSetupStageSetup,
-			fmt.Errorf("reset workspace branch before retry: %w", err),
-		)
-	}
-	m.markRetryStarted(ctx, ws, retryBranch)
-	return nil
-}
-
-func retryWorkspaceBranch(ws *Workspace) string {
-	if workspaceRequiresExistingDirectory(ws) {
-		return workspaceBranchRecoveryPending
-	}
-	if workspaceUsesOriginHead(ws) && ws.WorkspaceBranch == "" {
-		return ""
-	}
-	return workspaceBranchUnknown
 }
 
 func (m *Manager) consumeQueuedRetry(id string) bool {
@@ -3817,9 +3805,9 @@ func (m *Manager) consumeQueuedRetry(id string) bool {
 }
 
 func (m *Manager) markRetryStarted(
-	ctx context.Context, ws *Workspace, workspaceBranch string,
+	ctx context.Context, ws *Workspace,
 ) {
-	ws.WorkspaceBranch = workspaceBranch
+	// Retain worktree, branch, and runtime rows so setup can resume in place.
 	ws.Status = "creating"
 	ws.ErrorMessage = nil
 	m.recordSetupEvent(
@@ -3827,72 +3815,6 @@ func (m *Manager) markRetryStarted(
 		ws.ID, workspaceSetupStageSetup, "retrying",
 		"retrying workspace setup",
 	)
-}
-
-func (m *Manager) cleanupWorkspaceArtifactsForRetry(
-	ctx context.Context, ws *Workspace,
-) error {
-	if err := m.cleanupTmuxSession(ctx, ws); err != nil {
-		return err
-	}
-
-	gitDir, ok, err := m.workspaceCleanupGitDir(ctx, ws)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		gitDir, ok, err = m.workspaceRegisteredCleanupGitDir(ctx, ws)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return nil
-		}
-	}
-
-	return m.withRepoLockForGitDir(ctx, gitDir, func() error {
-		return m.cleanupWorkspaceArtifactsForRetryLocked(ctx, gitDir, ws)
-	})
-}
-
-func (m *Manager) cleanupWorkspaceArtifactsForRetryLocked(
-	ctx context.Context, gitDir string, ws *Workspace,
-) error {
-	state, err := currentWorkspaceCleanupState(ctx, gitDir, ws)
-	if err != nil {
-		return err
-	}
-	switch state {
-	case workspaceCleanupOwned:
-		if err := runGitWithoutHooks(
-			ctx, gitDir,
-			"worktree", "remove", "--force", ws.WorktreePath,
-		); err != nil && !isGitWorktreeAbsent(err) {
-			return fmt.Errorf("remove git worktree: %w", err)
-		}
-	case workspaceCleanupStaleRegistration:
-		if err := removeStaleWorktreeRegistrationMetadata(
-			ctx, gitDir, ws.WorktreePath,
-		); err != nil {
-			return err
-		}
-	}
-	if ws.WorkspaceBranch == workspaceBranchUnknown {
-		if err := deleteWorkspaceBranchStrict(
-			ctx, gitDir, workspaceBranchUnknown,
-		); err != nil {
-			return err
-		}
-	}
-	if err := m.deleteWorkspaceBranchesStrict(
-		ctx, gitDir, ws, ws.WorkspaceBranch,
-	); err != nil {
-		return err
-	}
-	if err := runGitWithoutHooks(ctx, gitDir, "worktree", "prune"); err != nil {
-		return fmt.Errorf("prune git worktrees: %w", err)
-	}
-	return nil
 }
 
 func (m *Manager) cleanupWorkspaceArtifactsForDelete(
@@ -6647,36 +6569,6 @@ func (m *Manager) deleteWorkspaceBranches(
 	}
 }
 
-func (m *Manager) deleteWorkspaceBranchesStrict(
-	ctx context.Context, cloneDir string, ws *Workspace,
-	managedBranch string,
-) error {
-	for _, branch := range workspaceBranchCandidates(ws, managedBranch) {
-		if err := deleteWorkspaceBranchStrict(
-			ctx, cloneDir, branch,
-		); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func deleteWorkspaceBranchStrict(
-	ctx context.Context, cloneDir string, branch string,
-) error {
-	if err := validateLocalBranchName(
-		ctx, cloneDir, branch,
-	); err != nil {
-		return err
-	}
-	if err := runGitWithoutHooks(
-		ctx, cloneDir, "branch", "-D", "--", branch,
-	); err != nil && !isGitBranchAbsent(err) {
-		return fmt.Errorf("delete git branch %q: %w", branch, err)
-	}
-	return nil
-}
-
 func isGitWorktreeAbsent(err error) bool {
 	if err == nil {
 		return false
@@ -6698,15 +6590,6 @@ func isGitWorktreeAbsent(err error) bool {
 		// race with a misleading "Success" suffix.
 		(strings.Contains(msg, "failed to read worktrees/") &&
 			strings.Contains(msg, "/commondir: success"))
-}
-
-func isGitBranchAbsent(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "branch") &&
-		strings.Contains(msg, "not found")
 }
 
 func gitCloneDirReady(cloneDir string) (bool, error) {

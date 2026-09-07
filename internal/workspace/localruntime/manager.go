@@ -343,6 +343,16 @@ func (m *Manager) Launch(
 	cwd string,
 	targetKey string,
 ) (SessionInfo, error) {
+	return m.launch(ctx, workspaceID, cwd, targetKey, nil, "", "")
+}
+
+// Resume launches the saved conversation under its original runtime key.
+// It never submits an opening prompt or falls back to a new conversation.
+func (m *Manager) Resume(ctx context.Context, restored RestoredRuntimeSession, agent, sessionID string) (SessionInfo, error) {
+	return m.launch(ctx, restored.WorkspaceID, restored.CWD, restored.TargetKey, &restored, agent, sessionID)
+}
+
+func (m *Manager) launch(ctx context.Context, workspaceID, cwd, targetKey string, restored *RestoredRuntimeSession, agent, sessionID string) (SessionInfo, error) {
 	slog.Debug(
 		"runtime launch requested",
 		"workspace_id", workspaceID,
@@ -378,6 +388,16 @@ func (m *Manager) Launch(
 		)
 	}
 
+	if restored != nil {
+		if target.Kind != LaunchTargetAgent {
+			return SessionInfo{}, fmt.Errorf("target %q is not an agent", targetKey)
+		}
+		target.Command, err = agentResumeCommand(target.Command, agent, sessionID)
+		if err != nil {
+			return SessionInfo{}, err
+		}
+	}
+
 	if err := m.ensureOpen(); err != nil {
 		return SessionInfo{}, err
 	}
@@ -395,11 +415,23 @@ func (m *Manager) Launch(
 	if err != nil {
 		return SessionInfo{}, err
 	}
+	if restored != nil {
+		key = restored.SessionKey
+		startMu := m.startLock(key)
+		startMu.Lock()
+		defer startMu.Unlock()
+		if existing := m.runningSession(m.sessions, key); existing != nil {
+			return existing.snapshot(), nil
+		}
+	}
 	label, releaseLabel := m.reserveSessionLabel(
 		workspaceID,
 		fallbackSessionLabel(target.Label, targetKey),
 	)
 	defer releaseLabel()
+	if restored != nil && restored.Label != "" {
+		label = restored.Label
+	}
 
 	launch, err := m.launchCommand(ctx, target, workspaceID, key, cwd)
 	if err != nil {
@@ -557,6 +589,11 @@ func (m *Manager) restoreRuntimeSession(
 			"tmux_session", tmuxSession,
 		)
 		return nil
+	}
+	if tmuxSession != "" {
+		if err := m.requireTmuxSession(ctx, tmuxSession); err != nil {
+			return err
+		}
 	}
 	if tmuxSession == "" && m.ptyOwnerRuntime == nil {
 		return fmt.Errorf(

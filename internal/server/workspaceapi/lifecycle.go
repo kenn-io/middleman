@@ -118,6 +118,7 @@ func (h *Handler) RestoreRuntimeSessions(ctx context.Context) error {
 	if h == nil || h.db == nil || h.runtime == nil || h.workspaces == nil {
 		return nil
 	}
+	h.restoreWorkspaceTerminals(ctx)
 	stored, err := h.db.ListAllWorkspaceRuntimeSessions(ctx)
 	if err != nil {
 		return err
@@ -145,6 +146,13 @@ func (h *Handler) RestoreRuntimeSessions(ctx context.Context) error {
 			continue
 		}
 		if errors.Is(err, localruntime.ErrSessionNotFound) {
+			if summary.Status == "ready" && session.Kind == string(localruntime.LaunchTargetAgent) {
+				if resumeErr := h.resumeWorkspaceAgent(ctx, session, restored); resumeErr == nil {
+					continue
+				} else {
+					slog.Warn("could not resume workspace agent", "workspace_id", session.WorkspaceID, "session_key", session.SessionKey, "err", resumeErr)
+				}
+			}
 			if _, forgetErr := h.workspaces.ForgetRuntimeSessionCreatedAt(
 				ctx, session.WorkspaceID, session.SessionKey, session.CreatedAt,
 			); forgetErr != nil {

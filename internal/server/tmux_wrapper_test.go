@@ -1257,6 +1257,13 @@ func TestWorkspaceRetryWhileCreatingQueuesAndRunsAfterFailureViaAPI(t *testing.T
 		50*time.Millisecond,
 	)
 
+	// Recovery verifies the saved clone's provider identity. Keep its origin
+	// canonical while directing fixture fetches to the local repository.
+	clonePath := strings.TrimSpace(string(gitfixture.Run(t, createResp.JSON202.WorktreePath,
+		"rev-parse", "--git-common-dir")))
+	gitfixture.Run(t, clonePath, "config", "url."+clonePath+".insteadOf", "https://github.com/acme/widget.git")
+	gitfixture.Run(t, clonePath, "remote", "set-url", "origin", "https://github.com/acme/widget.git")
+
 	retryResp, err := client.HTTP.RetryWorkspaceWithResponse(ctx, wsID)
 	require.NoError(err)
 	require.Equal(http.StatusAccepted, retryResp.StatusCode())
