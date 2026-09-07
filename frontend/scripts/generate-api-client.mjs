@@ -63,7 +63,7 @@ try {
     frontendDir,
   );
   writeIndex(stagingDir);
-  run("vp", ["fmt", stagingDir, "--write"]);
+  run(process.execPath, [resolve(frontendDir, "../node_modules/vite-plus/bin/vp"), "fmt", stagingDir, "--write"]);
   rmSync(generatedDir, { recursive: true, force: true });
   renameSync(stagingDir, generatedDir);
 } finally {
