@@ -6,10 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	gh "github.com/google/go-github/v89/github"
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
-	platformgithub "go.kenn.io/forge/internal/platform/github"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 // sanitizeURL returns the URL if it uses a safe scheme, or empty string.
@@ -101,8 +103,8 @@ func NormalizePR(repoID int64, ghPR *gh.PullRequest) (*db.MergeRequest, error) {
 	mr.Labels = dbLabels(platformMR.Labels, itemLabelUpdatedAt(mr.UpdatedAt, mr.CreatedAt))
 	mr.Assignees = platformMR.Assignees
 	mr.RequestedReviewers = platformMR.RequestedReviewers
-	mr.AssigneesJSON = platform.MarshalUserNamesJSON(platformMR.Assignees)
-	mr.ReviewersJSON = platform.MarshalUserNamesJSON(platformMR.RequestedReviewers)
+	mr.AssigneesJSON = platformdb.MarshalUserNamesJSON(platformMR.Assignees)
+	mr.ReviewersJSON = platformdb.MarshalUserNamesJSON(platformMR.RequestedReviewers)
 
 	return mr, nil
 }
@@ -117,25 +119,13 @@ func NormalizeCommentEvent(mrID int64, c *gh.IssueComment) db.MREvent {
 	return dbMREvent(mrID, event)
 }
 
-func normalizeCommentVisibilityMetadata(visibility CommentVisibility) string {
-	if !visibility.Hidden {
-		return ""
-	}
-	metadata := map[string]any{"provider_hidden": true}
-	if visibility.Reason != "" {
-		metadata["provider_hidden_reason"] = visibility.Reason
-	}
-	encoded, _ := json.Marshal(metadata)
-	return string(encoded)
-}
-
 func NormalizeCommentEventWithVisibility(
 	mrID int64,
 	c *gh.IssueComment,
-	visibility CommentVisibility,
+	visibility platformgithub.CommentVisibility,
 ) db.MREvent {
 	event := NormalizeCommentEvent(mrID, c)
-	event.MetadataJSON = normalizeCommentVisibilityMetadata(visibility)
+	event.MetadataJSON = platformgithub.NormalizeCommentVisibilityMetadata(visibility)
 	return event
 }
 
@@ -153,7 +143,7 @@ func NormalizeCommitEvent(mrID int64, c *gh.RepositoryCommit) db.MREvent {
 	return dbMREvent(mrID, event)
 }
 
-func NormalizeForcePushEvent(mrID int64, fp ForcePushEvent) db.MREvent {
+func NormalizeForcePushEvent(mrID int64, fp platformgithub.ForcePushEvent) db.MREvent {
 	event := platformgithub.NormalizeForcePushEvent(platform.RepoRef{}, 0, platformgithub.ForcePushEvent{
 		Actor:     fp.Actor,
 		BeforeSHA: fp.BeforeSHA,
@@ -164,7 +154,7 @@ func NormalizeForcePushEvent(mrID int64, fp ForcePushEvent) db.MREvent {
 	return dbMREvent(mrID, event)
 }
 
-func NormalizeTimelineEvent(mrID int64, event PullRequestTimelineEvent) *db.MREvent {
+func NormalizeTimelineEvent(mrID int64, event platformgithub.PullRequestTimelineEvent) *db.MREvent {
 	normalized := platformgithub.NormalizeTimelineEvent(
 		platform.RepoRef{},
 		0,
@@ -199,7 +189,7 @@ func NormalizeTimelineEvent(mrID int64, event PullRequestTimelineEvent) *db.MREv
 	return &eventDB
 }
 
-func NormalizeIssueTimelineEvent(issueID int64, event PullRequestTimelineEvent) *db.IssueEvent {
+func NormalizeIssueTimelineEvent(issueID int64, event platformgithub.PullRequestTimelineEvent) *db.IssueEvent {
 	normalized := platformgithub.NormalizeIssueTimelineEvent(
 		platform.RepoRef{},
 		0,
@@ -365,7 +355,7 @@ func NormalizeIssue(repoID int64, ghIssue *gh.Issue) (*db.Issue, error) {
 		UpdatedAt:          platformIssue.UpdatedAt,
 		LastActivityAt:     platformIssue.LastActivityAt,
 		ClosedAt:           platformIssue.ClosedAt,
-		AssigneesJSON:      platform.MarshalAssigneesJSON(platformIssue.Assignees),
+		AssigneesJSON:      platformdb.MarshalAssigneesJSON(platformIssue.Assignees),
 		Assignees:          platformIssue.Assignees,
 	}
 	issue.Labels = dbLabels(platformIssue.Labels, itemLabelUpdatedAt(issue.UpdatedAt, issue.CreatedAt))
@@ -439,7 +429,7 @@ func dbLabels(labels []platform.Label, updatedAt time.Time) []db.Label {
 }
 
 func dbCIChecks(checks []platform.CICheck) []db.CICheck {
-	return platform.DBCIChecks(checks)
+	return platformdb.DBCIChecks(checks)
 }
 
 // NormalizeIssueCommentEvent converts a GitHub IssueComment to a db.IssueEvent.
@@ -451,10 +441,10 @@ func NormalizeIssueCommentEvent(issueID int64, c *gh.IssueComment) db.IssueEvent
 func NormalizeIssueCommentEventWithVisibility(
 	issueID int64,
 	c *gh.IssueComment,
-	visibility CommentVisibility,
+	visibility platformgithub.CommentVisibility,
 ) db.IssueEvent {
 	event := NormalizeIssueCommentEvent(issueID, c)
-	event.MetadataJSON = normalizeCommentVisibilityMetadata(visibility)
+	event.MetadataJSON = platformgithub.NormalizeCommentVisibilityMetadata(visibility)
 	return event
 }
 

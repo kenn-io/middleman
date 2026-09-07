@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 type QuotaResource string

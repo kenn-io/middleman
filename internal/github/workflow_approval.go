@@ -1,9 +1,6 @@
 package github
 
 import (
-	"regexp"
-	"strings"
-
 	gh "github.com/google/go-github/v89/github"
 )
 
@@ -84,22 +81,4 @@ func WorkflowApprovalStateFromRuns(runs []*gh.WorkflowRun) WorkflowApprovalState
 	state.Count = len(state.RunIDs)
 	state.Required = state.Count > 0
 	return state
-}
-
-var cloneURLPattern = regexp.MustCompile(`[/:]([\w.-]+)/([\w.-]+?)(?:\.git)?/?$`)
-
-// ParseHeadRepoFullName extracts "owner/repo" from a GitHub clone URL.
-// Accepts both HTTPS (https://host/owner/repo[.git]) and SSH
-// (git@host:owner/repo[.git]) forms. Returns empty string if the URL does
-// not match a recognized form.
-func ParseHeadRepoFullName(cloneURL string) string {
-	cloneURL = strings.TrimSpace(cloneURL)
-	if cloneURL == "" {
-		return ""
-	}
-	m := cloneURLPattern.FindStringSubmatch(cloneURL)
-	if len(m) != 3 {
-		return ""
-	}
-	return m[1] + "/" + m[2]
 }

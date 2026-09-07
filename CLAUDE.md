@@ -20,7 +20,7 @@ owner/name remains a mutable route. The routing table below owns the detailed ru
 ## Non-Provider Modes
 
 Kata and Docs are first-class modes, not platform providers. Do not force them
-through `internal/platform`: their data remains owned respectively by Kata
+through `platform`: their data remains owned respectively by Kata
 daemons and configured filesystem folders.
 
 ## Context Routing

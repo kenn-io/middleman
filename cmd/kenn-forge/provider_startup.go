@@ -5,19 +5,21 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
+	"time"
 
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	forgejoclient "go.kenn.io/forge/internal/platform/forgejo"
-	giteaclient "go.kenn.io/forge/internal/platform/gitea"
-	gitlabclient "go.kenn.io/forge/internal/platform/gitlab"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
+	forgejoclient "go.kenn.io/forge/platform/forgejo"
+	giteaclient "go.kenn.io/forge/platform/gitea"
+	gitlabclient "go.kenn.io/forge/platform/gitlab"
 )
 
-type providerFactory func(providerFactoryInput) (providerFactoryOutput, error)
+type providerFactory func(context.Context, providerFactoryInput) (providerFactoryOutput, error)
 
 type providerFactoryInput struct {
 	host          string
@@ -34,13 +36,20 @@ type providerFactoryOutput struct {
 	provider     platform.Provider
 }
 
+func (input providerFactoryInput) rateObserver() platform.RateObserver {
+	if input.rateTracker == nil {
+		return nil
+	}
+	return input.rateTracker
+}
+
 type graphQLRateTrackerSetter interface {
-	SetGraphQLRateTracker(*github.RateTracker)
+	SetGraphQLRateTracker(platform.RateObserver)
 }
 
 type writeRateTrackerSetter interface {
-	SetWriteRateTracker(*github.RateTracker)
-	SetWriteGraphQLRateTracker(*github.RateTracker)
+	SetWriteRateTracker(platform.RateObserver)
+	SetWriteGraphQLRateTracker(platform.RateObserver)
 }
 
 type githubIdentityRuntime struct {
@@ -276,7 +285,7 @@ type providerControlPlane struct {
 
 func defaultProviderFactories() map[string]providerFactory {
 	return map[string]providerFactory{
-		string(platform.KindGitHub): func(input providerFactoryInput) (providerFactoryOutput, error) {
+		string(platform.KindGitHub): func(ctx context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 			// No credential router on this path, so reads and mutations both
 			// account to the host-wide chain.
 			hostIdentity := github.HostIdentity(input.host)
@@ -293,35 +302,58 @@ func defaultProviderFactories() map[string]providerFactory {
 				githubClient: client,
 			}, nil
 		},
-		string(platform.KindGitLab): func(input providerFactoryInput) (providerFactoryOutput, error) {
+		string(platform.KindGitLab): func(ctx context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 			client, err := gitlabclient.NewClient(
 				input.host, input.tokenSource,
-				gitlabclient.WithRateTracker(input.rateTracker),
-				gitlabclient.WithSyncBudget(input.budget),
+				gitlabclient.WithRateTracker(input.rateObserver()),
+				gitlabclient.WithOptionalRequestContext(github.WithoutEssentialSyncBudget),
+				gitlabclient.WithTransport(github.WrapSyncBudgetTransport(http.DefaultTransport, input.budget)),
 			)
 			if err != nil {
 				return providerFactoryOutput{}, err
 			}
 			return providerFactoryOutput{provider: client}, nil
 		},
-		string(platform.KindForgejo): func(input providerFactoryInput) (providerFactoryOutput, error) {
-			client, err := forgejoclient.NewClient(
-				input.host, input.tokenSource,
-				forgejoclient.WithRateTracker(input.rateTracker),
-				forgejoclient.WithSyncBudget(input.budget),
-			)
+		string(platform.KindForgejo): func(ctx context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
+			options := []forgejoclient.ClientOption{
+				forgejoclient.WithRateTracker(input.rateObserver()),
+				forgejoclient.WithTransport(github.WrapSyncBudgetTransport(http.DefaultTransport, input.budget)),
+			}
+			client, err := forgejoclient.NewClient(input.host, input.tokenSource, options...)
+			if err != nil {
+				return providerFactoryOutput{}, err
+			}
+			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			version, err := client.ServerVersion(ctx)
+			if err != nil {
+				return providerFactoryOutput{}, err
+			}
+			options = append(options, forgejoclient.WithServerVersion(version))
+			client, err = forgejoclient.NewClient(input.host, input.tokenSource, options...)
 			if err != nil {
 				return providerFactoryOutput{}, err
 			}
 			return providerFactoryOutput{provider: client}, nil
 		},
-		string(platform.KindGitea): func(input providerFactoryInput) (providerFactoryOutput, error) {
-			client, err := giteaclient.NewClient(
-				input.host, input.tokenSource,
+		string(platform.KindGitea): func(ctx context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
+			options := []giteaclient.ClientOption{
 				giteaclient.WithBaseURL(input.baseURL, input.allowInsecure),
-				giteaclient.WithRateTracker(input.rateTracker),
-				giteaclient.WithSyncBudget(input.budget),
-			)
+				giteaclient.WithRateTracker(input.rateObserver()),
+				giteaclient.WithTransport(github.WrapSyncBudgetTransport(http.DefaultTransport, input.budget)),
+			}
+			client, err := giteaclient.NewClient(input.host, input.tokenSource, options...)
+			if err != nil {
+				return providerFactoryOutput{}, err
+			}
+			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			version, err := client.ServerVersion(ctx)
+			if err != nil {
+				return providerFactoryOutput{}, err
+			}
+			options = append(options, giteaclient.WithServerVersion(version))
+			client, err = giteaclient.NewClient(input.host, input.tokenSource, options...)
 			if err != nil {
 				return providerFactoryOutput{}, err
 			}
@@ -659,7 +691,7 @@ func buildProviderControlPlane(
 			return providerControlPlane{}, fmt.Errorf("unsupported platform %q", platformName)
 		}
 		transportConfig := providerTransportConfig(cfg, platformName, host)
-		built, err := factory(providerFactoryInput{
+		built, err := factory(ctx, providerFactoryInput{
 			host:          host,
 			baseURL:       transportConfig.BaseURL,
 			allowInsecure: transportConfig.AllowInsecure,

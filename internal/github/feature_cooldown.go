@@ -8,7 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 const repositoryFeatureProbeInterval = 24 * time.Hour
@@ -346,5 +347,5 @@ func repositoryFeatureDisabledError(repo RepoRef, feature string, err error) err
 	if repoPlatform(repo) != platform.KindGitHub {
 		return nil
 	}
-	return githubRepositoryFeatureDisabled(repoHost(repo), feature, err)
+	return platformgithub.RepositoryFeatureDisabled(repoHost(repo), feature, err)
 }

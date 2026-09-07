@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	gh "github.com/google/go-github/v89/github"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/httpapi"
 )
 
@@ -43,7 +44,7 @@ func (s *Handler) postIssueComment(ctx context.Context, input *postIssueCommentI
 			"create comment on provider failed",
 		)
 	}
-	event := platform.DBIssueEvent(issueID, providerEvent)
+	event := platformdb.DBIssueEvent(issueID, providerEvent)
 	// Preserve the established best-effort local write: provider success is
 	// authoritative and the next detail sync can recover a failed cache write.
 	_ = s.db.UpsertIssueEvents(ctx, []db.IssueEvent{event})
@@ -88,7 +89,7 @@ func (s *Handler) editIssueComment(ctx context.Context, input *editIssueCommentI
 		)
 	}
 	providerEvent.IssueNumber = input.Number
-	event := platform.DBIssueEvent(issueID, providerEvent)
+	event := platformdb.DBIssueEvent(issueID, providerEvent)
 	existingEvents, err := s.db.ListIssueEvents(ctx, issueID)
 	if err != nil {
 		return nil, httpapi.Internal("load existing comment metadata failed")
@@ -96,7 +97,7 @@ func (s *Handler) editIssueComment(ctx context.Context, input *editIssueCommentI
 	for _, existing := range existingEvents {
 		if existing.EventType == "issue_comment" && existing.PlatformID != nil &&
 			*existing.PlatformID == input.CommentID {
-			event.MetadataJSON = platform.PreserveProviderHiddenMetadata(
+			event.MetadataJSON = platformdb.PreserveProviderHiddenMetadata(
 				existing.MetadataJSON, event.MetadataJSON,
 			)
 			break
@@ -190,7 +191,7 @@ func (s *Handler) setIssueLabels(ctx context.Context, input *setIssueLabelsInput
 			err, string(httpapi.ProviderKind(*repo)), httpapi.ProviderHost(*repo), "provider API error: "+err.Error(),
 		)
 	}
-	labels := platform.DBLabels(providerLabels, time.Now().UTC())
+	labels := platformdb.DBLabels(providerLabels, time.Now().UTC())
 	if err := s.db.ReplaceIssueLabels(ctx, repo.ID, issue.ID, labels); err != nil {
 		return nil, httpapi.Internal("save issue labels failed")
 	}

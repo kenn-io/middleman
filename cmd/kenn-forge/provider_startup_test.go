@@ -15,9 +15,9 @@ import (
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/gitclone"
 	"go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
 )
 
 func TestBuildServeControlPlanesNodeNeverConstructsProviderPlane(t *testing.T) {
@@ -48,7 +48,7 @@ func TestBuildServeControlPlanesNodeNeverConstructsProviderPlane(t *testing.T) {
 	planes, err := buildServeControlPlanes(
 		t.Context(), nil, cfg, set,
 		map[string]providerFactory{
-			"github": func(providerFactoryInput) (providerFactoryOutput, error) {
+			"github": func(context.Context, providerFactoryInput) (providerFactoryOutput, error) {
 				factoryCalls.Add(1)
 				return providerFactoryOutput{}, nil
 			},
@@ -149,7 +149,7 @@ func TestDefaultProviderFactoryPassesGitLabSharedSyncBudget(t *testing.T) {
 	host := strings.TrimPrefix(server.URL, "https://")
 	budget := github.NewSyncBudget(100)
 	factory := defaultProviderFactories()[string(platform.KindGitLab)]
-	built, err := factory(providerFactoryInput{
+	built, err := factory(t.Context(), providerFactoryInput{
 		host: host,
 		tokenSource: mainTestTokenSource(
 			t, string(platform.KindGitLab), host, "GITLAB_FACTORY_TOKEN", "factory-token",
@@ -190,7 +190,7 @@ func TestDefaultProviderFactoryUsesGiteaExplicitBaseURL(t *testing.T) {
 	defer server.Close()
 
 	factory := defaultProviderFactories()[string(platform.KindGitea)]
-	built, err := factory(providerFactoryInput{
+	built, err := factory(t.Context(), providerFactoryInput{
 		host:          "gitea.test",
 		baseURL:       server.URL,
 		allowInsecure: true,

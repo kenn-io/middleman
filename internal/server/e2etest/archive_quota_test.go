@@ -9,16 +9,18 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"go.kenn.io/forge/internal/archive"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
 )
 
 type archiveQuotaBurstSource struct {
@@ -159,7 +161,7 @@ func TestArchiveAPIStopsProviderBurstAtObservedQuotaHeadroomE2E(t *testing.T) {
 	)
 	require.Equal(http.StatusOK, status, body)
 
-	repo, err := database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	states, err := database.ListArchiveRepoStates(t.Context(), []int64{repo.ID})
@@ -297,7 +299,7 @@ func TestArchiveAPIDefersHydrationAtLargerPoolReserveE2E(t *testing.T) {
 	)
 	require.Equal(http.StatusOK, status, body)
 
-	repo, err := database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	states, err := database.ListArchiveRepoStates(t.Context(), []int64{repo.ID})

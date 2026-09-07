@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"go.kenn.io/forge/internal/archive/report"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 type Controller interface {

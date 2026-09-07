@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 type syncBudgetKey struct{}

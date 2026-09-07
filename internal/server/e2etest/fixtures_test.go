@@ -12,10 +12,11 @@ import (
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 type localHealthResponse struct {
@@ -163,7 +164,7 @@ func gracefulShutdown(t *testing.T, srv *server.Server) {
 }
 
 type mockGH struct {
-	getRateLimitSnapshotFn     func(context.Context) (*ghclient.RateLimitSnapshot, error)
+	getRateLimitSnapshotFn     func(context.Context) (*platformgithub.RateLimitSnapshot, error)
 	getRepositoryFn            func(context.Context, string, string) (*gh.Repository, error)
 	getPullRequestFn           func(context.Context, string, string, int) (*gh.PullRequest, error)
 	listOpenPullRequestsFn     func(context.Context, string, string) ([]*gh.PullRequest, error)
@@ -183,7 +184,7 @@ func (m *mockGH) ListOpenPullRequests(ctx context.Context, owner, repo string) (
 	return nil, nil
 }
 
-func (m *mockGH) GetRateLimitSnapshot(ctx context.Context) (*ghclient.RateLimitSnapshot, error) {
+func (m *mockGH) GetRateLimitSnapshot(ctx context.Context) (*platformgithub.RateLimitSnapshot, error) {
 	if m.getRateLimitSnapshotFn != nil {
 		return m.getRateLimitSnapshotFn(ctx)
 	}
@@ -228,16 +229,16 @@ func (m *mockGH) ListIssueCommentsIfChanged(context.Context, string, string, int
 func (m *mockGH) ListReviews(context.Context, string, string, int) ([]*gh.PullRequestReview, error) {
 	return nil, nil
 }
-func (m *mockGH) ListPullRequestReviewThreads(context.Context, string, string, int) ([]ghclient.PullRequestReviewThread, error) {
+func (m *mockGH) ListPullRequestReviewThreads(context.Context, string, string, int) ([]platformgithub.PullRequestReviewThread, error) {
 	return nil, nil
 }
 func (m *mockGH) ListCommits(context.Context, string, string, int) ([]*gh.RepositoryCommit, error) {
 	return nil, nil
 }
-func (m *mockGH) ListPullRequestTimelineEvents(context.Context, string, string, int) ([]ghclient.PullRequestTimelineEvent, error) {
+func (m *mockGH) ListPullRequestTimelineEvents(context.Context, string, string, int) ([]platformgithub.PullRequestTimelineEvent, error) {
 	return nil, nil
 }
-func (m *mockGH) ListForcePushEvents(context.Context, string, string, int) ([]ghclient.ForcePushEvent, error) {
+func (m *mockGH) ListForcePushEvents(context.Context, string, string, int) ([]platformgithub.ForcePushEvent, error) {
 	return nil, nil
 }
 func (m *mockGH) GetCombinedStatus(context.Context, string, string, string) (*gh.CombinedStatus, error) {
@@ -344,7 +345,7 @@ func (m *mockGH) MergePullRequest(ctx context.Context, owner, repo string, numbe
 	}
 	return nil, nil
 }
-func (m *mockGH) EditPullRequest(context.Context, string, string, int, ghclient.EditPullRequestOpts) (*gh.PullRequest, error) {
+func (m *mockGH) EditPullRequest(context.Context, string, string, int, platformgithub.EditPullRequestOpts) (*gh.PullRequest, error) {
 	return nil, nil
 }
 func (m *mockGH) EditIssue(context.Context, string, string, int, string) (*gh.Issue, error) {

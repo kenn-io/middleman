@@ -12,11 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 func readHistoricalIssuePage(
-	provider *gitHubClientProvider,
+	provider *platformgithub.Provider,
 	ctx context.Context,
 	ref platform.RepoRef,
 	cursor string,
@@ -27,7 +28,7 @@ func readHistoricalIssuePage(
 }
 
 func readUpdatedIssuePage(
-	provider *gitHubClientProvider,
+	provider *platformgithub.Provider,
 	ctx context.Context,
 	ref platform.RepoRef,
 	since time.Time,
@@ -40,7 +41,7 @@ func readUpdatedIssuePage(
 }
 
 func readHistoricalMergeRequestPage(
-	provider *gitHubClientProvider,
+	provider *platformgithub.Provider,
 	ctx context.Context,
 	ref platform.RepoRef,
 	cursor string,
@@ -245,9 +246,7 @@ func TestGitHubArchiveCapabilitiesRequireBoundedClient(t *testing.T) {
 		HistoricalIssues: true, HistoricalMergeRequests: true,
 		OrdinaryComments: true, SubmittedReviews: true, InlineReviewComments: true,
 	}, live.Capabilities().Archive)
-	assert.Equal(platform.ArchiveCapabilities{}, (&gitHubClientProvider{
-		host: "github.com", client: &mockClient{},
-	}).Capabilities().Archive)
+	assert.Equal(platform.ArchiveCapabilities{}, (newTestGitHubProvider(t, "github.com", &mockClient{})).Capabilities().Archive)
 	registry, err := platform.NewRegistry(live)
 	require.NoError(err)
 	issueReader, err := registry.IssuePageReader(platform.KindGitHub, "github.com")
@@ -270,14 +269,14 @@ func newEmptyArchiveServer(t *testing.T) *httptest.Server {
 	return server
 }
 
-func newArchiveTestGitHubProvider(t *testing.T, baseURL string) *gitHubClientProvider {
+func newArchiveTestGitHubProvider(t *testing.T, baseURL string) *platformgithub.Provider {
 	t.Helper()
 	client, err := NewClient(
 		testTokenSource("archive-token"), "github.com", nil, nil,
 		WithBaseURLForTesting(baseURL),
 	)
 	require.NoError(t, err)
-	return &gitHubClientProvider{host: "github.com", client: client}
+	return newTestGitHubProvider(t, "github.com", client)
 }
 
 func srvURL(r *http.Request) string {

@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/httpapi"
 )
 
@@ -57,7 +58,7 @@ func (s *Handler) setPullLabels(
 			"provider API error: "+err.Error(),
 		)
 	}
-	labels := platform.DBLabels(providerLabels, time.Now().UTC())
+	labels := platformdb.DBLabels(providerLabels, time.Now().UTC())
 	if err := s.db.ReplaceMergeRequestLabels(ctx, repo.ID, mr.ID, labels); err != nil {
 		return nil, httpapi.Internal("save pull labels failed")
 	}

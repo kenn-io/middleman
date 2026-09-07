@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 // Fixed reference time for deterministic tests.

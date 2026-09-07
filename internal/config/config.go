@@ -20,9 +20,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"go.kenn.io/forge/internal/federation"
-	platformpkg "go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/procutil"
 	"go.kenn.io/forge/internal/tokenauth"
+	platformpkg "go.kenn.io/forge/platform"
 )
 
 const (

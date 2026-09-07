@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/danielgtaylor/huma/v2"
 	gh "github.com/google/go-github/v89/github"
 	gitlabapi "gitlab.com/gitlab-org/api/client-go/v2"
@@ -21,11 +23,11 @@ import (
 	"go.kenn.io/forge/internal/federationauth"
 	"go.kenn.io/forge/internal/gitclone"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	"go.kenn.io/forge/internal/platform/gitealike"
 	"go.kenn.io/forge/internal/providerplane"
 	"go.kenn.io/forge/internal/server/httpapi"
 	"go.kenn.io/forge/internal/server/workspaceapi"
+	"go.kenn.io/forge/platform"
+	"go.kenn.io/forge/platform/gitealike"
 )
 
 var discussionIDPattern = regexp.MustCompile(`^[a-f0-9]{40}$`)
@@ -1027,7 +1029,7 @@ func (s *Handler) postComment(ctx context.Context, input *postCommentInput) (*po
 		)
 	}
 
-	event := platform.DBMREvent(mr.ID, platformEvent)
+	event := platformdb.DBMREvent(mr.ID, platformEvent)
 	if err := s.db.UpsertMREvents(ctx, []db.MREvent{event}); err != nil {
 		_ = err
 	}
@@ -1091,7 +1093,7 @@ func (s *Handler) editComment(ctx context.Context, input *editCommentInput) (*ed
 	}
 	platformEvent.MergeRequestNumber = input.Number
 
-	event := platform.DBMREvent(mrID, platformEvent)
+	event := platformdb.DBMREvent(mrID, platformEvent)
 	existingEvents, err := s.db.ListMREvents(ctx, mrID)
 	if err != nil {
 		return nil, httpapi.Internal("load existing comment metadata failed")
@@ -1099,7 +1101,7 @@ func (s *Handler) editComment(ctx context.Context, input *editCommentInput) (*ed
 	for _, existing := range existingEvents {
 		if existing.EventType == "issue_comment" && existing.PlatformID != nil &&
 			*existing.PlatformID == input.CommentID {
-			event.MetadataJSON = platform.PreserveProviderHiddenMetadata(
+			event.MetadataJSON = platformdb.PreserveProviderHiddenMetadata(
 				existing.MetadataJSON, event.MetadataJSON,
 			)
 			break
@@ -1248,7 +1250,7 @@ func (s *Handler) replyToDiscussion(ctx context.Context, input *replyToDiscussio
 		platformEvent.ThreadID = eventThreadID
 	}
 
-	event := platform.DBMREvent(mr.ID, platformEvent)
+	event := platformdb.DBMREvent(mr.ID, platformEvent)
 	providerUpdatedAt, activityErr := s.providerMergeRequestUpdatedAt(ctx, *repo, input.Number)
 	if activityErr != nil {
 		slog.WarnContext(ctx, "failed to refresh pull request activity after discussion reply",
@@ -1398,7 +1400,7 @@ func (s *Handler) approvePR(ctx context.Context, input *approvePRInput) (*action
 		)
 	}
 
-	event := platform.DBMREvent(mr.ID, platformEvent)
+	event := platformdb.DBMREvent(mr.ID, platformEvent)
 	_ = s.db.UpsertMREvents(ctx, []db.MREvent{event})
 
 	if syncErr := s.syncer.SyncMROnProvider(
@@ -1680,7 +1682,7 @@ func (s *Handler) readyForReview(ctx context.Context, input *repoNumberInput) (*
 		)
 	}
 
-	normalized := platform.DBMergeRequest(repo.ID, pr)
+	normalized := platformdb.DBMergeRequest(repo.ID, pr)
 	if mrID, _, accepted, upsertErr := s.syncer.CommitMergeRequestParentSnapshot(
 		ctx, mergeRequestRepoRef(*repo), normalized,
 	); upsertErr == nil && accepted {
@@ -2221,7 +2223,7 @@ func (s *Handler) setPRGitHubState(
 	// round repairs state through the same path; the provider mutation
 	// itself succeeded.
 	if updatedMR.Number == input.Number {
-		normalized := platform.DBMergeRequest(repo.ID, updatedMR)
+		normalized := platformdb.DBMergeRequest(repo.ID, updatedMR)
 		// Edit responses cannot represent sync-derived columns (CI state,
 		// review decision, comment count); carry them from the stored row
 		// so a UI close does not erase them from a row no later sync will

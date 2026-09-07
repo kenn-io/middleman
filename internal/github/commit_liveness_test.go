@@ -9,12 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	gh "github.com/google/go-github/v89/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/gitclone"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
 
@@ -890,7 +892,7 @@ func TestCommitLivenessRepairsThroughUnchangedDetail(t *testing.T) {
 	repairHead := livenessTestGit(t, h.sourceDir, "rev-parse", "HEAD")
 	existing := setLivenessFixtureHead(t, fixture, repairHead)
 	routeFence, found, err := fixture.database.CurrentRepositoryRouteFence(
-		t.Context(), platform.DBRepoIdentity(platformRepoRef(fixture.repo)), fixture.repoID,
+		t.Context(), platformdb.DBRepoIdentity(platformRepoRef(fixture.repo)), fixture.repoID,
 	)
 	require.NoError(err)
 	require.True(found)
@@ -942,7 +944,7 @@ func TestCommitLivenessViaFetchProviderMRDetail(t *testing.T) {
 	)
 	require.NoError(err)
 	routeFence, found, err := fixture.database.CurrentRepositoryRouteFence(
-		t.Context(), platform.DBRepoIdentity(platformRepoRef(providerRepo)), providerRepoID,
+		t.Context(), platformdb.DBRepoIdentity(platformRepoRef(providerRepo)), providerRepoID,
 	)
 	require.NoError(err)
 	require.True(found)

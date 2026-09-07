@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.kenn.io/forge/internal/tokenauth"
 )
 
 var (
@@ -206,7 +208,7 @@ func TestQuotaTransportAttributesEachChainToItsBoundIdentity(t *testing.T) {
 	require := require.New(t)
 	assert := assert.New(t)
 	registry := NewQuotaRegistry()
-	respond := func(limit, remaining int) tokenauth.RoundTripFunc {
+	respond := func(limit, remaining int) platform.RoundTripFunc {
 		return func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -515,7 +517,7 @@ func TestSnapshotRefreshDropsTheCachedReserveVerdict(t *testing.T) {
 	// The refresh reports a credential that has reached its reserve.
 	client := &credentialRateLimitSnapshotMockClient{
 		mockClient: &mockClient{},
-		appSnapshot: &RateLimitSnapshot{
+		appSnapshot: &platformgithub.RateLimitSnapshot{
 			Core: &Rate{Limit: 5000, Remaining: RateReserveBuffer, Reset: reset},
 		},
 	}

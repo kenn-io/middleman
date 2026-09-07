@@ -3,14 +3,9 @@ package github
 import (
 	"context"
 	"fmt"
-)
 
-// pageInfo holds GraphQL pagination state from a connection's
-// pageInfo field.
-type pageInfo struct {
-	HasNextPage bool
-	EndCursor   string
-}
+	platformgithub "go.kenn.io/forge/platform/github"
+)
 
 // fetchAllPages accumulates all nodes from a paginated GraphQL
 // connection. queryFn is called with a nil cursor for the first
@@ -18,14 +13,14 @@ type pageInfo struct {
 // all accumulated nodes, or partial results plus the first error.
 func fetchAllPages[T any](
 	ctx context.Context,
-	queryFn func(ctx context.Context, cursor *string) ([]T, pageInfo, error),
+	queryFn func(ctx context.Context, cursor *string) ([]T, platformgithub.GraphQLPageInfo, error),
 ) ([]T, error) {
 	return fetchAllPagesWithProgress(ctx, queryFn, nil)
 }
 
 func fetchAllPagesWithProgress[T any](
 	ctx context.Context,
-	queryFn func(ctx context.Context, cursor *string) ([]T, pageInfo, error),
+	queryFn func(ctx context.Context, cursor *string) ([]T, platformgithub.GraphQLPageInfo, error),
 	onPage func(int, bool),
 ) ([]T, error) {
 	var all []T

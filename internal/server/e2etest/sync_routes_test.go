@@ -17,12 +17,12 @@ import (
 	"go.kenn.io/forge/internal/apiclient"
 	"go.kenn.io/forge/internal/apiclient/generated"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	platformgithub "go.kenn.io/forge/internal/platform/github"
-	platformgitlab "go.kenn.io/forge/internal/platform/gitlab"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
+	platformgitlab "go.kenn.io/forge/platform/gitlab"
 )
 
 func TestSyncRoutesWithoutProviderSyncerE2E(t *testing.T) {
@@ -622,8 +622,7 @@ func TestGitLabSyncBudgetExhaustionIncludesWindowE2E(t *testing.T) {
 		staticTokenSource("token"),
 		platformgitlab.WithBaseURLForTesting(gitlabAPI.URL+"/api/v4"),
 		platformgitlab.WithoutRetriesForTesting(),
-		platformgitlab.WithSyncBudget(budget),
-	)
+		platformgitlab.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)))
 	require.NoError(err)
 	registry, err := ghclient.NewProviderRegistry(nil, client)
 	require.NoError(err)

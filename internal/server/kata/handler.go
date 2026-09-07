@@ -10,10 +10,10 @@ import (
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/db"
 	katacatalog "go.kenn.io/forge/internal/kata"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/httpapi"
 	"go.kenn.io/forge/internal/server/workspaceapi"
 	"go.kenn.io/forge/internal/workspace"
+	"go.kenn.io/forge/platform"
 )
 
 // Deps contains the committed state and shared services consumed by Kata.

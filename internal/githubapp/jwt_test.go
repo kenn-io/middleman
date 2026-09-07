@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"go.kenn.io/forge/githubapp"
 	"strings"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ func generateTestKey(t *testing.T) *rsa.PrivateKey {
 }
 
 // verifyJWT checks sig and returns the decoded claims. Verification is
-// independent of SignAppJWT: it recomputes the RS256 signature check
+// independent of githubapp.SignAppJWT: it recomputes the RS256 signature check
 // from the raw segments.
 func verifyJWT(t *testing.T, token string, pub *rsa.PublicKey) map[string]any {
 	t.Helper()
@@ -52,7 +53,7 @@ func TestSignAppJWT(t *testing.T) {
 	key := generateTestKey(t)
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 
-	token, err := SignAppJWT(4321, key, now)
+	token, err := githubapp.SignAppJWT(4321, key, now)
 	require.NoError(t, err)
 
 	claims := verifyJWT(t, token, &key.PublicKey)
@@ -73,9 +74,9 @@ func TestSignAppJWTRejectsBadInput(t *testing.T) {
 	key := generateTestKey(t)
 	now := time.Now()
 
-	_, err := SignAppJWT(0, key, now)
+	_, err := githubapp.SignAppJWT(0, key, now)
 	require.ErrorContains(t, err, "app id")
-	_, err = SignAppJWT(1, nil, now)
+	_, err = githubapp.SignAppJWT(1, nil, now)
 	require.ErrorContains(t, err, "private key")
 }
 
@@ -101,7 +102,7 @@ func TestParsePrivateKeyFormats(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			parsed, err := ParsePrivateKey(tt.pem)
+			parsed, err := githubapp.ParsePrivateKey(tt.pem)
 			if tt.wantErr != "" {
 				assert.ErrorContains(t, err, tt.wantErr)
 				return

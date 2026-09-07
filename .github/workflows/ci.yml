@@ -309,7 +309,7 @@ jobs:
           KENN_FORGE_LIVE_GITHUB_TESTS: "1"
         run: |
           mkdir -p tmp
-          go tool gotestsum --format pkgname-and-test-fails --jsonfile=tmp/test-graphql-output.json -- ./internal/github -run TestLiveGraphQLQueriesValidateAgainstGitHub -shuffle=on
+          go tool gotestsum --format pkgname-and-test-fails --jsonfile=tmp/test-graphql-output.json -- ./internal/github ./platform/github -run 'TestLive.*GraphQLQueriesValidateAgainstGitHub' -shuffle=on
 
       - name: Publish live GraphQL test report
         if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) }}

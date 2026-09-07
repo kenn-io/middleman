@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.kenn.io/forge/internal/platformdb"
 
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 // hydrateItem runs the existing full item sync under archive admission. The
@@ -65,7 +66,7 @@ func (s *Service) hydrateItem(
 		commit.ErrorCode = archiveSyncErrorCode(syncErr)
 		commit.ErrorDetail = syncErr.Error()
 		if destination != nil {
-			dbDestination := platform.DBRepoIdentity(*destination)
+			dbDestination := platformdb.DBRepoIdentity(*destination)
 			commit.Destination = &dbDestination
 		}
 		return s.db.CommitArchiveItemSync(ctx, commit)

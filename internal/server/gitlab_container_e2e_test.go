@@ -22,11 +22,11 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	platformgitlab "go.kenn.io/forge/internal/platform/gitlab"
 	"go.kenn.io/forge/internal/procutil"
 	"go.kenn.io/forge/internal/testutil"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
+	platformgitlab "go.kenn.io/forge/platform/gitlab"
 )
 
 type gitLabContainerManifest struct {
@@ -129,7 +129,8 @@ func TestGitLabContainerE2E(t *testing.T) {
 		manifest.Host,
 		testTokenSource(manifest.Token),
 		platformgitlab.WithBaseURLForTesting(manifest.APIURL),
-		platformgitlab.WithForegroundTimeoutForTesting(time.Minute),
+		platformgitlab.WithForegroundTimeoutForTesting(time.Minute), platformgitlab.
+			WithTransport(http.DefaultTransport),
 	)
 	require.NoError(err)
 

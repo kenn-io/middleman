@@ -11,10 +11,13 @@ import (
 	"strings"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	gh "github.com/google/go-github/v89/github"
 	"go.kenn.io/forge/internal/archive"
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 const (
@@ -52,17 +55,17 @@ type routedNotificationReadMarker interface {
 }
 
 type notificationReadRateReserveBypasser interface {
-	bypassNotificationReadRateReserve() bool
+	InstallationAuthenticationActive() bool
 }
 
 func notificationBypassesReadRateReserve(client notificationClient) bool {
 	if bypasser, ok := client.(notificationReadRateReserveBypasser); ok {
-		return bypasser.bypassNotificationReadRateReserve()
+		return bypasser.InstallationAuthenticationActive()
 	}
-	if legacy, ok := client.(interface{ GitHubClient() Client }); ok {
+	if legacy, ok := client.(interface{ GitHubClient() platformgithub.API }); ok {
 		if inner := legacy.GitHubClient(); inner != nil {
 			if bypasser, ok := inner.(notificationReadRateReserveBypasser); ok {
-				return bypasser.bypassNotificationReadRateReserve()
+				return bypasser.InstallationAuthenticationActive()
 			}
 		}
 	}
@@ -77,7 +80,7 @@ func notificationThreadGetterFor(client notificationClient) (notificationThreadG
 	if getter, ok := client.(notificationThreadGetter); ok {
 		return getter, true
 	}
-	if legacy, ok := client.(interface{ GitHubClient() Client }); ok {
+	if legacy, ok := client.(interface{ GitHubClient() platformgithub.API }); ok {
 		if inner := legacy.GitHubClient(); inner != nil {
 			if getter, ok := inner.(notificationThreadGetter); ok {
 				return getter, true
@@ -365,7 +368,7 @@ func (s *Syncer) syncNotificationsForRepoAttempt(
 		return true, nil
 	}
 	repo = resolved
-	observedIdentity := platform.DBRepoIdentity(platformRepoRef(repo))
+	observedIdentity := platformdb.DBRepoIdentity(platformRepoRef(repo))
 	routeFence, found, err := s.db.CurrentRepositoryRouteFence(
 		ctx, observedIdentity, observedRepoID,
 	)

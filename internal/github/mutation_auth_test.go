@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,7 +31,7 @@ var (
 func newSplitAuthTestClient(
 	t *testing.T, srv *httptest.Server, source tokenauth.Source,
 	registries ...*QuotaRegistry,
-) *liveClient {
+) *platformgithub.Client {
 	t.Helper()
 	options := []ClientOption{WithBaseURLForTesting(srv.URL)}
 	if len(registries) > 0 {
@@ -38,7 +41,7 @@ func newSplitAuthTestClient(
 	}
 	client, err := NewClient(source, "github.com", nil, nil, options...)
 	require.NoError(t, err)
-	live, ok := client.(*liveClient)
+	live, ok := client.(*platformgithub.Client)
 	require.True(t, ok)
 	return live
 }
@@ -296,7 +299,7 @@ func TestNotificationAPIsUseUserAuthAndBackgroundBudget(t *testing.T) {
 		),
 	)
 	require.NoError(err)
-	c, ok := client.(*liveClient)
+	c, ok := client.(*platformgithub.Client)
 	require.True(ok)
 
 	syncCtx := WithSyncBudget(t.Context())
@@ -436,6 +439,7 @@ func TestNewClientRejectsMutationsWithoutStartupWriteIdentity(t *testing.T) {
 }
 
 func TestMutationAuthFallsBackToReadClientWhenUnsplit(t *testing.T) {
+	require := require.New(t)
 	var gotAuth string
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v3/repos/acme/widgets/issues/5/comments",
@@ -455,18 +459,22 @@ func TestMutationAuthFallsBackToReadClientWhenUnsplit(t *testing.T) {
 			{Kind: tokenauth.SourceKindEnv, EnvName: "TEST_SPLIT_AUTH_PAT"},
 		},
 	}, tokenauth.Options{})
-	authRT := tokenauth.AuthTransport{
+	authRT := platform.AuthTransport{
 		Source:    source,
 		Base:      http.DefaultTransport,
-		SetHeader: tokenauth.BearerAuthHeader,
+		SetHeader: platform.BearerAuthHeader,
 	}
 	ghClient, err := newEnterpriseGHClient(&http.Client{Transport: authRT},
 		srv.URL+"/api/v3/", srv.URL+"/api/uploads/")
 
-	require.NoError(t, err)
-	c := &liveClient{gh: ghClient}
+	require.NoError(err)
+	c, err := platformgithub.NewClient(platformgithub.ClientConfig{
+		Host: "github.example.com", Read: ghClient.Client(), Write: ghClient.Client(), Notifications: ghClient.Client(),
+		Clock: time.Now, APIBase: ghClient.BaseURL(),
+	})
+	require.NoError(err)
 
 	_, err = c.CreateIssueComment(t.Context(), "acme", "widgets", 5, "hello")
-	require.NoError(t, err)
+	require.NoError(err)
 	assert.Equal(t, "Bearer only-pat", gotAuth)
 }

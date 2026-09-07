@@ -19,10 +19,11 @@ import (
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 func TestTriggerSyncE2EBypassesCooldown(t *testing.T) {
@@ -73,9 +74,9 @@ func TestTriggerSyncE2ERefreshesSnapshotBeforeRateBackoff(t *testing.T) {
 	synced := make(chan struct{})
 	var syncedClosed atomic.Bool
 	mock := &mockGH{
-		getRateLimitSnapshotFn: func(context.Context) (*ghclient.RateLimitSnapshot, error) {
+		getRateLimitSnapshotFn: func(context.Context) (*platformgithub.RateLimitSnapshot, error) {
 			resetAt := time.Now().UTC().Add(time.Hour)
-			return &ghclient.RateLimitSnapshot{
+			return &platformgithub.RateLimitSnapshot{
 				Core: &ghclient.Rate{
 					Limit:     5000,
 					Remaining: 4800,

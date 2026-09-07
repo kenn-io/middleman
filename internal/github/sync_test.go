@@ -19,6 +19,9 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+	platformgithub "go.kenn.io/forge/platform/github"
+
 	gh "github.com/google/go-github/v89/github"
 	"github.com/shurcooL/githubv4"
 	"github.com/stretchr/testify/assert"
@@ -26,9 +29,9 @@ import (
 	"go.kenn.io/forge/internal/archive"
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/gitclone"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
 
@@ -39,7 +42,7 @@ func verifiedGitHubRepoIdentity(host, owner, name string) db.RepoIdentity {
 }
 
 func verifiedDBRepoIdentity(ref platform.RepoRef) db.RepoIdentity {
-	identity := platform.DBRepoIdentity(ref)
+	identity := platformdb.DBRepoIdentity(ref)
 	if identity.PlatformRepoID == "" {
 		identity.PlatformRepoID = "test-" + strings.ToLower(
 			string(ref.Platform)+"-"+ref.Host+"-"+ref.DisplayName(),
@@ -795,7 +798,7 @@ esac
 	)
 	require.NoError(err)
 	routeFence, found, err := database.CurrentRepositoryRouteFence(
-		t.Context(), platform.DBRepoIdentity(platformRepoRef(repo)), repoID,
+		t.Context(), platformdb.DBRepoIdentity(platformRepoRef(repo)), repoID,
 	)
 	require.NoError(err)
 	require.True(found)
@@ -923,11 +926,11 @@ type mockClient struct {
 	markNotificationThreadReadFn    func(context.Context, string) error
 	comments                        []*gh.IssueComment
 	reviews                         []*gh.PullRequestReview
-	reviewThreads                   []PullRequestReviewThread
+	reviewThreads                   []platformgithub.PullRequestReviewThread
 	commits                         []*gh.RepositoryCommit
-	timelineEvents                  []PullRequestTimelineEvent
+	timelineEvents                  []platformgithub.PullRequestTimelineEvent
 	timelineEventsErr               error
-	forcePushEvents                 []ForcePushEvent
+	forcePushEvents                 []platformgithub.ForcePushEvent
 	forcePushEventsErr              error
 	ciStatus                        *gh.CombinedStatus
 	ciStatusErr                     error
@@ -967,33 +970,33 @@ type issueTimelineMockClient struct {
 
 func (c *issueTimelineMockClient) ListIssueTimelineEvents(
 	context.Context, string, string, int,
-) ([]PullRequestTimelineEvent, error) {
+) ([]platformgithub.PullRequestTimelineEvent, error) {
 	c.issueTimelineCalls.Add(1)
 	return nil, c.issueTimelineErr
 }
 
-func (m *mockClient) bypassNotificationReadRateReserve() bool {
+func (m *mockClient) InstallationAuthenticationActive() bool {
 	return m.bypassNotificationReadReserve
 }
 
 type rateLimitSnapshotMockClient struct {
 	*mockClient
-	snapshot           *RateLimitSnapshot
+	snapshot           *platformgithub.RateLimitSnapshot
 	snapshotCalls      atomic.Int32
 	syncBudgetContexts atomic.Int32
 }
 
 type credentialRateLimitSnapshotMockClient struct {
 	*mockClient
-	appSnapshot  *RateLimitSnapshot
-	userSnapshot *RateLimitSnapshot
+	appSnapshot  *platformgithub.RateLimitSnapshot
+	userSnapshot *platformgithub.RateLimitSnapshot
 	appCalls     atomic.Int32
 	userCalls    atomic.Int32
 }
 
 func (m *credentialRateLimitSnapshotMockClient) GetRateLimitSnapshot(
 	ctx context.Context,
-) (*RateLimitSnapshot, error) {
+) (*platformgithub.RateLimitSnapshot, error) {
 	if tokenauth.IsMutationAuth(ctx) {
 		m.userCalls.Add(1)
 		return m.userSnapshot, nil
@@ -1002,7 +1005,7 @@ func (m *credentialRateLimitSnapshotMockClient) GetRateLimitSnapshot(
 	return m.appSnapshot, nil
 }
 
-func (m *rateLimitSnapshotMockClient) GetRateLimitSnapshot(ctx context.Context) (*RateLimitSnapshot, error) {
+func (m *rateLimitSnapshotMockClient) GetRateLimitSnapshot(ctx context.Context) (*platformgithub.RateLimitSnapshot, error) {
 	m.snapshotCalls.Add(1)
 	if IsSyncBudgetContext(ctx) {
 		m.syncBudgetContexts.Add(1)
@@ -1479,7 +1482,7 @@ func (m *mockClient) ListPullRequestReviewThreads(
 	_ string,
 	_ string,
 	_ int,
-) ([]PullRequestReviewThread, error) {
+) ([]platformgithub.PullRequestReviewThread, error) {
 	m.trackCall()
 	return m.reviewThreads, nil
 }
@@ -1489,7 +1492,7 @@ func (m *mockClient) ListCommits(_ context.Context, _, _ string, _ int) ([]*gh.R
 	return m.commits, nil
 }
 
-func (m *mockClient) ListForcePushEvents(_ context.Context, _, _ string, _ int) ([]ForcePushEvent, error) {
+func (m *mockClient) ListForcePushEvents(_ context.Context, _, _ string, _ int) ([]platformgithub.ForcePushEvent, error) {
 	m.trackCall()
 	return m.forcePushEvents, m.forcePushEventsErr
 }
@@ -1625,7 +1628,7 @@ func TestGitHubProviderPublishDiffReviewDraftMapsReviewComments(t *testing.T) {
 	require := require.New(t)
 	startLine := 10
 	mock := &mockClient{}
-	provider := gitHubClientProvider{client: mock, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", mock)
 
 	result, err := provider.PublishDiffReviewDraft(t.Context(), platform.RepoRef{
 		Owner: "acme",
@@ -1672,7 +1675,7 @@ func TestGitHubProviderPublishDiffReviewDraftApproveSubmitsReview(t *testing.T) 
 	assert := assert.New(t)
 	require := require.New(t)
 	mock := &mockClient{}
-	provider := gitHubClientProvider{client: mock, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", mock)
 	line := 12
 
 	result, err := provider.PublishDiffReviewDraft(t.Context(), platform.RepoRef{
@@ -1712,7 +1715,11 @@ func TestGitHubProviderViewerAuthoredMergeRequestRefreshesExpiredCache(t *testin
 			return next, nil
 		},
 	}
-	provider := &gitHubClientProvider{client: mock, host: "github.com"}
+	now := time.Now()
+	provider, err := platformgithub.NewProvider(platformgithub.ProviderConfig{
+		Host: "github.com", Client: mock, Clock: func() time.Time { return now }, ViewerCacheTTL: authenticatedViewerLoginTTL,
+	})
+	require.NoError(err)
 	mr := platform.MergeRequest{Author: "marius"}
 
 	authored, err := provider.ViewerAuthoredMergeRequest(t.Context(), mr)
@@ -1724,12 +1731,7 @@ func TestGitHubProviderViewerAuthoredMergeRequestRefreshesExpiredCache(t *testin
 	assert.True(authored)
 	assert.EqualValues(1, mock.authenticatedViewerCalls.Load())
 
-	provider.viewerMu.Lock()
-	for key, entry := range provider.viewerLogins {
-		entry.fetchedAt = time.Now().Add(-authenticatedViewerLoginTTL - time.Minute)
-		provider.viewerLogins[key] = entry
-	}
-	provider.viewerMu.Unlock()
+	now = now.Add(authenticatedViewerLoginTTL + time.Minute)
 
 	authored, err = provider.ViewerAuthoredMergeRequest(t.Context(), mr)
 	require.NoError(err)
@@ -1741,7 +1743,7 @@ func TestGitHubProviderApplyReviewSuggestionsDelegatesToClient(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	mock := &mockClient{}
-	provider := gitHubClientProvider{client: mock, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", mock)
 	input := platform.ApplyReviewSuggestionsInput{
 		HeadBranch:      "feature",
 		ExpectedHeadSHA: "head-sha",
@@ -1764,7 +1766,7 @@ func TestGitHubProviderApplyReviewSuggestionsDelegatesToClient(t *testing.T) {
 
 func TestGitHubProviderCapabilitiesExposeReviewThreadReads(t *testing.T) {
 	require := require.New(t)
-	provider := gitHubClientProvider{client: &mockClient{}, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", &mockClient{})
 
 	caps := provider.Capabilities()
 
@@ -1783,7 +1785,7 @@ func TestGitHubProviderListMergeRequestReviewThreadsMapsGraphQLThreads(t *testin
 	createdAt := time.Date(2026, 5, 27, 16, 1, 31, 0, time.UTC)
 	updatedAt := createdAt.Add(time.Minute)
 	mock := &mockClient{
-		reviewThreads: []PullRequestReviewThread{{
+		reviewThreads: []platformgithub.PullRequestReviewThread{{
 			NodeID:     "PRRT_1",
 			IsResolved: true,
 			IsOutdated: false,
@@ -1791,7 +1793,7 @@ func TestGitHubProviderListMergeRequestReviewThreadsMapsGraphQLThreads(t *testin
 			Side:       "RIGHT",
 			StartLine:  &startLine,
 			Line:       12,
-			Comments: []PullRequestReviewThreadComment{{
+			Comments: []platformgithub.PullRequestReviewThreadComment{{
 				NodeID:           "PRRC_1",
 				DatabaseID:       101,
 				ReviewDatabaseID: 201,
@@ -1819,7 +1821,7 @@ func TestGitHubProviderListMergeRequestReviewThreadsMapsGraphQLThreads(t *testin
 			}},
 		}},
 	}
-	provider := gitHubClientProvider{client: mock, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", mock)
 
 	threads, err := provider.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 		Owner: "acme",
@@ -1863,13 +1865,13 @@ func TestGitHubProviderListMergeRequestReviewThreadsMapsFileSubject(t *testing.T
 	require := require.New(t)
 	createdAt := time.Date(2026, 5, 27, 16, 1, 31, 0, time.UTC)
 	mock := &mockClient{
-		reviewThreads: []PullRequestReviewThread{{
+		reviewThreads: []platformgithub.PullRequestReviewThread{{
 			NodeID:       "PRRT_file",
 			Path:         ".golangci.yml",
 			Side:         "RIGHT",
 			Line:         1,
 			OriginalLine: 1,
-			Comments: []PullRequestReviewThreadComment{{
+			Comments: []platformgithub.PullRequestReviewThreadComment{{
 				NodeID:      "PRRC_file",
 				DatabaseID:  101,
 				SubjectType: "FILE",
@@ -1881,7 +1883,7 @@ func TestGitHubProviderListMergeRequestReviewThreadsMapsFileSubject(t *testing.T
 			}},
 		}},
 	}
-	provider := gitHubClientProvider{client: mock, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", mock)
 
 	threads, err := provider.ListMergeRequestReviewThreads(t.Context(), platform.RepoRef{
 		Owner: "acme",
@@ -1913,7 +1915,7 @@ func TestGitHubProviderPublishDiffReviewDraftHandlesMissingSubmittedAt(t *testin
 			return &gh.PullRequestReview{ID: &id}, nil
 		},
 	}
-	provider := gitHubClientProvider{client: mock, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", mock)
 
 	result, err := provider.PublishDiffReviewDraft(t.Context(), platform.RepoRef{
 		Owner: "acme",
@@ -1972,7 +1974,7 @@ func (m *mockClient) MergePullRequest(
 }
 
 func (m *mockClient) EditPullRequest(
-	_ context.Context, _, _ string, _ int, opts EditPullRequestOpts,
+	_ context.Context, _, _ string, _ int, opts platformgithub.EditPullRequestOpts,
 ) (*gh.PullRequest, error) {
 	m.trackCall()
 	pr := &gh.PullRequest{}
@@ -4093,7 +4095,7 @@ func TestSyncNotificationsReportsReconciledRepoSettingsPersistenceFailure(t *tes
 }
 
 func TestGitHubPlatformRepositoryTreatsIncompleteMergeSettingsAsUnknown(t *testing.T) {
-	repo := gitHubPlatformRepository("github.com", "acme", &gh.Repository{
+	repo := platformgithub.GitHubPlatformRepository("github.com", "acme", &gh.Repository{
 		NodeID: new("repo-1"), Name: new("widget"),
 		Owner:            &gh.User{Login: new("acme")},
 		AllowSquashMerge: new(true),
@@ -4104,7 +4106,7 @@ func TestGitHubPlatformRepositoryTreatsIncompleteMergeSettingsAsUnknown(t *testi
 
 func TestGitHubPlatformRepositoryPreservesExplicitAllDisabledMergeSettings(t *testing.T) {
 	assert := assert.New(t)
-	repo := gitHubPlatformRepository("github.com", "acme", &gh.Repository{
+	repo := platformgithub.GitHubPlatformRepository("github.com", "acme", &gh.Repository{
 		NodeID: new("repo-1"), Name: new("widget"),
 		Owner:            &gh.User{Login: new("acme")},
 		AllowSquashMerge: new(false), AllowMergeCommit: new(false),
@@ -5267,7 +5269,7 @@ func TestSyncStoresForcePushEvent(t *testing.T) {
 				Author:  &gh.CommitAuthor{Name: new("dev"), Date: makeTimestamp(now.Add(-1 * time.Hour))},
 			},
 		}},
-		timelineEvents: []PullRequestTimelineEvent{{
+		timelineEvents: []platformgithub.PullRequestTimelineEvent{{
 			EventType: "force_push",
 			Actor:     "alice",
 			BeforeSHA: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -5347,7 +5349,7 @@ func TestRefreshTimelineDoesNotRewriteProviderPullRequestActivity(t *testing.T) 
 				Author:  &gh.CommitAuthor{Name: new("dev"), Date: makeTimestamp(now.Add(-1 * time.Hour))},
 			},
 		}},
-		timelineEvents: []PullRequestTimelineEvent{{
+		timelineEvents: []platformgithub.PullRequestTimelineEvent{{
 			EventType: "force_push",
 			Actor:     "alice",
 			BeforeSHA: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -5456,7 +5458,7 @@ func TestSyncAssignsStableCommitOrderKeysAcrossForcePushReplacement(t *testing.T
 			commit(newBaseSHA, "new base", now.Add(-30*time.Minute)),
 			commit(newHeadSHA, "new head", now.Add(-20*time.Minute)),
 		},
-		timelineEvents: []PullRequestTimelineEvent{{
+		timelineEvents: []platformgithub.PullRequestTimelineEvent{{
 			EventType: "force_push",
 			Actor:     "alice",
 			BeforeSHA: oldHeadSHA,
@@ -5544,7 +5546,7 @@ func TestSyncStoresPullRequestTimelineEvents(t *testing.T) {
 		comments: []*gh.IssueComment{},
 		reviews:  []*gh.PullRequestReview{},
 		commits:  []*gh.RepositoryCommit{},
-		timelineEvents: []PullRequestTimelineEvent{
+		timelineEvents: []platformgithub.PullRequestTimelineEvent{
 			{
 				NodeID:            "CRE_1",
 				EventType:         "cross_referenced",
@@ -6333,7 +6335,7 @@ func TestIndexUpsertMergeRequestUpdatesKnownMergeableState(t *testing.T) {
 		UpdatedAt:      now,
 		LastActivityAt: now,
 	}
-	_, err = d.UpsertMergeRequest(ctx, platform.DBMergeRequest(repoID, baseMR))
+	_, err = d.UpsertMergeRequest(ctx, platformdb.DBMergeRequest(repoID, baseMR))
 	require.NoError(err)
 
 	syncer := NewSyncer(nil, d, nil, nil, time.Minute, nil, testBudget(500))
@@ -6374,7 +6376,7 @@ func TestIndexUpsertMergeRequestUpdatesKnownDiffMetricsAcrossSyncs(t *testing.T)
 		FilesChanged: &filesChanged, CreatedAt: now, UpdatedAt: now,
 		LastActivityAt: now,
 	}
-	_, err = d.UpsertMergeRequest(ctx, platform.DBMergeRequest(repoID, baseMR))
+	_, err = d.UpsertMergeRequest(ctx, platformdb.DBMergeRequest(repoID, baseMR))
 	require.NoError(err)
 	syncer := NewSyncer(nil, d, nil, nil, time.Minute, nil, nil)
 	repo := RepoRef{
@@ -6559,7 +6561,7 @@ func TestIndexUpsertMergeRequestReclassifiesWorkspaceHeadRepoOnForkRetarget(t *t
 		UpdatedAt:      now,
 		LastActivityAt: now,
 	}
-	_, err = d.UpsertMergeRequest(ctx, platform.DBMergeRequest(repoID, baseMR))
+	_, err = d.UpsertMergeRequest(ctx, platformdb.DBMergeRequest(repoID, baseMR))
 	require.NoError(err)
 
 	ws := &db.Workspace{
@@ -6623,7 +6625,7 @@ func TestIndexUpsertMergeRequestKeepsKnownWorkspaceHeadRepoOnUnknownSnapshot(t *
 		UpdatedAt:        now,
 		LastActivityAt:   now,
 	}
-	_, err = d.UpsertMergeRequest(ctx, platform.DBMergeRequest(repoID, baseMR))
+	_, err = d.UpsertMergeRequest(ctx, platformdb.DBMergeRequest(repoID, baseMR))
 	require.NoError(err)
 
 	forkURL := "https://github.com/forker/repo.git"
@@ -7421,7 +7423,7 @@ func TestRunOncePreservesItemCeilingStatusAcrossLaterHardRepoFailure(t *testing.
 	}
 	repoID, err := database.UpsertRepo(t.Context(), verifiedDBRepoIdentity(platformRepoRef(repo)))
 	require.NoError(err)
-	_, err = database.UpsertMergeRequest(t.Context(), platform.DBMergeRequest(repoID, platform.MergeRequest{
+	_, err = database.UpsertMergeRequest(t.Context(), platformdb.DBMergeRequest(repoID, platform.MergeRequest{
 		PlatformID:     700,
 		Number:         7,
 		URL:            "https://github.com/acme/widget/pull/7",
@@ -9272,7 +9274,7 @@ func TestFetchMRDetailDoesNotDuplicateMergedTimelineEvent(t *testing.T) {
 		comments: []*gh.IssueComment{},
 		reviews:  []*gh.PullRequestReview{},
 		commits:  []*gh.RepositoryCommit{},
-		timelineEvents: []PullRequestTimelineEvent{{
+		timelineEvents: []platformgithub.PullRequestTimelineEvent{{
 			NodeID:    "ME_1",
 			EventType: "merged",
 			Actor:     mergedBy,
@@ -9348,7 +9350,7 @@ func TestRefreshTimelineSkipsMergedEventWhenAuthoredMergedEventAlreadyExists(t *
 		comments: []*gh.IssueComment{},
 		reviews:  []*gh.PullRequestReview{},
 		commits:  []*gh.RepositoryCommit{},
-		timelineEvents: []PullRequestTimelineEvent{{
+		timelineEvents: []platformgithub.PullRequestTimelineEvent{{
 			NodeID:    "ME_1",
 			EventType: "merged",
 			Actor:     mergedBy,
@@ -9768,7 +9770,7 @@ func TestFetchProviderMRDetailSyncsReviewThreads(t *testing.T) {
 	require.NoError(err)
 	syncer := NewSyncerWithRegistry(registry, d, nil, []RepoRef{repo}, time.Minute, nil, nil)
 	routeFence, found, err := d.CurrentRepositoryRouteFence(
-		ctx, platform.DBRepoIdentity(ref), repoID,
+		ctx, platformdb.DBRepoIdentity(ref), repoID,
 	)
 	require.NoError(err)
 	require.True(found)
@@ -9871,12 +9873,12 @@ func TestFetchGitHubMRDetailSyncsReviewThreads(t *testing.T) {
 		reviews:  []*gh.PullRequestReview{},
 		commits:  []*gh.RepositoryCommit{},
 		ciStatus: &gh.CombinedStatus{State: new("success")},
-		reviewThreads: []PullRequestReviewThread{{
+		reviewThreads: []platformgithub.PullRequestReviewThread{{
 			NodeID: "PRRT_1",
 			Path:   ".golangci.yml",
 			Side:   "RIGHT",
 			Line:   line,
-			Comments: []PullRequestReviewThreadComment{{
+			Comments: []platformgithub.PullRequestReviewThreadComment{{
 				NodeID:           "PRRC_1",
 				DatabaseID:       commentID,
 				ReviewDatabaseID: reviewID,
@@ -12446,14 +12448,14 @@ func TestRunOnceScopesGitHubProviderReserveToRepoCredential(t *testing.T) {
 	// is healthy. Only the repository routed to the user may sync.
 	appClient := &credentialRateLimitSnapshotMockClient{
 		mockClient: base,
-		appSnapshot: &RateLimitSnapshot{
+		appSnapshot: &platformgithub.RateLimitSnapshot{
 			Core:    &Rate{Limit: 15000, Remaining: RateReserveBuffer, Reset: now.Add(time.Hour)},
 			GraphQL: &Rate{Limit: 10000, Remaining: 9000, Reset: now.Add(time.Hour)},
 		},
 	}
 	userClient := &credentialRateLimitSnapshotMockClient{
 		mockClient: base,
-		appSnapshot: &RateLimitSnapshot{
+		appSnapshot: &platformgithub.RateLimitSnapshot{
 			Core:    &Rate{Limit: 5000, Remaining: 4900, Reset: now.Add(time.Hour)},
 			GraphQL: &Rate{Limit: 5000, Remaining: 4800, Reset: now.Add(time.Hour)},
 		},
@@ -12619,7 +12621,7 @@ type conditionalIssueLifecycleClient struct {
 	conditionalIssueTrackingClient
 	unconditionalCalls atomic.Int32
 	timelineCalls      atomic.Int32
-	timelineEvents     []PullRequestTimelineEvent
+	timelineEvents     []platformgithub.PullRequestTimelineEvent
 }
 
 func (c *conditionalIssueLifecycleClient) GetIssue(
@@ -12633,7 +12635,7 @@ func (c *conditionalIssueLifecycleClient) GetIssue(
 
 func (c *conditionalIssueLifecycleClient) ListIssueTimelineEvents(
 	context.Context, string, string, int,
-) ([]PullRequestTimelineEvent, error) {
+) ([]platformgithub.PullRequestTimelineEvent, error) {
 	c.timelineCalls.Add(1)
 	return c.timelineEvents, nil
 }
@@ -12809,12 +12811,12 @@ func TestFetchMRDetailRefreshesCommentVisibilityOnParent304(t *testing.T) {
 	mc.commits = []*gh.RepositoryCommit{{SHA: new(string)}}
 	inlineCommentID := int64(10402)
 	inlineLine := 12
-	mc.reviewThreads = []PullRequestReviewThread{{
+	mc.reviewThreads = []platformgithub.PullRequestReviewThread{{
 		NodeID: "PRRT_10402",
 		Path:   "src/main.go",
 		Side:   "RIGHT",
 		Line:   inlineLine,
-		Comments: []PullRequestReviewThreadComment{{
+		Comments: []platformgithub.PullRequestReviewThreadComment{{
 			NodeID:          "PRRC_10402",
 			DatabaseID:      inlineCommentID,
 			Body:            "inline moderation changed without changing the parent",
@@ -12832,9 +12834,7 @@ func TestFetchMRDetailRefreshesCommentVisibilityOnParent304(t *testing.T) {
 		time.Minute, nil, testBudget(1000),
 	)
 	gqlSrv := currentCommentVisibilityServer(
-		t, "pullRequest", commentID,
-		CommentVisibility{Hidden: true, Reason: "ABUSE"},
-		CommentVisibility{},
+		t, "pullRequest", commentID, platformgithub.CommentVisibility{Hidden: true, Reason: "ABUSE"}, platformgithub.CommentVisibility{},
 	)
 	defer gqlSrv.Close()
 	syncer.SetFetchers(map[string]*GraphQLFetcher{
@@ -13243,9 +13243,7 @@ func TestFetchIssueDetailRefreshesCommentVisibilityOnParent304(t *testing.T) {
 		time.Minute, nil, testBudget(1000),
 	)
 	gqlSrv := currentCommentVisibilityServer(
-		t, "issue", commentID,
-		CommentVisibility{Hidden: true, Reason: "ABUSE"},
-		CommentVisibility{},
+		t, "issue", commentID, platformgithub.CommentVisibility{Hidden: true, Reason: "ABUSE"}, platformgithub.CommentVisibility{},
 	)
 	defer gqlSrv.Close()
 	syncer.SetFetchers(map[string]*GraphQLFetcher{
@@ -13305,7 +13303,7 @@ func TestSyncArchiveIssueBypassesPersistedETagForLifecycleBackfill(t *testing.T)
 		},
 		comments:    []*gh.IssueComment{},
 		notModified: true,
-		timelineEvents: []PullRequestTimelineEvent{{
+		timelineEvents: []platformgithub.PullRequestTimelineEvent{{
 			NodeID: "closed-7", EventType: "closed",
 			Actor: "closer", CreatedAt: closedAt,
 		}},
@@ -14494,10 +14492,7 @@ func TestDetailDrainDisambiguatesSameHostOwnerNameAcrossProviders(t *testing.T) 
 			return nil, errors.New("wrong provider")
 		},
 	}
-	registry, err := platform.NewRegistry(
-		&gitHubClientProvider{host: host, client: githubClient},
-		gitlabProvider,
-	)
+	registry, err := platform.NewRegistry(newTestGitHubProvider(t, host, githubClient), gitlabProvider)
 	require.NoError(err)
 	rateKey := RateBucketKey("gitlab", host, "host")
 	syncer := NewSyncer(nil, d, nil, []RepoRef{
@@ -18619,7 +18614,7 @@ func currentCommentVisibilityServer(
 	t *testing.T,
 	item string,
 	commentID int64,
-	states ...CommentVisibility,
+	states ...platformgithub.CommentVisibility,
 ) *httptest.Server {
 	t.Helper()
 	require.NotEmpty(t, states)
@@ -18670,7 +18665,7 @@ func TestFetchMRDetailUsesCurrentCommentVisibility(t *testing.T) {
 		},
 	}
 	gqlSrv := currentCommentVisibilityServer(
-		t, "pullRequest", commentID, CommentVisibility{Hidden: true, Reason: "ABUSE"},
+		t, "pullRequest", commentID, platformgithub.CommentVisibility{Hidden: true, Reason: "ABUSE"},
 	)
 	defer gqlSrv.Close()
 	syncer := NewSyncer(
@@ -18723,7 +18718,7 @@ func TestFetchIssueDetailUsesCurrentCommentVisibility(t *testing.T) {
 		},
 	}
 	gqlSrv := currentCommentVisibilityServer(
-		t, "issue", commentID, CommentVisibility{Hidden: true, Reason: "ABUSE"},
+		t, "issue", commentID, platformgithub.CommentVisibility{Hidden: true, Reason: "ABUSE"},
 	)
 	defer gqlSrv.Close()
 	syncer := NewSyncer(
@@ -19162,7 +19157,7 @@ func TestSyncOpenMRFromBulkStoresTimelineEvents(t *testing.T) {
 				},
 			},
 		}},
-		TimelineEvents: []PullRequestTimelineEvent{{
+		TimelineEvents: []platformgithub.PullRequestTimelineEvent{{
 			NodeID:          "BRC_1",
 			EventType:       "base_ref_changed",
 			Actor:           "alice",
@@ -19503,7 +19498,7 @@ func TestSyncOpenIssueFromBulkMergesPartialCommentVisibilityWithStoredState(t *t
 	err = syncer.syncOpenIssueFromBulk(ctx, repo, repoID, &BulkIssue{
 		Issue:             issue,
 		Comments:          comments,
-		CommentVisibility: map[int64]CommentVisibility{firstCommentID: {Hidden: true}, secondCommentID: {Hidden: true}},
+		CommentVisibility: map[int64]platformgithub.CommentVisibility{firstCommentID: {Hidden: true}, secondCommentID: {Hidden: true}},
 		CommentsComplete:  true,
 		TimelineComplete:  true,
 	})
@@ -19512,7 +19507,7 @@ func TestSyncOpenIssueFromBulkMergesPartialCommentVisibilityWithStoredState(t *t
 	err = syncer.syncOpenIssueFromBulk(ctx, repo, repoID, &BulkIssue{
 		Issue:             issue,
 		Comments:          comments[:1],
-		CommentVisibility: map[int64]CommentVisibility{firstCommentID: {}},
+		CommentVisibility: map[int64]platformgithub.CommentVisibility{firstCommentID: {}},
 		CommentsComplete:  false,
 		TimelineComplete:  true,
 	})
@@ -19570,7 +19565,7 @@ func TestSyncOpenIssueFromBulkStoresTimelineEvents(t *testing.T) {
 			CreatedAt: &updatedAt,
 			UpdatedAt: &updatedAt,
 		},
-		TimelineEvents: []PullRequestTimelineEvent{
+		TimelineEvents: []platformgithub.PullRequestTimelineEvent{
 			{
 				NodeID:       "CRE_issue_1",
 				EventType:    "cross_referenced",
@@ -21047,7 +21042,7 @@ func TestRunOnceRefreshesGitHubRateLimitSnapshotOutsideSyncBudget(t *testing.T) 
 	budget := NewSyncBudget(100)
 	client := &rateLimitSnapshotMockClient{
 		mockClient: &mockClient{},
-		snapshot: &RateLimitSnapshot{
+		snapshot: &platformgithub.RateLimitSnapshot{
 			Core: &Rate{
 				Limit:     5000,
 				Remaining: 4991,
@@ -21101,7 +21096,7 @@ type failingSnapshotClient struct {
 
 func (m *failingSnapshotClient) GetRateLimitSnapshot(
 	_ context.Context,
-) (*RateLimitSnapshot, error) {
+) (*platformgithub.RateLimitSnapshot, error) {
 	m.calls.Add(1)
 	return nil, errors.New("rate limit snapshot unavailable")
 }
@@ -21177,14 +21172,14 @@ func TestRefreshRateLimitSnapshotsReconcilesEachCredentialEveryThreeMinutes(t *t
 	userIdentity := IdentityKey{Host: "github.com", Principal: "user:7"}
 	appClient := &credentialRateLimitSnapshotMockClient{
 		mockClient: &mockClient{},
-		appSnapshot: &RateLimitSnapshot{
+		appSnapshot: &platformgithub.RateLimitSnapshot{
 			Core:    &Rate{Limit: 15000, Remaining: 14900, Reset: now.Add(time.Hour)},
 			GraphQL: &Rate{Limit: 10000, Remaining: 9900, Reset: now.Add(time.Hour)},
 		},
 	}
 	userClient := &credentialRateLimitSnapshotMockClient{
 		mockClient: &mockClient{},
-		appSnapshot: &RateLimitSnapshot{
+		appSnapshot: &platformgithub.RateLimitSnapshot{
 			Core:    &Rate{Limit: 5000, Remaining: 4900, Reset: now.Add(time.Hour)},
 			GraphQL: &Rate{Limit: 5000, Remaining: 4800, Reset: now.Add(time.Hour)},
 		},
@@ -21257,7 +21252,7 @@ func TestRunOnceSnapshotWindowResetResetsSyncBudget(t *testing.T) {
 	budget.Spend(100)
 	client := &rateLimitSnapshotMockClient{
 		mockClient: &mockClient{},
-		snapshot: &RateLimitSnapshot{
+		snapshot: &platformgithub.RateLimitSnapshot{
 			Core: &Rate{
 				Limit:     5000,
 				Remaining: 4990,
@@ -21300,7 +21295,7 @@ func TestRunOnceRecoveredRateLimitSnapshotClearsStaleThrottleGate(t *testing.T) 
 	})
 	client := &rateLimitSnapshotMockClient{
 		mockClient: &mockClient{},
-		snapshot: &RateLimitSnapshot{
+		snapshot: &platformgithub.RateLimitSnapshot{
 			Core: &Rate{
 				Limit:     5000,
 				Remaining: 4900,
@@ -21534,7 +21529,7 @@ func TestGitHubProviderApproveSubmitsReviewForReviewedHead(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	mock := &mockClient{}
-	provider := gitHubClientProvider{client: mock, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", mock)
 
 	event, err := provider.ApproveMergeRequest(
 		t.Context(), platform.RepoRef{Owner: "acme", Name: "widget"}, 7,
@@ -21555,11 +21550,11 @@ func TestIsGitHubHeadModified(t *testing.T) {
 			Message:  message,
 		}
 	}
-	assert.True(isGitHubHeadModified(mismatch(405, "Head branch was modified. Review and try the merge again.")))
-	assert.True(isGitHubHeadModified(mismatch(409, "Head branch was modified.")))
-	assert.False(isGitHubHeadModified(mismatch(405, "Pull Request is not mergeable")))
-	assert.False(isGitHubHeadModified(mismatch(422, "Head branch was modified.")))
-	assert.False(isGitHubHeadModified(errOther))
+	assert.True(platformgithub.IsGitHubHeadModified(mismatch(405, "Head branch was modified. Review and try the merge again.")))
+	assert.True(platformgithub.IsGitHubHeadModified(mismatch(409, "Head branch was modified.")))
+	assert.False(platformgithub.IsGitHubHeadModified(mismatch(405, "Pull Request is not mergeable")))
+	assert.False(platformgithub.IsGitHubHeadModified(mismatch(422, "Head branch was modified.")))
+	assert.False(platformgithub.IsGitHubHeadModified(errOther))
 }
 
 var errOther = fmt.Errorf("transport down")
@@ -23410,7 +23405,7 @@ func TestWithObsoleteMetadata(t *testing.T) {
 }
 
 func TestWithCommitOrderMetadataPreservesCommitAuthor(t *testing.T) {
-	withOrder := withCommitOrderMetadata(`{"commit_author":"original-author"}`, 2, 4)
+	withOrder := platformgithub.WithCommitOrderMetadata(`{"commit_author":"original-author"}`, 2, 4)
 	assert.JSONEq(t, `{"commit_author":"original-author","commit_order":2,"commit_order_key":4}`, withOrder)
 
 	withObsolete, changed := withObsoleteMetadata(withOrder, true)
@@ -23739,7 +23734,7 @@ func (l watermarkAdvancingArchiveLifecycle) EnsureConfigured(
 	ctx context.Context, refs []platform.RepoRef,
 ) ([]platform.RepoRef, error) {
 	for _, ref := range refs {
-		identity := platform.DBRepoIdentity(ref)
+		identity := platformdb.DBRepoIdentity(ref)
 		if identity.PlatformRepoID == "" {
 			continue
 		}

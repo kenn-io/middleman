@@ -13,9 +13,9 @@ import (
 	"go.kenn.io/forge/internal/configwatch"
 	ghclient "go.kenn.io/forge/internal/github"
 	katacatalog "go.kenn.io/forge/internal/kata"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/docsapi"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
 )
 
 // configChangedEvent is the payload broadcast on the SSE "config.changed"

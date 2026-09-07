@@ -6,8 +6,10 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -74,41 +76,35 @@ func TestWatcher_FiresAfterDebounce(t *testing.T) {
 }
 
 func TestWatcher_DebouncesBurst(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
-	const debounce = 250 * time.Millisecond
+	synctest.Test(t, func(t *testing.T) {
+		assert := assert.New(t)
+		const debounce = 250 * time.Millisecond
+		var count atomic.Int32
+		w, err := New(Options{
+			Path: "config.toml", Debounce: debounce,
+			OnChange: func() { count.Add(1) },
+		})
+		require.NoError(t, err)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		events := make(chan fsnotify.Event)
+		go w.runEvents(ctx, events, nil)
 
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.toml")
-	require.NoError(os.WriteFile(path, []byte("a = 1"), 0o600))
-
-	var count atomic.Int32
-	w, err := New(Options{
-		Path:     path,
-		OnChange: func() { count.Add(1) },
-		Debounce: debounce,
+		// Real filesystem writes can straddle debounce windows under load.
+		// Control event delivery and time while exercising the real event loop.
+		for range 5 {
+			events <- fsnotify.Event{Name: w.path, Op: fsnotify.Write}
+			time.Sleep(debounce / 2)
+			synctest.Wait()
+			assert.Equal(int32(0), count.Load(), "each event must postpone the callback")
+		}
+		time.Sleep(debounce / 2)
+		synctest.Wait()
+		assert.Equal(int32(1), count.Load(), "one callback after the last event's debounce window")
+		time.Sleep(2 * debounce)
+		synctest.Wait()
+		assert.Equal(int32(1), count.Load(), "no additional callback without another event")
 	})
-	require.NoError(err)
-
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	w.Start(ctx)
-	require.NoError(w.WaitReady(ctx))
-
-	// Five rapid writes; debounce should coalesce into a single callback.
-	for i := range 5 {
-		content := []byte("a = " + string(rune('0'+i)))
-		require.NoError(os.WriteFile(path, content, 0o600))
-		time.Sleep(2 * time.Millisecond)
-	}
-
-	waitForCount(t, &count, 1, time.Second)
-
-	// Give the debounce window a chance to lapse so any extra callback
-	// would have fired.
-	time.Sleep(2 * debounce)
-	assert.Equal(int32(1), count.Load(),
-		"expected exactly one callback from coalesced burst")
 }
 
 func TestWatcher_IgnoresUnrelatedFiles(t *testing.T) {

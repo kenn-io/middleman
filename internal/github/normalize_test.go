@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/db"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 func ghTimestamp(t time.Time) *gh.Timestamp {
@@ -41,7 +42,7 @@ func TestNormalizeIssueNilInputReturnsError(t *testing.T) {
 
 func TestNormalizeCommentVisibilityMetadata(t *testing.T) {
 	comment := &gh.IssueComment{ID: new(int64(73))}
-	visibility := CommentVisibility{Hidden: true, Reason: "OFF_TOPIC"}
+	visibility := platformgithub.CommentVisibility{Hidden: true, Reason: "OFF_TOPIC"}
 
 	tests := []struct {
 		name      string
@@ -268,7 +269,7 @@ func TestNormalizeCommentEvent(t *testing.T) {
 func TestNormalizeForcePushEvent(t *testing.T) {
 	require := require.New(t)
 	createdAt := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
-	event := NormalizeForcePushEvent(17, ForcePushEvent{
+	event := NormalizeForcePushEvent(17, platformgithub.ForcePushEvent{
 		Actor:     "alice",
 		BeforeSHA: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		AfterSHA:  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -292,7 +293,7 @@ func TestNormalizeTimelineEventCrossReferenced(t *testing.T) {
 	assert := assert.New(t)
 	createdAt := time.Date(2024, 6, 1, 12, 15, 0, 0, time.UTC)
 
-	event := NormalizeTimelineEvent(17, PullRequestTimelineEvent{
+	event := NormalizeTimelineEvent(17, platformgithub.PullRequestTimelineEvent{
 		NodeID:            "CRE_1",
 		EventType:         "cross_referenced",
 		Actor:             "alice",
@@ -323,7 +324,7 @@ func TestNormalizeTimelineEventCommentDeleted(t *testing.T) {
 	assert := assert.New(t)
 	createdAt := time.Date(2024, 6, 1, 12, 18, 0, 0, time.UTC)
 
-	event := NormalizeTimelineEvent(17, PullRequestTimelineEvent{
+	event := NormalizeTimelineEvent(17, platformgithub.PullRequestTimelineEvent{
 		NodeID:               "CDE_1",
 		EventType:            "comment_deleted",
 		Actor:                "maintainer",
@@ -346,7 +347,7 @@ func TestNormalizeTimelineEventRenamedTitle(t *testing.T) {
 	assert := assert.New(t)
 	createdAt := time.Date(2024, 6, 1, 12, 5, 0, 0, time.UTC)
 
-	event := NormalizeTimelineEvent(17, PullRequestTimelineEvent{
+	event := NormalizeTimelineEvent(17, platformgithub.PullRequestTimelineEvent{
 		NodeID:        "RTE_1",
 		EventType:     "renamed_title",
 		Actor:         "bob",
@@ -368,7 +369,7 @@ func TestNormalizeTimelineEventBaseRefChanged(t *testing.T) {
 	assert := assert.New(t)
 	createdAt := time.Date(2024, 6, 1, 12, 10, 0, 0, time.UTC)
 
-	event := NormalizeTimelineEvent(17, PullRequestTimelineEvent{
+	event := NormalizeTimelineEvent(17, platformgithub.PullRequestTimelineEvent{
 		NodeID:          "BRC_1",
 		EventType:       "base_ref_changed",
 		Actor:           "carol",
@@ -390,7 +391,7 @@ func TestNormalizeTimelineEventAssigned(t *testing.T) {
 	assert := assert.New(t)
 	createdAt := time.Date(2024, 6, 1, 12, 22, 0, 0, time.UTC)
 
-	event := NormalizeTimelineEvent(17, PullRequestTimelineEvent{
+	event := NormalizeTimelineEvent(17, platformgithub.PullRequestTimelineEvent{
 		NodeID:    "AE_1",
 		EventType: "assigned",
 		Actor:     "wesm",
@@ -423,7 +424,7 @@ func TestNormalizeTimelineEventLifecycle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			event := NormalizeTimelineEvent(17, PullRequestTimelineEvent{
+			event := NormalizeTimelineEvent(17, platformgithub.PullRequestTimelineEvent{
 				NodeID:    tt.nodeID,
 				EventType: tt.eventType,
 				Actor:     "maintainer",
@@ -446,7 +447,7 @@ func TestNormalizeIssueTimelineEventAssigned(t *testing.T) {
 	assert := assert.New(t)
 	createdAt := time.Date(2024, 6, 1, 12, 22, 0, 0, time.UTC)
 
-	event := NormalizeIssueTimelineEvent(23, PullRequestTimelineEvent{
+	event := NormalizeIssueTimelineEvent(23, platformgithub.PullRequestTimelineEvent{
 		NodeID:    "AE_1",
 		EventType: "assigned",
 		Actor:     "alice",
@@ -468,7 +469,7 @@ func TestNormalizeIssueTimelineEventCrossReferenced(t *testing.T) {
 	assert := assert.New(t)
 	createdAt := time.Date(2024, 6, 1, 12, 30, 0, 0, time.UTC)
 
-	event := NormalizeIssueTimelineEvent(23, PullRequestTimelineEvent{
+	event := NormalizeIssueTimelineEvent(23, platformgithub.PullRequestTimelineEvent{
 		NodeID:            "CRE_1",
 		EventType:         "cross_referenced",
 		Actor:             "mariusvniekerk",
@@ -521,7 +522,7 @@ func TestNormalizeIssueTimelineEventLifecycle(t *testing.T) {
 			require := require.New(t)
 			assert := assert.New(t)
 
-			event := NormalizeIssueTimelineEvent(23, PullRequestTimelineEvent{
+			event := NormalizeIssueTimelineEvent(23, platformgithub.PullRequestTimelineEvent{
 				NodeID:    tt.nodeID,
 				EventType: tt.eventType,
 				Actor:     "maintainer",
@@ -544,7 +545,7 @@ func TestNormalizeTimelineEventForcePush(t *testing.T) {
 	assert := assert.New(t)
 	createdAt := time.Date(2024, 6, 1, 12, 20, 0, 0, time.UTC)
 
-	event := NormalizeTimelineEvent(17, PullRequestTimelineEvent{
+	event := NormalizeTimelineEvent(17, platformgithub.PullRequestTimelineEvent{
 		NodeID:    "HRFPE_1",
 		EventType: "force_push",
 		Actor:     "dana",
@@ -570,7 +571,7 @@ func TestNormalizeTimelineEventFallbackDedupeIgnoresCrossReferenceTitle(t *testi
 	require := require.New(t)
 	createdAt := time.Date(2024, 6, 1, 12, 25, 0, 0, time.UTC)
 
-	first := NormalizeTimelineEvent(17, PullRequestTimelineEvent{
+	first := NormalizeTimelineEvent(17, platformgithub.PullRequestTimelineEvent{
 		EventType:         "cross_referenced",
 		Actor:             "alice",
 		CreatedAt:         createdAt,
@@ -583,7 +584,7 @@ func TestNormalizeTimelineEventFallbackDedupeIgnoresCrossReferenceTitle(t *testi
 		IsCrossRepository: true,
 		WillCloseTarget:   false,
 	})
-	second := NormalizeTimelineEvent(17, PullRequestTimelineEvent{
+	second := NormalizeTimelineEvent(17, platformgithub.PullRequestTimelineEvent{
 		EventType:         "cross_referenced",
 		Actor:             "alice",
 		CreatedAt:         createdAt,

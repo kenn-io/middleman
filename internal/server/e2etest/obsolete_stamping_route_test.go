@@ -17,11 +17,11 @@ import (
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/gitclone"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	"go.kenn.io/forge/internal/platform/forgejo"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
+	"go.kenn.io/forge/platform/forgejo"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
 
@@ -164,8 +164,7 @@ func TestForgejoSyncRouteStampsObsoleteCommitEventsAcrossForcePushes(t *testing.
 	provider, err := forgejo.NewClient(
 		platform.DefaultForgejoHost,
 		staticTokenSource("token"),
-		forgejo.WithBaseURLForTesting(providerAPI.URL),
-	)
+		forgejo.WithBaseURLForTesting(providerAPI.URL), forgejo.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := platform.NewRegistry(provider)
 	require.NoError(err)

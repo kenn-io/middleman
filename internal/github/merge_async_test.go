@@ -11,6 +11,7 @@ import (
 	gh "github.com/google/go-github/v89/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 func TestGitHubComMergeUsesAsyncAPI(t *testing.T) {
@@ -161,7 +162,7 @@ func TestGitHubComMergeHeadMoveIsConflict(t *testing.T) {
 	require.NotNil(githubError.Response)
 	assert.Equal(t, http.StatusConflict, githubError.Response.StatusCode)
 	assert.Equal(t, "Head branch was modified. Review and try the merge again.", githubError.Message)
-	assert.True(t, isGitHubHeadModified(err))
+	assert.True(t, platformgithub.IsGitHubHeadModified(err))
 }
 
 func TestGitHubComMergeDoesNotAdoptExistingOperation(t *testing.T) {

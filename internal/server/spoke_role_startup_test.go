@@ -11,9 +11,9 @@ import (
 
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/gitclone"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/httpapi"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
 )
 
 type countingNodeRoleTransport struct {

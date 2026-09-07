@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -20,10 +22,10 @@ import (
 	"go.kenn.io/forge/internal/archive"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
 )
 
 type archiveMergeMetricsClock struct{ now time.Time }
@@ -173,7 +175,7 @@ func TestArchiveHydrationRejectsInterveningMergeRequestSnapshotE2E(t *testing.T)
 	)
 	require.NoError(err)
 	requireEnsureConfigured(t, archiveService, []platform.RepoRef{ref})
-	repo, err := database.GetRepoByIdentity(ctx, platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(ctx, platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	wrapped.repoID = repo.ID
@@ -367,7 +369,7 @@ func testArchiveReactivationReclassifiesWorkspaceHeadRepo(
 	require.NoError(err)
 	require.NotNil(started.JSON200)
 
-	repo, err := database.GetRepoByIdentity(ctx, platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(ctx, platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	_, err = database.UpsertMergeRequest(ctx, &db.MergeRequest{
@@ -532,7 +534,7 @@ func testArchiveReportRepairsMergedMetricsAcrossRepositoryRename(
 	require.NoError(err)
 	require.NotNil(started.JSON200)
 
-	repo, err := database.GetRepoByIdentity(ctx, platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(ctx, platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	var storedMergedAt *time.Time

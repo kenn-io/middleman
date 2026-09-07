@@ -13,6 +13,7 @@ import (
 
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 // SeedResult holds references to seeded data for use in E2E tests.
@@ -1177,7 +1178,7 @@ func SeedFixtures(ctx context.Context, d *db.DB) (*SeedResult, error) {
 			sameTimestampReview,
 		},
 	}
-	reviewThreads := map[string][]ghclient.PullRequestReviewThread{
+	reviewThreads := map[string][]platformgithub.PullRequestReviewThread{
 		issueKey("acme", "widgets", 1): {
 			{
 				NodeID:     "PRRT_cache_guard",
@@ -1185,7 +1186,7 @@ func SeedFixtures(ctx context.Context, d *db.DB) (*SeedResult, error) {
 				Path:       "src/cache/store.ts",
 				Side:       "RIGHT",
 				Line:       42,
-				Comments: []ghclient.PullRequestReviewThreadComment{
+				Comments: []platformgithub.PullRequestReviewThreadComment{
 					{
 						NodeID:           "PRRC_cache_guard",
 						DatabaseID:       6011,
@@ -1224,7 +1225,7 @@ func SeedFixtures(ctx context.Context, d *db.DB) (*SeedResult, error) {
 				Path:       "src/cache/store.ts",
 				Side:       "RIGHT",
 				Line:       43,
-				Comments: []ghclient.PullRequestReviewThreadComment{
+				Comments: []platformgithub.PullRequestReviewThreadComment{
 					{
 						NodeID:           "PRRC_reply_regroup_root",
 						DatabaseID:       6013,

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"go.kenn.io/forge/platform"
+
 	gh "github.com/google/go-github/v89/github"
 	"go.kenn.io/forge/internal/tokenauth"
 )
@@ -252,10 +254,10 @@ func identityHTTPClientForHost(
 	host string, source tokenauth.Source,
 ) *http.Client {
 	origin := restAPIOriginForHost(host)
-	return &http.Client{Transport: wrapPublicGitHubAPIGuard(tokenauth.AuthTransport{
+	return &http.Client{Transport: wrapPublicGitHubAPIGuard(platform.AuthTransport{
 		Source:              source,
 		Base:                http.DefaultTransport,
-		SetHeader:           tokenauth.BearerAuthHeader,
+		SetHeader:           platform.BearerAuthHeader,
 		RetryOnUnauthorized: true,
 		AllowedOrigin:       origin,
 	})}

@@ -16,17 +16,19 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
 )
 
 // TestGitHubAppSplitAuthE2E pins the credential split through the
@@ -249,7 +251,7 @@ repository_selection = "all"
 		PlatformExternalID: "R_kenn_forge",
 		DefaultBranch:      "main",
 	}
-	repoID, err := database.UpsertRepo(t.Context(), platform.DBRepoIdentity(platform.RepoRef{
+	repoID, err := database.UpsertRepo(t.Context(), platformdb.DBRepoIdentity(platform.RepoRef{
 		Platform:           platform.KindGitHub,
 		Host:               "github.com",
 		Owner:              "kenn-io",
@@ -819,7 +821,7 @@ repository_selection = "all"
 		PlatformExternalID: "R_kenn_forge",
 		DefaultBranch:      "main",
 	}
-	repoID, err := database.UpsertRepo(t.Context(), platform.DBRepoIdentity(platform.RepoRef{
+	repoID, err := database.UpsertRepo(t.Context(), platformdb.DBRepoIdentity(platform.RepoRef{
 		Platform:           platform.KindGitHub,
 		Host:               "github.com",
 		Owner:              "kenn-io",

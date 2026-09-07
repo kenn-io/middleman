@@ -3,6 +3,7 @@ package githubapp
 import (
 	"context"
 	"fmt"
+	"go.kenn.io/forge/githubapp"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,7 +20,7 @@ import (
 
 // submitManifest plays the browser role: POST a manifest form to the
 // fake's web surface and return the conversion code from the redirect.
-func submitManifest(t *testing.T, fake *githubapptest.Fake, manifest Manifest) string {
+func submitManifest(t *testing.T, fake *githubapptest.Fake, manifest githubapp.Manifest) string {
 	t.Helper()
 	manifestJSON, err := manifest.JSON()
 	require.NoError(t, err)
@@ -52,7 +53,7 @@ func TestConvertManifest(t *testing.T) {
 	require.NoError(err)
 	code := submitManifest(t, fake, manifest)
 
-	client := NewClientWithBase(fake.APIBase())
+	client := githubapp.NewClientWithBase(fake.APIBase())
 	creds, err := client.ConvertManifest(context.Background(), code)
 	require.NoError(err)
 
@@ -61,13 +62,13 @@ func TestConvertManifest(t *testing.T) {
 	assert.Positive(creds.ID)
 	assert.Contains(creds.PEM, "RSA PRIVATE KEY")
 	assert.NotEmpty(creds.ClientSecret)
-	_, parseErr := ParsePrivateKey([]byte(creds.PEM))
+	_, parseErr := githubapp.ParsePrivateKey([]byte(creds.PEM))
 	require.NoError(parseErr)
 
 	// Conversion codes are single use; replay must fail loudly so the
 	// CLI reports a stale callback instead of silently re-creating.
 	_, err = client.ConvertManifest(context.Background(), code)
-	assert.True(IsStatus(err, http.StatusNotFound), "got %v", err)
+	assert.True(githubapp.IsStatus(err, http.StatusNotFound), "got %v", err)
 }
 
 func TestMintInstallationToken(t *testing.T) {
@@ -78,7 +79,7 @@ func TestMintInstallationToken(t *testing.T) {
 	manifest, err := NewManifest("kenn-forge-mint", "", "http://127.0.0.1:1/callback")
 	require.NoError(err)
 	code := submitManifest(t, fake, manifest)
-	client := NewClientWithBase(fake.APIBase())
+	client := githubapp.NewClientWithBase(fake.APIBase())
 	creds, err := client.ConvertManifest(context.Background(), code)
 	require.NoError(err)
 	installID, err := fake.Install(creds.ID, "kenn-io")
@@ -108,7 +109,7 @@ func TestMintInstallationTokenRejectsWrongKey(t *testing.T) {
 	t.Cleanup(fake.Close)
 	manifest, err := NewManifest("kenn-forge-badkey", "", "http://127.0.0.1:1/callback")
 	require.NoError(err)
-	client := NewClientWithBase(fake.APIBase())
+	client := githubapp.NewClientWithBase(fake.APIBase())
 	creds, err := client.ConvertManifest(
 		context.Background(), submitManifest(t, fake, manifest),
 	)
@@ -119,10 +120,10 @@ func TestMintInstallationTokenRejectsWrongKey(t *testing.T) {
 	// A key that does not match the app must be rejected by signature
 	// verification, not just shape checks.
 	otherKey := generateTestKey(t)
-	wrongJWT, err := SignAppJWT(creds.ID, otherKey, time.Now())
+	wrongJWT, err := githubapp.SignAppJWT(creds.ID, otherKey, time.Now())
 	require.NoError(err)
 	_, err = client.CreateInstallationToken(context.Background(), wrongJWT, installID)
-	assert.True(t, IsStatus(err, http.StatusUnauthorized), "got %v", err)
+	assert.True(t, githubapp.IsStatus(err, http.StatusUnauthorized), "got %v", err)
 }
 
 func TestAPIBaseForHost(t *testing.T) {
@@ -136,7 +137,7 @@ func TestAPIBaseForHost(t *testing.T) {
 		{host: "github.example.com", want: "https://github.example.com/api/v3"},
 	}
 	for _, tt := range tests {
-		assert.Equal(t, tt.want, APIBaseForHost(tt.host), "host %q", tt.host)
+		assert.Equal(t, tt.want, githubapp.APIBaseForHost(tt.host), "host %q", tt.host)
 	}
 }
 
@@ -169,7 +170,7 @@ func TestStatusErrorRetryDeadline(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			err := &StatusError{StatusCode: http.StatusForbidden, Header: tt.header}
+			err := &githubapp.StatusError{StatusCode: http.StatusForbidden, Header: tt.header}
 			assert.Equal(t, tt.want, err.RetryDeadline(now))
 		})
 	}

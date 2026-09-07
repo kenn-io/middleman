@@ -11,7 +11,7 @@ import (
 	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 const (

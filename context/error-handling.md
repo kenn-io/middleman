@@ -110,7 +110,7 @@ Rules for handler code:
 
 ## Platform Error Translation
 
-Translate `internal/platform` typed errors at the server boundary:
+Translate `platform` typed errors at the server boundary:
 
 | Platform code | Wire result |
 | --- | --- |

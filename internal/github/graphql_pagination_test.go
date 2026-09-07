@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 func TestFetchAllPagesSinglePage(t *testing.T) {
@@ -14,9 +15,9 @@ func TestFetchAllPagesSinglePage(t *testing.T) {
 
 	items, err := fetchAllPages(
 		t.Context(),
-		func(_ context.Context, cursor *string) ([]int, pageInfo, error) {
+		func(_ context.Context, cursor *string) ([]int, platformgithub.GraphQLPageInfo, error) {
 			assert.Nil(cursor)
-			return []int{1, 2, 3}, pageInfo{HasNextPage: false}, nil
+			return []int{1, 2, 3}, platformgithub.GraphQLPageInfo{HasNextPage: false}, nil
 		},
 	)
 	require.NoError(t, err)
@@ -29,24 +30,24 @@ func TestFetchAllPagesMultiPage(t *testing.T) {
 
 	items, err := fetchAllPages(
 		t.Context(),
-		func(_ context.Context, cursor *string) ([]string, pageInfo, error) {
+		func(_ context.Context, cursor *string) ([]string, platformgithub.GraphQLPageInfo, error) {
 			calls++
 			switch calls {
 			case 1:
 				assert.Nil(cursor)
-				return []string{"a", "b"}, pageInfo{
+				return []string{"a", "b"}, platformgithub.GraphQLPageInfo{
 					HasNextPage: true,
 					EndCursor:   "cursor1",
 				}, nil
 			case 2:
 				require.NotNil(t, cursor)
 				assert.Equal("cursor1", *cursor)
-				return []string{"c"}, pageInfo{
+				return []string{"c"}, platformgithub.GraphQLPageInfo{
 					HasNextPage: false,
 				}, nil
 			default:
 				require.Fail(t, "too many calls")
-				return nil, pageInfo{}, nil
+				return nil, platformgithub.GraphQLPageInfo{}, nil
 			}
 		},
 	)
@@ -61,8 +62,8 @@ func TestFetchAllPagesError(t *testing.T) {
 	// Test error on first page
 	_, err := fetchAllPages(
 		t.Context(),
-		func(_ context.Context, cursor *string) ([]int, pageInfo, error) {
-			return nil, pageInfo{}, fmt.Errorf("graphql: rate limited")
+		func(_ context.Context, cursor *string) ([]int, platformgithub.GraphQLPageInfo, error) {
+			return nil, platformgithub.GraphQLPageInfo{}, fmt.Errorf("graphql: rate limited")
 		},
 	)
 	require.Error(t, err)
@@ -75,8 +76,8 @@ func TestFetchAllPagesContextCanceled(t *testing.T) {
 
 	_, err := fetchAllPages(
 		ctx,
-		func(ctx context.Context, cursor *string) ([]int, pageInfo, error) {
-			return nil, pageInfo{}, ctx.Err()
+		func(ctx context.Context, cursor *string) ([]int, platformgithub.GraphQLPageInfo, error) {
+			return nil, platformgithub.GraphQLPageInfo{}, ctx.Err()
 		},
 	)
 	require.Error(t, err)
@@ -87,8 +88,8 @@ func TestFetchAllPagesEmptyCursor(t *testing.T) {
 
 	items, err := fetchAllPages(
 		t.Context(),
-		func(_ context.Context, cursor *string) ([]int, pageInfo, error) {
-			return []int{1}, pageInfo{
+		func(_ context.Context, cursor *string) ([]int, platformgithub.GraphQLPageInfo, error) {
+			return []int{1}, platformgithub.GraphQLPageInfo{
 				HasNextPage: true,
 				EndCursor:   "",
 			}, nil
@@ -105,9 +106,9 @@ func TestFetchAllPagesRepeatedCursor(t *testing.T) {
 
 	items, err := fetchAllPages(
 		t.Context(),
-		func(_ context.Context, cursor *string) ([]int, pageInfo, error) {
+		func(_ context.Context, cursor *string) ([]int, platformgithub.GraphQLPageInfo, error) {
 			calls++
-			return []int{calls}, pageInfo{
+			return []int{calls}, platformgithub.GraphQLPageInfo{
 				HasNextPage: true,
 				EndCursor:   "stuck",
 			}, nil
@@ -124,15 +125,15 @@ func TestFetchAllPagesPartialResultsOnError(t *testing.T) {
 
 	items, err := fetchAllPages(
 		t.Context(),
-		func(_ context.Context, cursor *string) ([]int, pageInfo, error) {
+		func(_ context.Context, cursor *string) ([]int, platformgithub.GraphQLPageInfo, error) {
 			calls++
 			if calls == 1 {
-				return []int{1, 2}, pageInfo{
+				return []int{1, 2}, platformgithub.GraphQLPageInfo{
 					HasNextPage: true,
 					EndCursor:   "c1",
 				}, nil
 			}
-			return nil, pageInfo{}, fmt.Errorf("page 2 failed")
+			return nil, platformgithub.GraphQLPageInfo{}, fmt.Errorf("page 2 failed")
 		},
 	)
 	require.Error(t, err)

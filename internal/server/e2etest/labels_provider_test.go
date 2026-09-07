@@ -17,14 +17,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	"go.kenn.io/forge/internal/platform/forgejo"
-	"go.kenn.io/forge/internal/platform/gitea"
-	gitlabprovider "go.kenn.io/forge/internal/platform/gitlab"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
+	"go.kenn.io/forge/platform/forgejo"
+	"go.kenn.io/forge/platform/gitea"
+	gitlabprovider "go.kenn.io/forge/platform/gitlab"
 )
 
 type staticTokenSource string
@@ -286,8 +286,7 @@ func setupGitLabLabelStack(t *testing.T) (*server.Server, *db.DB, int64, *fakeGi
 	client, err := gitlabprovider.NewClient(
 		platform.DefaultGitLabHost,
 		staticTokenSource("token"),
-		gitlabprovider.WithBaseURLForTesting(upstream.URL+"/api/v4"),
-	)
+		gitlabprovider.WithBaseURLForTesting(upstream.URL+"/api/v4"), gitlabprovider.WithTransport(http.DefaultTransport))
 	require.NoError(t, err)
 
 	repoID := seedProviderRepo(t, database, platform.KindGitLab, platform.DefaultGitLabHost)
@@ -616,8 +615,7 @@ func gitealikeLabelVariants() []gitealikeLabelVariant {
 				client, err := forgejo.NewClient(
 					platform.DefaultForgejoHost,
 					staticTokenSource("token"),
-					forgejo.WithBaseURLForTesting(upstreamURL),
-				)
+					forgejo.WithBaseURLForTesting(upstreamURL), forgejo.WithTransport(http.DefaultTransport))
 				require.NoError(t, err)
 				return client
 			},
@@ -633,8 +631,7 @@ func gitealikeLabelVariants() []gitealikeLabelVariant {
 					platform.DefaultGiteaHost,
 					staticTokenSource("token"),
 					gitea.WithBaseURL(upstreamURL, true),
-					gitea.WithServerVersionForTesting("1.26.0"),
-				)
+					gitea.WithServerVersion("1.26.0"), gitea.WithTransport(http.DefaultTransport))
 				require.NoError(t, err)
 				return client
 			},

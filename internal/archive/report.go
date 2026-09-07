@@ -11,7 +11,7 @@ import (
 
 	"go.kenn.io/forge/internal/archive/report"
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 var ErrEmptyReportScope = errors.New("archive report repository scope is empty")

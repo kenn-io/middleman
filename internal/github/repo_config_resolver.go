@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"go.kenn.io/forge/internal/config"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 func canonicalRepoName(name string) string {

@@ -17,6 +17,7 @@ import (
 	"github.com/shurcooL/githubv4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 func TestAdaptPR(t *testing.T) {
@@ -25,7 +26,7 @@ func TestAdaptPR(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	merged := now.Add(-time.Hour)
 
-	gql := gqlPR{
+	gql := platformgithub.GraphQLPR{
 		DatabaseId:     12345,
 		Number:         42,
 		Title:          "Fix bug",
@@ -50,7 +51,7 @@ func TestAdaptPR(t *testing.T) {
 	gql.MergedBy = &struct{ Login string }{Login: "merge-admin"}
 	gql.HeadRepository = &struct{ URL string }{URL: "https://github.com/o/r"}
 
-	pr := adaptPR(&gql)
+	pr := platformgithub.AdaptPR(&gql)
 
 	assert.Equal(int64(12345), pr.GetID())
 	assert.Equal(42, pr.GetNumber())
@@ -77,30 +78,30 @@ func TestAdaptPR(t *testing.T) {
 func TestConvertGQLCommentsPreservesMinimizedVisibility(t *testing.T) {
 	reason := githubv4.ReportedContentClassifiersOffTopic
 	fullDatabaseID := int64(3714845345)
-	comment := gqlComment{
+	comment := platformgithub.GraphQLComment{
 		DatabaseId:      73,
-		FullDatabaseId:  graphQLInt64(fullDatabaseID),
+		FullDatabaseId:  platformgithub.GraphQLInt64(fullDatabaseID),
 		IsMinimized:     true,
 		MinimizedReason: &reason,
 	}
 
 	tests := []struct {
 		name    string
-		convert func() map[int64]CommentVisibility
+		convert func() map[int64]platformgithub.CommentVisibility
 	}{
 		{
 			name: "pull request",
-			convert: func() map[int64]CommentVisibility {
-				input := gqlPR{}
-				input.Comments.Nodes = []gqlComment{comment}
+			convert: func() map[int64]platformgithub.CommentVisibility {
+				input := platformgithub.GraphQLPR{}
+				input.Comments.Nodes = []platformgithub.GraphQLComment{comment}
 				return convertGQLPR(&input).CommentVisibility
 			},
 		},
 		{
 			name: "issue",
-			convert: func() map[int64]CommentVisibility {
-				input := gqlIssue{}
-				input.Comments.Nodes = []gqlComment{comment}
+			convert: func() map[int64]platformgithub.CommentVisibility {
+				input := platformgithub.GraphQLIssue{}
+				input.Comments.Nodes = []platformgithub.GraphQLComment{comment}
 				return convertGQLIssue(&input).CommentVisibility
 			},
 		},
@@ -110,31 +111,31 @@ func TestConvertGQLCommentsPreservesMinimizedVisibility(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			visibility := tt.convert()
 			require.Contains(t, visibility, fullDatabaseID)
-			assert.Equal(t, CommentVisibility{Hidden: true, Reason: "OFF_TOPIC"}, visibility[fullDatabaseID])
+			assert.Equal(t, platformgithub.CommentVisibility{Hidden: true, Reason: "OFF_TOPIC"}, visibility[fullDatabaseID])
 		})
 	}
 }
 
 func TestConvertGQLCommentsRecordsObservedVisibleComments(t *testing.T) {
-	comment := gqlComment{DatabaseId: 74}
+	comment := platformgithub.GraphQLComment{DatabaseId: 74}
 
 	tests := []struct {
 		name    string
-		convert func() map[int64]CommentVisibility
+		convert func() map[int64]platformgithub.CommentVisibility
 	}{
 		{
 			name: "pull request",
-			convert: func() map[int64]CommentVisibility {
-				input := gqlPR{}
-				input.Comments.Nodes = []gqlComment{comment}
+			convert: func() map[int64]platformgithub.CommentVisibility {
+				input := platformgithub.GraphQLPR{}
+				input.Comments.Nodes = []platformgithub.GraphQLComment{comment}
 				return convertGQLPR(&input).CommentVisibility
 			},
 		},
 		{
 			name: "issue",
-			convert: func() map[int64]CommentVisibility {
-				input := gqlIssue{}
-				input.Comments.Nodes = []gqlComment{comment}
+			convert: func() map[int64]platformgithub.CommentVisibility {
+				input := platformgithub.GraphQLIssue{}
+				input.Comments.Nodes = []platformgithub.GraphQLComment{comment}
 				return convertGQLIssue(&input).CommentVisibility
 			},
 		},
@@ -144,7 +145,7 @@ func TestConvertGQLCommentsRecordsObservedVisibleComments(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			visibility := tt.convert()
 			require.Contains(t, visibility, int64(74))
-			assert.Equal(t, CommentVisibility{}, visibility[74])
+			assert.Equal(t, platformgithub.CommentVisibility{}, visibility[74])
 		})
 	}
 }
@@ -154,8 +155,8 @@ func TestConvertGQLPRIncludesReviewThreads(t *testing.T) {
 	require := require.New(t)
 	reason := githubv4.ReportedContentClassifiersAbuse
 	line := 12
-	input := gqlPR{}
-	threadInput := gqlReviewThread{
+	input := platformgithub.GraphQLPR{}
+	threadInput := platformgithub.GraphQLReviewThread{
 		ID:         githubv4.ID("PRRT_1"),
 		Path:       "src/main.go",
 		Line:       line,
@@ -163,7 +164,7 @@ func TestConvertGQLPRIncludesReviewThreads(t *testing.T) {
 		IsResolved: false,
 		IsOutdated: false,
 	}
-	threadInput.Comments.Nodes = []gqlReviewThreadComment{{
+	threadInput.Comments.Nodes = []platformgithub.GraphQLReviewThreadComment{{
 		ID:              githubv4.ID("PRRC_1"),
 		DatabaseId:      101,
 		FullDatabaseId:  3714845345,
@@ -174,7 +175,7 @@ func TestConvertGQLPRIncludesReviewThreads(t *testing.T) {
 		IsMinimized:     true,
 		MinimizedReason: &reason,
 	}}
-	input.ReviewThreads.Nodes = []gqlReviewThread{threadInput}
+	input.ReviewThreads.Nodes = []platformgithub.GraphQLReviewThread{threadInput}
 
 	bulk := convertGQLPR(&input)
 
@@ -191,14 +192,14 @@ func TestGraphQLFetcherPaginatesCommentVisibility(t *testing.T) {
 	tests := []struct {
 		name         string
 		responseData string
-		complete     func(*testing.T, *GraphQLFetcher) map[int64]CommentVisibility
+		complete     func(*testing.T, *GraphQLFetcher) map[int64]platformgithub.CommentVisibility
 	}{
 		{
 			name:         "pull request",
 			responseData: `{"repository":{"pullRequest":{"comments":{"nodes":[{"databaseId":202,"fullDatabaseId":"3714845345","isMinimized":true,"minimizedReason":"ABUSE"}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`,
-			complete: func(t *testing.T, fetcher *GraphQLFetcher) map[int64]CommentVisibility {
-				pr := gqlPR{Number: 7}
-				pr.Comments.PageInfo = pageInfo{HasNextPage: true, EndCursor: "comment-100"}
+			complete: func(t *testing.T, fetcher *GraphQLFetcher) map[int64]platformgithub.CommentVisibility {
+				pr := platformgithub.GraphQLPR{Number: 7}
+				pr.Comments.PageInfo = platformgithub.GraphQLPageInfo{HasNextPage: true, EndCursor: "comment-100"}
 				bulk := convertGQLPR(&pr)
 				require.NoError(t, fetcher.completePRComments(
 					t.Context(), "owner", "repo", &pr, &bulk,
@@ -209,9 +210,9 @@ func TestGraphQLFetcherPaginatesCommentVisibility(t *testing.T) {
 		{
 			name:         "issue",
 			responseData: `{"repository":{"issue":{"comments":{"nodes":[{"databaseId":202,"fullDatabaseId":"3714845345","isMinimized":true,"minimizedReason":"ABUSE"}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`,
-			complete: func(t *testing.T, fetcher *GraphQLFetcher) map[int64]CommentVisibility {
-				issue := gqlIssue{Number: 8}
-				issue.Comments.PageInfo = pageInfo{HasNextPage: true, EndCursor: "comment-100"}
+			complete: func(t *testing.T, fetcher *GraphQLFetcher) map[int64]platformgithub.CommentVisibility {
+				issue := platformgithub.GraphQLIssue{Number: 8}
+				issue.Comments.PageInfo = platformgithub.GraphQLPageInfo{HasNextPage: true, EndCursor: "comment-100"}
 				bulk := convertGQLIssue(&issue)
 				require.NoError(t, fetcher.completeIssueCommentVisibility(
 					t.Context(), "owner", "repo", &issue, &bulk,
@@ -225,7 +226,9 @@ func TestGraphQLFetcherPaginatesCommentVisibility(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var cursor string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				var request graphQLRequest
+				var request struct {
+					Variables map[string]any `json:"variables"`
+				}
 				if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&request)) {
 					http.Error(w, "invalid request", http.StatusBadRequest)
 					return
@@ -242,7 +245,7 @@ func TestGraphQLFetcherPaginatesCommentVisibility(t *testing.T) {
 			visibility := tt.complete(t, fetcher)
 
 			assert.Equal(t, "comment-100", cursor)
-			assert.Equal(t, CommentVisibility{Hidden: true, Reason: "ABUSE"}, visibility[3714845345])
+			assert.Equal(t, platformgithub.CommentVisibility{Hidden: true, Reason: "ABUSE"}, visibility[3714845345])
 		})
 	}
 }
@@ -251,19 +254,19 @@ func TestGraphQLFetcherFetchesCurrentCommentVisibility(t *testing.T) {
 	tests := []struct {
 		name     string
 		queryKey string
-		fetch    func(context.Context, *GraphQLFetcher) (map[int64]CommentVisibility, error)
+		fetch    func(context.Context, *GraphQLFetcher) (map[int64]platformgithub.CommentVisibility, error)
 	}{
 		{
 			name:     "pull request",
 			queryKey: "pullRequest(number:",
-			fetch: func(ctx context.Context, fetcher *GraphQLFetcher) (map[int64]CommentVisibility, error) {
+			fetch: func(ctx context.Context, fetcher *GraphQLFetcher) (map[int64]platformgithub.CommentVisibility, error) {
 				return fetcher.FetchPullRequestCommentVisibility(ctx, "owner", "repo", 7)
 			},
 		},
 		{
 			name:     "issue",
 			queryKey: "issue(number:",
-			fetch: func(ctx context.Context, fetcher *GraphQLFetcher) (map[int64]CommentVisibility, error) {
+			fetch: func(ctx context.Context, fetcher *GraphQLFetcher) (map[int64]platformgithub.CommentVisibility, error) {
 				return fetcher.FetchIssueCommentVisibility(ctx, "owner", "repo", 8)
 			},
 		},
@@ -287,7 +290,7 @@ func TestGraphQLFetcherFetchesCurrentCommentVisibility(t *testing.T) {
 			)
 			visibility, err := tt.fetch(t.Context(), fetcher)
 			require.NoError(t, err)
-			assert.Equal(t, CommentVisibility{Hidden: true, Reason: "ABUSE"}, visibility[3714845345])
+			assert.Equal(t, platformgithub.CommentVisibility{Hidden: true, Reason: "ABUSE"}, visibility[3714845345])
 		})
 	}
 }
@@ -296,7 +299,7 @@ func TestAdaptComment(t *testing.T) {
 	assert := assert.New(t)
 	now := time.Now().UTC().Truncate(time.Second)
 
-	gql := gqlComment{
+	gql := platformgithub.GraphQLComment{
 		DatabaseId:     100,
 		FullDatabaseId: 3714845345,
 		Body:           "LGTM",
@@ -318,7 +321,7 @@ func TestAdaptReview(t *testing.T) {
 	assert := assert.New(t)
 	now := time.Now().UTC().Truncate(time.Second)
 
-	gql := gqlReview{
+	gql := platformgithub.GraphQLReview{
 		DatabaseId:  200,
 		Body:        "Looks good",
 		State:       "APPROVED",
@@ -338,8 +341,8 @@ func TestAdaptCommit(t *testing.T) {
 	assert := assert.New(t)
 	now := time.Now().UTC().Truncate(time.Second)
 
-	gql := gqlCommitNode{
-		Commit: gqlCommit{
+	gql := platformgithub.GraphQLCommitNode{
+		Commit: platformgithub.GraphQLCommit{
 			OID:     "sha123",
 			Message: "fix: something",
 		},
@@ -372,10 +375,10 @@ func TestAdaptCheckContext(t *testing.T) {
 	assert := assert.New(t)
 
 	now := time.Date(2026, 4, 9, 12, 0, 0, 0, time.UTC)
-	contexts := []gqlCheckContext{
+	contexts := []platformgithub.GraphQLCheckContext{
 		{
 			Typename: "CheckRun",
-			CheckRun: gqlCheckRunFields{
+			CheckRun: platformgithub.GraphQLCheckRunFields{
 				Name:       "ci/test",
 				Status:     "COMPLETED",
 				Conclusion: "SUCCESS",
@@ -384,7 +387,7 @@ func TestAdaptCheckContext(t *testing.T) {
 		},
 		{
 			Typename: "StatusContext",
-			StatusContext: gqlStatusContextFields{
+			StatusContext: platformgithub.GraphQLStatusContextFields{
 				Context:   "ci/lint",
 				State:     "SUCCESS",
 				TargetURL: "https://example.com/2",
@@ -412,7 +415,7 @@ func TestAdaptCheckContext(t *testing.T) {
 func TestAdaptCheckRunURLSanitization(t *testing.T) {
 	assert := assert.New(t)
 
-	safe := adaptCheckRun(&gqlCheckRunFields{
+	safe := adaptCheckRun(&platformgithub.GraphQLCheckRunFields{
 		Name:       "ci",
 		Status:     "COMPLETED",
 		Conclusion: "SUCCESS",
@@ -420,7 +423,7 @@ func TestAdaptCheckRunURLSanitization(t *testing.T) {
 	})
 	assert.Equal("https://ci.example.com/run/1", safe.GetHTMLURL())
 
-	unsafe := adaptCheckRun(&gqlCheckRunFields{
+	unsafe := adaptCheckRun(&platformgithub.GraphQLCheckRunFields{
 		Name:       "ci",
 		Status:     "COMPLETED",
 		Conclusion: "SUCCESS",
@@ -481,7 +484,7 @@ func TestGraphQLFetcherRateTrackerNilReceiver(t *testing.T) {
 func TestConvertGQLPRCompleteness(t *testing.T) {
 	assert := assert.New(t)
 
-	gql := gqlPR{
+	gql := platformgithub.GraphQLPR{
 		Number:    1,
 		Title:     "test",
 		State:     "OPEN",
@@ -509,9 +512,9 @@ func TestConvertGQLPRCompleteness(t *testing.T) {
 }
 
 func TestConvertGQLPRNativeStackHint(t *testing.T) {
-	gql := gqlPRWithNativeStacks{
+	gql := platformgithub.GraphQLPRWithNativeStacks{
 		Number: 42,
-		Stack: &gqlNativeStack{
+		Stack: &platformgithub.GraphQLNativeStack{
 			Number: 7, Size: 3, BaseRefName: "main",
 		},
 		StackEntry: &struct{ Position int }{Position: 2},
@@ -519,7 +522,7 @@ func TestConvertGQLPRNativeStackHint(t *testing.T) {
 
 	bulk := convertGQLPRWithNativeStacks(&gql)
 	require.NotNil(t, bulk.NativeStack)
-	assert.Equal(t, NativeStackHint{
+	assert.Equal(t, platformgithub.NativeStackHint{
 		Number: 7, Size: 3, Position: 2, BaseRef: "main",
 	}, *bulk.NativeStack)
 }
@@ -1003,7 +1006,7 @@ func TestNormalizeBulkCI(t *testing.T) {
 func TestAdaptPRNilFields(t *testing.T) {
 	assert := assert.New(t)
 
-	gql := gqlPR{
+	gql := platformgithub.GraphQLPR{
 		Number:    1,
 		Title:     "test",
 		State:     "OPEN",
@@ -1011,7 +1014,7 @@ func TestAdaptPRNilFields(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 	// HeadRepository is nil
-	pr := adaptPR(&gql)
+	pr := platformgithub.AdaptPR(&gql)
 	assert.Nil(pr.GetHead().GetRepo())
 	assert.Nil(pr.MergedAt)
 	assert.False(pr.GetMerged())
@@ -1023,7 +1026,7 @@ func TestAdaptIssue(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	closed := now.Add(-time.Hour)
 
-	gql := gqlIssue{
+	gql := platformgithub.GraphQLIssue{
 		DatabaseId: 99999,
 		Number:     10,
 		Title:      "Bug report",
@@ -1034,10 +1037,10 @@ func TestAdaptIssue(t *testing.T) {
 		UpdatedAt:  now,
 	}
 	gql.Author.Login = "alice"
-	gql.Labels.Nodes = []gqlLabel{
+	gql.Labels.Nodes = []platformgithub.GraphQLLabel{
 		{Name: "bug", Color: "d73a4a", Description: "Something broken", IsDefault: false},
 	}
-	gql.Comments.Nodes = []gqlComment{
+	gql.Comments.Nodes = []platformgithub.GraphQLComment{
 		{DatabaseId: 501, Body: "I see this too", CreatedAt: now, UpdatedAt: now},
 	}
 	gql.Comments.Nodes[0].Author.Login = "bob"
@@ -1075,7 +1078,7 @@ func TestAdaptIssue(t *testing.T) {
 func TestAdaptIssueNilFields(t *testing.T) {
 	assert := assert.New(t)
 
-	gql := gqlIssue{
+	gql := platformgithub.GraphQLIssue{
 		Number:    1,
 		Title:     "minimal",
 		State:     "OPEN",
@@ -1096,14 +1099,14 @@ func TestAdaptIssueNilFields(t *testing.T) {
 func TestAdaptIssueAssignees(t *testing.T) {
 	assert := assert.New(t)
 
-	gql := gqlIssue{
+	gql := platformgithub.GraphQLIssue{
 		Number:    2,
 		Title:     "Assigned issue",
 		State:     "OPEN",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	gql.Assignees.Nodes = []gqlAssigneeID{
+	gql.Assignees.Nodes = []platformgithub.GraphQLAssigneeID{
 		{Login: "alice"},
 		{Login: "bob"},
 	}
@@ -1118,7 +1121,7 @@ func TestConvertGQLIssue(t *testing.T) {
 	assert := assert.New(t)
 
 	now := time.Now()
-	gql := gqlIssue{
+	gql := platformgithub.GraphQLIssue{
 		DatabaseId: 1,
 		Number:     5,
 		Title:      "test",
@@ -1137,7 +1140,7 @@ func TestConvertGQLIssue(t *testing.T) {
 	assert.Empty(bulk.Comments)
 
 	// Add comments with next page
-	gql.Comments.Nodes = []gqlComment{
+	gql.Comments.Nodes = []platformgithub.GraphQLComment{
 		{DatabaseId: 100, Body: "hello", CreatedAt: now, UpdatedAt: now},
 	}
 	gql.Comments.Nodes[0].Author.Login = "commenter"
@@ -1149,12 +1152,12 @@ func TestConvertGQLIssue(t *testing.T) {
 	assert.Equal("hello", bulk.Comments[0].GetBody())
 
 	gql.Comments.PageInfo.HasNextPage = false
-	gql.TimelineItems.Nodes = []gqlIssueTimelineItem{{
+	gql.TimelineItems.Nodes = []platformgithub.GraphQLIssueTimelineItem{{
 		Typename: "AssignedEvent",
-		Node:     gqlNodeFragment{ID: "AE_1"},
-		AssignedEvent: gqlAssignedEvent{
-			Actor:     &gqlActorRef{Login: "wesm"},
-			Assignee:  gqlAssignee{Typename: "User", User: gqlAssigneeID{Login: "wesm"}},
+		Node:     platformgithub.GraphQLNodeFragment{ID: "AE_1"},
+		AssignedEvent: platformgithub.GraphQLAssignedEvent{
+			Actor:     &platformgithub.GraphQLActorRef{Login: "wesm"},
+			Assignee:  platformgithub.GraphQLAssignee{Typename: "User", User: platformgithub.GraphQLAssigneeID{Login: "wesm"}},
 			CreatedAt: now,
 		},
 	}}
@@ -1169,16 +1172,16 @@ func TestConvertGQLIssue(t *testing.T) {
 
 func TestStateConversion(t *testing.T) {
 	assert := assert.New(t)
-	assert.Equal("open", stateToREST("OPEN"))
-	assert.Equal("closed", stateToREST("CLOSED"))
-	assert.Equal("closed", stateToREST("MERGED"))
+	assert.Equal("open", platformgithub.StateToREST("OPEN"))
+	assert.Equal("closed", platformgithub.StateToREST("CLOSED"))
+	assert.Equal("closed", platformgithub.StateToREST("MERGED"))
 }
 
 func TestMergeableConversion(t *testing.T) {
 	assert := assert.New(t)
-	assert.Equal("clean", mergeableToREST("MERGEABLE"))
-	assert.Equal("dirty", mergeableToREST("CONFLICTING"))
-	assert.Equal("unknown", mergeableToREST("UNKNOWN"))
+	assert.Equal("clean", platformgithub.MergeableToREST("MERGEABLE"))
+	assert.Equal("dirty", platformgithub.MergeableToREST("CONFLICTING"))
+	assert.Equal("unknown", platformgithub.MergeableToREST("UNKNOWN"))
 }
 
 func TestNormalizeBulkCIPendingStatus(t *testing.T) {

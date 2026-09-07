@@ -35,7 +35,6 @@ import (
 	"go.kenn.io/forge/internal/federationauth"
 	"go.kenn.io/forge/internal/gitclone"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/procutil"
 	"go.kenn.io/forge/internal/profiler"
 	"go.kenn.io/forge/internal/ptyowner"
@@ -48,6 +47,8 @@ import (
 	"go.kenn.io/forge/internal/tokenauth"
 	"go.kenn.io/forge/internal/web"
 	"go.kenn.io/forge/internal/workspace"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 	gitcmd "go.kenn.io/kit/git/cmd"
 	oteltelemetry "go.kenn.io/kit/telemetry"
 )
@@ -534,12 +535,12 @@ func seedReviewSuggestionProviderFixture(
 	now := time.Date(2026, 7, 1, 16, 30, 0, 0, time.UTC)
 	body := "Consider returning the published value.\n\n```suggestion\nreturn publish();\n```"
 	key := fmt.Sprintf("%s/%s#%d", owner, name, number)
-	fc.ReviewThreads[key] = append(fc.ReviewThreads[key], ghclient.PullRequestReviewThread{
+	fc.ReviewThreads[key] = append(fc.ReviewThreads[key], platformgithub.PullRequestReviewThread{
 		NodeID: providerThreadID,
 		Path:   "internal/cache.go",
 		Side:   "RIGHT",
 		Line:   1,
-		Comments: []ghclient.PullRequestReviewThreadComment{{
+		Comments: []platformgithub.PullRequestReviewThreadComment{{
 			NodeID:           providerThreadID,
 			DatabaseID:       6901,
 			ReviewDatabaseID: 5012,

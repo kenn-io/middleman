@@ -205,8 +205,8 @@ const (
 )
 
 // ArchiveLookupOutcome mirrors platform.ArchiveLookupOutcome values.
-// internal/db cannot import internal/platform (platform imports db), so the
-// outcome is re-declared here with identical string values.
+// The database package keeps its storage enum independent from the public
+// provider domain; internal/platformdb converts between them.
 type ArchiveLookupOutcome string
 
 const (

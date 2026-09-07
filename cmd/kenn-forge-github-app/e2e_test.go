@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	appfiles "go.kenn.io/forge/internal/githubapp"
 	"io"
 	"net/http"
 	"net/url"
@@ -23,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.kenn.io/forge/internal/config"
-	"go.kenn.io/forge/internal/githubapp"
 	"go.kenn.io/forge/internal/githubapp/githubapptest"
 	"go.kenn.io/forge/internal/tokenauth"
 )
@@ -248,8 +248,8 @@ func TestCreateFlowEndToEnd(t *testing.T) {
 		DefaultPermissions map[string]string `json:"default_permissions"`
 	}
 	require.NoError(json.Unmarshal([]byte(manifests[0]), &sent))
-	assert.Equal(githubapp.DefaultHomepageURL, sent.URL)
-	assert.Equal(githubapp.DefaultHomepageURL, sent.HookAttributes.URL)
+	assert.Equal(appfiles.DefaultHomepageURL, sent.URL)
+	assert.Equal(appfiles.DefaultHomepageURL, sent.HookAttributes.URL)
 	assert.False(sent.Public)
 	// The app stays read-only; mutations use the user's PAT chain.
 	for scope, level := range sent.DefaultPermissions {

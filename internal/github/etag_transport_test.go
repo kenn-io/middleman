@@ -10,6 +10,7 @@ import (
 	gh "github.com/google/go-github/v89/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 // roundTripFunc adapts a function to http.RoundTripper.
@@ -634,14 +635,14 @@ func TestIsNotModified(t *testing.T) {
 
 	resp304 := &http.Response{StatusCode: 304}
 	err304 := &gh.ErrorResponse{Response: resp304}
-	assert.True(IsNotModified(err304))
+	assert.True(platformgithub.IsNotModified(err304))
 
 	resp403 := &http.Response{StatusCode: 403}
 	err403 := &gh.ErrorResponse{Response: resp403}
-	assert.False(IsNotModified(err403))
+	assert.False(platformgithub.IsNotModified(err403))
 
-	assert.False(IsNotModified(errors.New("random error")))
+	assert.False(platformgithub.IsNotModified(errors.New("random error")))
 
 	errNilResp := &gh.ErrorResponse{Response: nil}
-	assert.False(IsNotModified(errNilResp), "nil Response should not panic")
+	assert.False(platformgithub.IsNotModified(errNilResp), "nil Response should not panic")
 }

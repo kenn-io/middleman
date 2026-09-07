@@ -63,7 +63,7 @@ what "current" means.
 - PR conversation comments and review threads share one bulk GraphQL freshness
   boundary. Fetch their first pages together, paginate comment content and moderation
   through GraphQL, and keep detail stale while either family is incomplete.
-  (`internal/github/graphql.go::gqlPR`, `internal/github/sync.go::syncOpenMRFromBulk`)
+  (`platform/github/graphql_models.go::GraphQLPR`, `internal/github/sync.go::syncOpenMRFromBulk`)
 - A parent `304 Not Modified` is not a moderation freshness signal. When GraphQL
   admission permits, re-observe conversation and review-thread visibility under
   the parent revision guard (`internal/github/sync.go::markUnchangedMRDetailFetched`).
@@ -196,7 +196,7 @@ Some PR-derived state is only valid for one head commit.
   lines, and do not re-add a trailing newline when a suggestion deletes every
   line. Mutation-time `NOT_FOUND`/could-not-resolve failures are head repo or
   branch races and map to conflict `head_repo_unknown`, not `not_found`
-  (`internal/github/client.go::ApplyReviewSuggestions`).
+  (`platform/github/client.go::Client.ApplyReviewSuggestions`).
 - Apply-suggestion consumes REST content reads plus the GraphQL
   `createCommitOnBranch` mutation; the provider reports both buckets via
   `OperationRateLimitBuckets(platform.OperationApplyReviewSuggestion)` so a
@@ -224,10 +224,10 @@ fallback repository listing.
 
 - GitHub.com merges are versioned asynchronous direct operations polled to terminal
   `merged`; `pending`/`enqueued` never count as merged. GHES stays synchronous with no
-  probe fallback. (`internal/github/merge_async.go::liveClient.MergePullRequest`)
+  probe fallback. (`platform/github/merge_async.go::Client.MergePullRequest`)
 - Preserve required-rebase failures verbatim; do not substitute private website routes
   or local force-pushes until GitHub exposes a token-authenticated stack-rebase API.
-  (`internal/github/merge_async.go::mergeAsyncTerminalResult`)
+  (`platform/github/merge_async.go::mergeAsyncTerminalResult`)
 - Confirmed native stacks claim and order their PRs first; branch inference always
   runs afterward on every unclaimed PR, including when the preview is disabled,
   incomplete, or failing. (`internal/stacks/detect.go::RunDetectionWithNativeStacks`)
@@ -259,7 +259,7 @@ fallback repository listing.
   that hint and not the list, and hint-listing errors get the same
   feature-disabled classification as the plain list so a repository with pull
   requests off still enters the cooldown.
-  (`internal/github/native_stacks.go::decodeNativeStackHint`,
+  (`platform/github/native_stacks.go::decodeNativeStackHint`,
   `internal/github/sync.go::ListOpenMergeRequestsWithNativeStackHints`)
 - Preview-only GraphQL fields must be absent from disabled query shapes;
   `@include(false)` does not bypass schema validation on servers without those
@@ -375,7 +375,7 @@ fallback repository listing.
   GitLab's server-side `archived=false` filter, which runs before any
   listing limit so archived projects cannot crowd live ones out of a
   bounded preview. (`internal/github/repo_config_resolver.go::resolveConfiguredRepo`,
-  `internal/platform/gitlab/client.go::ListRepositories`,
+  `platform/gitlab/client.go::ListRepositories`,
   `internal/github/sync.go::repoRefFromCatalog`)
 - Archived state transitions are observed during normal sync passes, not
   only at resolution sites: each pass reconciles archived tracked refs with
@@ -453,28 +453,28 @@ fallback repository listing.
   that only delays eligible archive work until the next backoff pass (five minutes at most)
   is accepted behavior, not a defect. Do not add wake bookkeeping or atomicity for it.
   (`internal/github/sync.go::runArchiveLoop`)
-- Initial issue and pull-request inventory includes all states in stable created-time ascending order; issue enumeration excludes PR-shaped rows. (`internal/github/pages.go::ListIssuesPage`, `internal/github/pages.go::ListMergeRequestsPage`)
+- Initial issue and pull-request inventory includes all states in stable created-time ascending order; issue enumeration excludes PR-shaped rows. (`platform/github/provider_pages.go::ListIssuesPage`, `platform/github/provider_pages.go::ListMergeRequestsPage`)
 - GitHub issue-only repositories return pulls API 404; normal and archive paths
   classify it as feature-disabled only for explicit `has_pull_requests=false`;
   ambiguous probes preserve the failure. (`internal/github/sync.go::mergeRequestsDisabledByRepository`)
 - GitHub pull inventory admission reserves the possible metadata probe and its
   authentication retry. (`internal/archive/scheduler.go::archiveFeatureReadAttemptCost`)
-- Every issue-only GitHub lookup rejects a PR-shaped Issues API response before normalization; `SyncItemByNumber` is the kind-dispatching exception. (`internal/github/pages.go::gitHubClientProvider.issuePullRequestOutcomeError`, `internal/github/sync.go::SyncItemByNumber`)
-- Updated issue scans query one second before the durable watermark while keeping cursor identity bound to the original boundary. Updated pull-request scans run newest-first across the same overlap. (`internal/github/pages.go::ListIssuesPage`, `internal/github/pages.go::ListMergeRequestsPage`)
-- Durable pull-request inventory bypasses the process-local list ETag cache. Archive cursors require response bodies, so a bodyless `304 Not Modified` must not turn an unchanged maintenance scan into a retryable failure. (`internal/github/pages.go::liveClient.ListInventoryPullRequestsPage`)
-- Repository probes classify only authentication/access/not-found responses; transient probe failures remain retryable and non-destructive. Issue and pull-request lookups compare the response repository with the requested source identity so transfers become moved outcomes instead of source-owned snapshots. (`internal/github/pages.go::archiveRepositoryProbeError`, `internal/github/pages.go::githubArchiveDestination`)
+- Every issue-only GitHub lookup rejects a PR-shaped Issues API response before normalization; `SyncItemByNumber` is the kind-dispatching exception. (`platform/github/provider_pages.go::Provider.IssuePullRequestOutcomeError`, `internal/github/sync.go::SyncItemByNumber`)
+- Updated issue scans query one second before the durable watermark while keeping cursor identity bound to the original boundary. Updated pull-request scans run newest-first across the same overlap. (`platform/github/provider_pages.go::ListIssuesPage`, `platform/github/provider_pages.go::ListMergeRequestsPage`)
+- Durable pull-request inventory bypasses the process-local list ETag cache. Archive cursors require response bodies, so a bodyless `304 Not Modified` must not turn an unchanged maintenance scan into a retryable failure. (`platform/github/pages.go::Client.ListInventoryPullRequestsPage`)
+- Repository probes classify only authentication/access/not-found responses; transient probe failures remain retryable and non-destructive. Issue and pull-request lookups compare the response repository with the requested source identity so transfers become moved outcomes instead of source-owned snapshots. (`platform/github/provider_pages.go::archiveRepositoryProbeError`, `platform/github/provider_pages.go::ArchiveDestination`)
 - After repository-wide issue disablement is classified, a 410 from GitHub's
   single-issue endpoint means deleted; map it to `removed_upstream` only at
   that lookup boundary, never across GitHub endpoints.
-  (`internal/github/pages.go::gitHubClientProvider.classifyIssueLookup`)
+  (`platform/github/provider_pages.go::Provider.classifyIssueLookup`)
 - A previously-open issue whose GitHub-classified lookup is a true removal
   (not_found, no destination) is tombstoned closed locally; otherwise it would
   fail every cycle forever. Transfers and provider-neutral bare 404s (GitLab
   hides inaccessible items behind 404) keep failing the cycle so maintainers
   see them in repo sync health
   (`internal/github/sync.go::tombstoneRemovedIssue`).
-- Archive REST and GraphQL failures must preserve typed authentication and reset-aware rate-limit errors so scheduling defers rather than hot-looping generic retries. (`internal/github/pages.go::archiveTransportError`)
-- GitHub archive code owns historical identity inventory only; hydration must invoke ordinary item sync instead of adding archive-specific lookup, normalization, or persistence. (`internal/github/pages.go::ListIssuesPage`, `internal/github/sync.go::SyncArchiveItem`)
+- Archive REST and GraphQL failures must preserve typed authentication and reset-aware rate-limit errors so scheduling defers rather than hot-looping generic retries. (`platform/github/provider_pages.go::archiveTransportError`)
+- GitHub archive code owns historical identity inventory only; hydration must invoke ordinary item sync instead of adding archive-specific lookup, normalization, or persistence. (`platform/github/provider_pages.go::ListIssuesPage`, `internal/github/sync.go::SyncArchiveItem`)
 - Archive item hydration bypasses persisted parent-detail ETags; an unchanged parent representation does not prove that legacy lifecycle timelines are complete. (`internal/github/sync.go::SyncArchiveItem`)
 - Every older-generation active merged GitHub lookup is requeued once; its new
   generation proves canonical merged detail passed the current verification.
@@ -515,7 +515,7 @@ fallback repository listing.
   `internal/github/budget.go::LocalArchiveSpendAvailable`,
   `internal/github/sync.go::Admit`,
   `internal/github/budget_transport.go::archiveAttemptProviderReserved`)
-- A GitHub issue without `updated_at` uses `created_at` as both its freshness and initial activity boundary; zero timestamps must not bypass monotonic snapshot acceptance. (`internal/platform/github/normalize.go::NormalizeIssue`)
+- A GitHub issue without `updated_at` uses `created_at` as both its freshness and initial activity boundary; zero timestamps must not bypass monotonic snapshot acceptance. (`platform/github/normalize.go::NormalizeIssue`)
 
 ## Owner Routes And Identity Accounting
 
@@ -742,13 +742,13 @@ app to an endpoint its credential cannot use, which fails even though the token
 chain "correctly" falls back to the PAT.
 - Private `user-attachments` reads are the exception to app-token-first reads:
   GitHub returns 404 to installation tokens, so the repo-scoped image proxy must
-  use the user's PAT/`gh` chain (`internal/github/markdown_images.go::GetMarkdownImage`).
+  use the user's PAT/`gh` chain (`platform/github/markdown_images.go::GetMarkdownImage`).
 - Repository-file markdown images (`blob`/`raw` web URLs, `raw.githubusercontent.com`)
   are proxied only for the route's own repository, use the normal read chain, and are
   type-sniffed because the contents raw media type hides the file type; web URLs do not
   delimit ref from path, so ref splits are tried shortest-first past 404s. They are
   marked mutable because the ref is usually a branch. The frontend must apply the
-  same URL rules (`internal/github/markdown_images.go::getRepositoryFileImage`).
+  same URL rules (`platform/github/markdown_images.go::getRepositoryFileImage`).
 Config may carry multiple `[[github_apps]]` rows for one host, but those rows
 represent distinct app credentials. Management commands must target one row by
 app owner/installation account or app id, and duplicate installation accounts on
@@ -779,7 +779,7 @@ error or cancellation unchanged and never adopts.
 Changes in this area should usually add or update tests at the boundary where
 the regression would show up.
 
-- `internal/github/*_test.go` and `internal/platform/github/*_test.go` for
+- `internal/github/*_test.go` and `platform/github/*_test.go` for
   GraphQL parsing, normalization, adapter compatibility, optional failure
   handling, and sync sequencing.
 - `internal/server/api_test.go` when the bug would surface through HTTP payloads
@@ -792,5 +792,6 @@ For notification sync specifics, see [`context/notifications-in-activity.md`](./
 Also see [`context/testing.md`](./testing.md):
 
 - Run the normal Go tests with `-shuffle=on`.
-- If you change GraphQL query shape in `internal/github/graphql.go`, run the
-  gated live GitHub validation as well.
+- If you change GraphQL query shape in `internal/github/graphql.go` or
+  `platform/github`, run the gated live GitHub validation for the owning
+  package as well.

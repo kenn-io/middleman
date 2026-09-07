@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.kenn.io/forge/platform"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -55,7 +56,7 @@ func TestGitHubAppTokenMintAndCache(t *testing.T) {
 	assert.Equal("ghs_minted", token)
 	assert.Equal(int64(1), mints.Load())
 
-	// Invalidate (e.g. a 401 retry in AuthTransport) forces a re-mint.
+	// Invalidate (e.g. a 401 retry in platform.AuthTransport) forces a re-mint.
 	src.Invalidate("ghs_minted")
 	_, err = src.Token(context.Background())
 	require.NoError(err)
@@ -313,9 +314,9 @@ func TestGitHubAppStaleUnauthorizedDoesNotEvictReplacementToken(t *testing.T) {
 	releaseFirst := make(chan struct{})
 	var authMu sync.Mutex
 	authByPath := make(map[string][]string)
-	transport := AuthTransport{
+	transport := platform.AuthTransport{
 		Source: src,
-		Base: RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		Base: platform.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
 			authMu.Lock()
 			authByPath[req.URL.Path] = append(
 				authByPath[req.URL.Path], req.Header.Get("Authorization"),
@@ -338,7 +339,7 @@ func TestGitHubAppStaleUnauthorizedDoesNotEvictReplacementToken(t *testing.T) {
 				Request:    req,
 			}, nil
 		}),
-		SetHeader:           BearerAuthHeader,
+		SetHeader:           platform.BearerAuthHeader,
 		RetryOnUnauthorized: true,
 	}
 

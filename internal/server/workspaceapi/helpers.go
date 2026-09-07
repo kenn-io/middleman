@@ -13,8 +13,8 @@ import (
 
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/fleet"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/httpapi"
+	"go.kenn.io/forge/platform"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
 

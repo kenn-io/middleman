@@ -13,7 +13,8 @@ import (
 
 	gh "github.com/google/go-github/v89/github"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 var errFixtureReadOnly = errors.New("fixture client: mutation not supported")
@@ -36,7 +37,7 @@ type FixtureClient struct {
 	Issues                    map[string][]*gh.Issue
 	Comments                  map[string][]*gh.IssueComment
 	Reviews                   map[string][]*gh.PullRequestReview
-	ReviewThreads             map[string][]ghclient.PullRequestReviewThread
+	ReviewThreads             map[string][]platformgithub.PullRequestReviewThread
 	ReposByOwner              map[string][]*gh.Repository
 	Releases                  map[string][]*gh.RepositoryRelease
 	Tags                      map[string][]*gh.RepositoryTag
@@ -67,7 +68,7 @@ func NewFixtureClient() ghclient.Client {
 		Issues:           make(map[string][]*gh.Issue),
 		Comments:         make(map[string][]*gh.IssueComment),
 		Reviews:          make(map[string][]*gh.PullRequestReview),
-		ReviewThreads:    make(map[string][]ghclient.PullRequestReviewThread),
+		ReviewThreads:    make(map[string][]platformgithub.PullRequestReviewThread),
 		ReposByOwner:     make(map[string][]*gh.Repository),
 		Releases:         make(map[string][]*gh.RepositoryRelease),
 		Tags:             make(map[string][]*gh.RepositoryTag),
@@ -592,7 +593,7 @@ func (c *FixtureClient) ListPullRequestReviewThreads(
 	owner string,
 	repo string,
 	number int,
-) ([]ghclient.PullRequestReviewThread, error) {
+) ([]platformgithub.PullRequestReviewThread, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	threads := c.ReviewThreads[issueKey(owner, repo, number)]
@@ -612,14 +613,14 @@ func (c *FixtureClient) ListCommits(
 // ListForcePushEvents returns nil (read-only stub).
 func (c *FixtureClient) ListForcePushEvents(
 	_ context.Context, _, _ string, _ int,
-) ([]ghclient.ForcePushEvent, error) {
+) ([]platformgithub.ForcePushEvent, error) {
 	return nil, nil
 }
 
 // ListPullRequestTimelineEvents returns nil (read-only stub).
 func (c *FixtureClient) ListPullRequestTimelineEvents(
 	_ context.Context, _, _ string, _ int,
-) ([]ghclient.PullRequestTimelineEvent, error) {
+) ([]platformgithub.PullRequestTimelineEvent, error) {
 	return nil, nil
 }
 
@@ -1154,7 +1155,7 @@ func (c *FixtureClient) MergePullRequest(
 // GetPullRequest (used by sync) returns the new state instead of the
 // pristine seed.
 func (c *FixtureClient) EditPullRequest(
-	_ context.Context, owner, repo string, number int, opts ghclient.EditPullRequestOpts,
+	_ context.Context, owner, repo string, number int, opts platformgithub.EditPullRequestOpts,
 ) (*gh.PullRequest, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

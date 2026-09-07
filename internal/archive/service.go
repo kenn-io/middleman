@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.kenn.io/forge/internal/platformdb"
 	"log/slog"
 	"slices"
 	"sort"
@@ -12,7 +13,7 @@ import (
 	"time"
 
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 type ConfiguredRepositorySource interface {
@@ -281,7 +282,7 @@ func (s *Service) seedArchiveRepository(ctx context.Context, ref platform.RepoRe
 	if _, err := s.registry.Provider(ref.Platform, ref.Host); err != nil {
 		return 0, err
 	}
-	identity := platform.DBRepoIdentity(ref)
+	identity := platformdb.DBRepoIdentity(ref)
 	// Captured before any provider lookup so a slow resolve cannot
 	// stamp its route data newer than intervening sync observations.
 	observedAt := time.Now().UTC()
@@ -306,7 +307,7 @@ func (s *Service) seedArchiveRepository(ctx context.Context, ref platform.RepoRe
 			if err != nil {
 				return 0, fmt.Errorf("resolve archive repository %s: %w", archiveRepoIdentityKey(ref), err)
 			}
-			identity = platform.DBRepositoryIdentity(resolved)
+			identity = platformdb.DBRepositoryIdentity(resolved)
 			if identity.PlatformRepoID == "" {
 				return 0, fmt.Errorf("resolve archive repository %s: provider returned no repository id", archiveRepoIdentityKey(ref))
 			}
@@ -575,7 +576,7 @@ func (s *Service) resolveRepository(ctx context.Context, ref platform.RepoRef, r
 	if err != nil && requireArchive {
 		return nil, err
 	}
-	repo, err := s.db.GetRepoByIdentity(ctx, platform.DBRepoIdentity(ref))
+	repo, err := s.db.GetRepoByIdentity(ctx, platformdb.DBRepoIdentity(ref))
 	if err != nil {
 		return nil, fmt.Errorf("resolve archive repository %s: %w", archiveRepoIdentityKey(ref), err)
 	}

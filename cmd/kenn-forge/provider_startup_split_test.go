@@ -10,9 +10,9 @@ import (
 
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
 )
 
 // TestBuildProviderControlPlaneScopesWriteTrackersToAppChains pins the

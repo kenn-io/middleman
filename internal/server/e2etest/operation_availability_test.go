@@ -13,10 +13,10 @@ import (
 	"go.kenn.io/forge/internal/apiclient"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
 )
 
 func TestRepoRenameSyncPreservesMergeAvailabilityE2E(t *testing.T) {

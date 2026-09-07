@@ -5,14 +5,16 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/apiclient"
 	"go.kenn.io/forge/internal/apiclient/generated"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
 )
 
 func newMidStackMergeFixture(
@@ -50,7 +52,7 @@ func newMidStackMergeFixture(
 	registry, err := platform.NewRegistry(provider)
 	require.NoError(t, err)
 	database := dbtest.Open(t)
-	repoID, err := database.UpsertRepo(ctx, platform.DBRepoIdentity(ref))
+	repoID, err := database.UpsertRepo(ctx, platformdb.DBRepoIdentity(ref))
 	require.NoError(t, err)
 	bottomID, err := database.UpsertMergeRequest(ctx, &db.MergeRequest{
 		RepoID: repoID, PlatformID: 7001, Number: 1, State: db.MergeRequestStateOpen,

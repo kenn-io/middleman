@@ -2,22 +2,17 @@ package github
 
 import (
 	"strings"
-	"time"
 
-	gh "github.com/google/go-github/v89/github"
+	"go.kenn.io/forge/platform"
+
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/ratelimit"
 )
 
 const RateReserveBuffer = ratelimit.RateReserveBuffer
 
-type Rate = ratelimit.Rate
+type Rate = platform.Rate
 type RateTracker = ratelimit.RateTracker
-
-type RateLimitSnapshot struct {
-	Core    *Rate
-	GraphQL *Rate
-}
 
 func NewRateTracker(
 	database *db.DB, platformHost, ratePrincipal, apiType string,
@@ -48,20 +43,4 @@ func RateStatusKey(platformName, platformHost, ratePrincipal string) string {
 		return RateBucketKey(platformName, platformHost, "host")
 	}
 	return strings.Join([]string{platformName, platformHost, ratePrincipal}, ":")
-}
-
-func rateFromGitHub(rate gh.Rate) Rate {
-	return Rate{
-		Limit:     rate.Limit,
-		Remaining: rate.Remaining,
-		Reset:     rate.Reset.Time,
-	}
-}
-
-func rateFromGitHubHeaders(limit int, remaining int, reset time.Time) Rate {
-	return Rate{
-		Limit:     limit,
-		Remaining: remaining,
-		Reset:     reset,
-	}
 }

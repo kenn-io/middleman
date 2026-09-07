@@ -5,6 +5,7 @@ import (
 
 	gh "github.com/google/go-github/v89/github"
 	"github.com/stretchr/testify/assert"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 func TestFilterWorkflowRunsAwaitingApproval(t *testing.T) {
@@ -149,7 +150,7 @@ func TestParseHeadRepoFullName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, ParseHeadRepoFullName(tt.in))
+			assert.Equal(t, tt.want, platformgithub.ParseHeadRepoFullName(tt.in))
 		})
 	}
 }

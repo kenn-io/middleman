@@ -18,11 +18,11 @@ import (
 	archivereport "go.kenn.io/forge/internal/archive/report"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	platformforgejo "go.kenn.io/forge/internal/platform/forgejo"
-	platformgitea "go.kenn.io/forge/internal/platform/gitea"
 	"go.kenn.io/forge/internal/procutil"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
+	platformforgejo "go.kenn.io/forge/platform/forgejo"
+	platformgitea "go.kenn.io/forge/platform/gitea"
 )
 
 type giteaLikeContainerClient interface {
@@ -106,7 +106,7 @@ func TestForgejoContainerSync(t *testing.T) {
 		platformforgejo.WithBaseURLForTesting(manifest.BaseURL),
 		platformforgejo.WithForegroundTimeoutForTesting(time.Minute),
 		platformforgejo.WithRateTracker(tracker),
-		platformforgejo.WithSyncBudget(budget),
+		platformforgejo.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)),
 	)
 	require.NoError(t, err)
 	assertGiteaLikeContainerSync(
@@ -146,8 +146,7 @@ func TestGiteaContainerSync(t *testing.T) {
 		platformgitea.WithBaseURL(manifest.BaseURL, true),
 		platformgitea.WithForegroundTimeoutForTesting(time.Minute),
 		platformgitea.WithRateTracker(tracker),
-		platformgitea.WithSyncBudget(budget),
-	)
+		platformgitea.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)))
 	require.NoError(t, err)
 	assertGiteaLikeContainerSync(
 		t, ctx, platform.KindGitea, manifest, client, budget,

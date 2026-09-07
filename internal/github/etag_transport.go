@@ -1,7 +1,6 @@
 package github
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	urlpkg "net/url"
@@ -11,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	gh "github.com/google/go-github/v89/github"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 const etagTTL = 30 * time.Minute
@@ -38,12 +37,6 @@ type etagTransport struct {
 	cache sync.Map // URL string -> etagEntry
 }
 
-type bypassETagKey struct{}
-
-func withBypassETag(ctx context.Context) context.Context {
-	return context.WithValue(ctx, bypassETagKey{}, true)
-}
-
 func (t *etagTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req == nil || req.URL == nil {
 		return nil, errors.New("nil request")
@@ -53,7 +46,7 @@ func (t *etagTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.Method != http.MethodGet || !isETagEligible(req.URL.Path) {
 		return t.base.RoundTrip(req)
 	}
-	if bypass, _ := req.Context().Value(bypassETagKey{}).(bool); bypass {
+	if platformgithub.UnconditionalRead(req.Context()) {
 		return t.base.RoundTrip(req)
 	}
 
@@ -182,14 +175,4 @@ func isCommentListPath(path, base, gheBase string) bool {
 		}
 	}
 	return false
-}
-
-// IsNotModified returns true if the error represents a 304 Not Modified
-// response from the GitHub API.
-func IsNotModified(err error) bool {
-	var ghErr *gh.ErrorResponse
-	if !errors.As(err, &ghErr) || ghErr == nil || ghErr.Response == nil {
-		return false
-	}
-	return ghErr.Response.StatusCode == http.StatusNotModified
 }

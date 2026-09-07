@@ -51,12 +51,7 @@ func TestNewClientBlocksPublicGitHubAPIInDefaultTests(t *testing.T) {
 
 	client, err := NewClient(testTokenSource("fake-token"), "github.com", nil, nil)
 	require.NoError(err)
-	live, ok := client.(*liveClient)
-	require.True(ok)
-	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/rate_limit", nil)
-	require.NoError(err)
-
-	resp, err := live.httpClient.Do(req)
+	resp, err := client.ListReleases(t.Context(), "example", "project", 1)
 
 	require.ErrorIs(err, ErrPublicGitHubAPIBlocked)
 	require.Nil(resp)
@@ -71,7 +66,7 @@ func TestRoutedClientExplicitlyImplementsOwnerBearingClientMethods(t *testing.T)
 		name string
 	}{
 		{file: "client.go", name: "Client"},
-		{file: "native_stacks.go", name: "NativeStackClient"},
+		{file: "../../platform/github/native_stacks.go", name: "NativeStackClient"},
 	}
 	files := token.NewFileSet()
 	routerFile, err := parser.ParseFile(files, "auth_router.go", nil, 0)

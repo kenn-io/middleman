@@ -25,11 +25,11 @@ import (
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/gitclone"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
 )
 
 func TestMain(m *testing.M) {
@@ -778,7 +778,7 @@ func TestBuildProviderControlPlaneKeepsForgeProviderHostsDistinct(t *testing.T) 
 
 	callsByProvider := map[string][]providerFactoryInput{}
 	factories := map[string]providerFactory{
-		string(platform.KindForgejo): func(input providerFactoryInput) (providerFactoryOutput, error) {
+		string(platform.KindForgejo): func(_ context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 			callsByProvider[string(platform.KindForgejo)] = append(
 				callsByProvider[string(platform.KindForgejo)], input,
 			)
@@ -787,7 +787,7 @@ func TestBuildProviderControlPlaneKeepsForgeProviderHostsDistinct(t *testing.T) 
 				host: input.host,
 			}}, nil
 		},
-		string(platform.KindGitea): func(input providerFactoryInput) (providerFactoryOutput, error) {
+		string(platform.KindGitea): func(_ context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 			callsByProvider[string(platform.KindGitea)] = append(
 				callsByProvider[string(platform.KindGitea)], input,
 			)
@@ -896,10 +896,10 @@ func TestBuildProviderControlPlaneOrDegradedKeepsHealthyProviderWhenFactoryFails
 			),
 		},
 		map[string]providerFactory{
-			string(platform.KindForgejo): func(providerFactoryInput) (providerFactoryOutput, error) {
+			string(platform.KindForgejo): func(context.Context, providerFactoryInput) (providerFactoryOutput, error) {
 				return providerFactoryOutput{}, errors.New("provider API unavailable")
 			},
-			string(platform.KindGitea): func(input providerFactoryInput) (providerFactoryOutput, error) {
+			string(platform.KindGitea): func(_ context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 				return providerFactoryOutput{provider: mainTestRepositoryReader{
 					kind: platform.KindGitea,
 					host: input.host,
@@ -925,7 +925,7 @@ func TestBuildProviderControlPlaneForServeReturnsFactoryErrorWhenSyncDisabled(t 
 			),
 		},
 		map[string]providerFactory{
-			string(platform.KindForgejo): func(providerFactoryInput) (providerFactoryOutput, error) {
+			string(platform.KindForgejo): func(context.Context, providerFactoryInput) (providerFactoryOutput, error) {
 				return providerFactoryOutput{}, errors.New("provider API unavailable")
 			},
 		},
@@ -953,7 +953,7 @@ func TestBuildProviderControlPlaneUsesRegisteredFactoryForFutureProvider(t *test
 			providerHostKey("codeberg", "codeberg.org"): codebergSource,
 		},
 		map[string]providerFactory{
-			"codeberg": func(input providerFactoryInput) (providerFactoryOutput, error) {
+			"codeberg": func(_ context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 				called = true
 				assert.Equal("codeberg.org", input.host)
 				token, err := input.tokenSource.Token(t.Context())
@@ -1006,13 +1006,13 @@ func TestBuildProviderControlPlaneSharedHostCloneAuthUsesHostLevelSource(t *test
 	require.Len(providerSources, 2)
 
 	factories := map[string]providerFactory{
-		string(platform.KindForgejo): func(input providerFactoryInput) (providerFactoryOutput, error) {
+		string(platform.KindForgejo): func(_ context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 			return providerFactoryOutput{provider: mainTestRepositoryReader{
 				kind: platform.KindForgejo,
 				host: input.host,
 			}}, nil
 		},
-		string(platform.KindGitea): func(input providerFactoryInput) (providerFactoryOutput, error) {
+		string(platform.KindGitea): func(_ context.Context, input providerFactoryInput) (providerFactoryOutput, error) {
 			return providerFactoryOutput{provider: mainTestRepositoryReader{
 				kind: platform.KindGitea,
 				host: input.host,

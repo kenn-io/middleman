@@ -8,14 +8,16 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	"go.kenn.io/forge/internal/platform/gitlab"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
+	"go.kenn.io/forge/platform/gitlab"
 )
 
 type staticGitLabToken string
@@ -145,8 +147,7 @@ func TestGitLabProviderSyncPersistsAndRetainsInaccessibleItems(t *testing.T) {
 	client, err := gitlab.NewClient(
 		"gitlab.example.com", staticGitLabToken("token"),
 		gitlab.WithBaseURLForTesting(server.URL+"/api/v4"),
-		gitlab.WithoutRetriesForTesting(),
-	)
+		gitlab.WithoutRetriesForTesting(), gitlab.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := ghclient.NewProviderRegistry(nil, client)
 	require.NoError(err)
@@ -206,7 +207,7 @@ func TestGitLabProviderSyncPersistsAndRetainsInaccessibleItems(t *testing.T) {
 	require.NotEmpty(threads, "inline review threads must persist through the neutral path")
 	assert.Equal("inline", threads[0].ProviderThreadID)
 
-	repoRow, err := d.GetRepoByIdentity(ctx, platform.DBRepoIdentity(platform.RepoRef{
+	repoRow, err := d.GetRepoByIdentity(ctx, platformdb.DBRepoIdentity(platform.RepoRef{
 		Platform: repo.Platform, Host: repo.PlatformHost, Owner: repo.Owner,
 		Name: repo.Name, RepoPath: repo.RepoPath,
 	}))
@@ -218,7 +219,7 @@ func TestGitLabProviderSyncPersistsAndRetainsInaccessibleItems(t *testing.T) {
 		Name: repo.Name, RepoPath: repo.RepoPath, PlatformID: 42,
 	}, 8)
 	require.NoError(err)
-	_, err = d.UpsertMergeRequest(ctx, platform.DBMergeRequest(repoRow.ID, mergedMR))
+	_, err = d.UpsertMergeRequest(ctx, platformdb.DBMergeRequest(repoRow.ID, mergedMR))
 	require.NoError(err)
 	storedMergedMR, err := d.GetMergeRequest(
 		ctx, "gitlab", "gitlab.example.com", "group", "project", 8,
@@ -328,8 +329,7 @@ func TestGitLabArchiveIssueLifecyclePersistsCloseActorInReport(t *testing.T) {
 	client, err := gitlab.NewClient(
 		"gitlab.example.com", staticGitLabToken("token"),
 		gitlab.WithBaseURLForTesting(server.URL+"/api/v4"),
-		gitlab.WithoutRetriesForTesting(),
-	)
+		gitlab.WithoutRetriesForTesting(), gitlab.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := ghclient.NewProviderRegistry(nil, client)
 	require.NoError(err)

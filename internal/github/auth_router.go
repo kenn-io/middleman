@@ -9,8 +9,9 @@ import (
 	"sync"
 
 	gh "github.com/google/go-github/v89/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 // RouteKey identifies one configuration-bounded GitHub authorization route.
@@ -396,18 +397,18 @@ type RoutedClient struct {
 
 var (
 	_ Client                              = (*RoutedClient)(nil)
-	_ authenticatedViewerLoginClient      = (*RoutedClient)(nil)
-	_ authenticatedViewerCacheKeyClient   = (*RoutedClient)(nil)
+	_ platformgithub.ViewerAPI            = (*RoutedClient)(nil)
+	_ platformgithub.ViewerCacheKeyAPI    = (*RoutedClient)(nil)
 	_ notificationThreadGetter            = (*RoutedClient)(nil)
 	_ notificationReadRateReserveBypasser = (*RoutedClient)(nil)
 	_ rateLimitSnapshotter                = (*RoutedClient)(nil)
-	_ githubLabelClient                   = (*RoutedClient)(nil)
-	_ githubAssigneeClient                = (*RoutedClient)(nil)
-	_ githubReviewerClient                = (*RoutedClient)(nil)
-	_ pageClient                          = (*RoutedClient)(nil)
+	_ platformgithub.LabelAPI             = (*RoutedClient)(nil)
+	_ platformgithub.AssigneeAPI          = (*RoutedClient)(nil)
+	_ platformgithub.ReviewerAPI          = (*RoutedClient)(nil)
+	_ platformgithub.InventoryAPI         = (*RoutedClient)(nil)
 	_ markdownImageClient                 = (*RoutedClient)(nil)
 	_ repoUserClient                      = (*RoutedClient)(nil)
-	_ NativeStackClient                   = (*RoutedClient)(nil)
+	_ platformgithub.NativeStackClient    = (*RoutedClient)(nil)
 )
 
 func NewRoutedClient(routes *HostRouter) (*RoutedClient, error) {
@@ -442,12 +443,12 @@ func (c *RoutedClient) routeForRepoContext(ctx context.Context, owner, repo stri
 
 func (c *RoutedClient) pageClientForRepo(
 	ctx context.Context, owner, repo string, capability platform.ArchiveCapability,
-) (pageClient, error) {
+) (platformgithub.InventoryAPI, error) {
 	client, err := c.routeForRepoContext(ctx, owner, repo)
 	if err != nil {
 		return nil, err
 	}
-	paged, ok := client.(pageClient)
+	paged, ok := client.(platformgithub.InventoryAPI)
 	if !ok {
 		return nil, platform.UnsupportedCapability(
 			platform.KindGitHub, c.routes.host, string(capability),
@@ -519,12 +520,12 @@ func (c *RoutedClient) GetMarkdownImage(
 func (c *RoutedClient) ListOpenPullRequestsWithNativeStackHints(
 	ctx context.Context,
 	owner, repo string,
-) ([]*gh.PullRequest, map[int]*NativeStackHint, error) {
+) ([]*gh.PullRequest, map[int]*platformgithub.NativeStackHint, error) {
 	client, err := c.routeForRepoContext(ctx, owner, repo)
 	if err != nil {
 		return nil, nil, err
 	}
-	native, ok := client.(NativeStackClient)
+	native, ok := client.(platformgithub.NativeStackClient)
 	if !ok {
 		prs, err := client.ListOpenPullRequests(ctx, owner, repo)
 		return prs, nil, err
@@ -536,14 +537,14 @@ func (c *RoutedClient) ListNativeStacksPage(
 	ctx context.Context,
 	owner, repo string,
 	page int,
-) (NativeStackPage, error) {
+) (platformgithub.NativeStackPage, error) {
 	client, err := c.routeForRepoContext(ctx, owner, repo)
 	if err != nil {
-		return NativeStackPage{}, err
+		return platformgithub.NativeStackPage{}, err
 	}
-	native, ok := client.(NativeStackClient)
+	native, ok := client.(platformgithub.NativeStackClient)
 	if !ok {
-		return NativeStackPage{}, platform.UnsupportedCapability(
+		return platformgithub.NativeStackPage{}, platform.UnsupportedCapability(
 			platform.KindGitHub, c.routes.host, "read_native_stacks",
 		)
 	}
@@ -653,7 +654,7 @@ func (c *RoutedClient) AuthenticatedViewerLoginForRepo(
 	if err != nil {
 		return "", err
 	}
-	viewer, ok := client.(authenticatedViewerLoginClient)
+	viewer, ok := client.(platformgithub.ViewerAPI)
 	if !ok {
 		return "", fmt.Errorf("GitHub route for %s/%s does not resolve authenticated viewer", owner, name)
 	}
@@ -665,7 +666,7 @@ func (c *RoutedClient) AuthenticatedViewerCacheKeyForRepo(owner, name string) st
 	if err != nil {
 		return ""
 	}
-	viewer, ok := client.(authenticatedViewerCacheKeyClient)
+	viewer, ok := client.(platformgithub.ViewerCacheKeyAPI)
 	if !ok {
 		return ""
 	}
@@ -677,7 +678,7 @@ func (c *RoutedClient) AuthenticatedViewerLogin(ctx context.Context) (string, er
 	if err != nil {
 		return "", err
 	}
-	viewer, ok := client.(authenticatedViewerLoginClient)
+	viewer, ok := client.(platformgithub.ViewerAPI)
 	if !ok {
 		return "", fmt.Errorf("GitHub fallback route for %s does not resolve authenticated viewer", c.routes.host)
 	}
@@ -689,7 +690,7 @@ func (c *RoutedClient) AuthenticatedViewerCacheKey() string {
 	if err != nil {
 		return ""
 	}
-	viewer, ok := client.(authenticatedViewerCacheKeyClient)
+	viewer, ok := client.(platformgithub.ViewerCacheKeyAPI)
 	if !ok {
 		return ""
 	}
@@ -722,7 +723,7 @@ func (c *RoutedClient) GetNotificationThread(ctx context.Context, threadID strin
 	return getter.GetNotificationThread(ctx, threadID)
 }
 
-func (c *RoutedClient) GetRateLimitSnapshot(ctx context.Context) (*RateLimitSnapshot, error) {
+func (c *RoutedClient) GetRateLimitSnapshot(ctx context.Context) (*platformgithub.RateLimitSnapshot, error) {
 	client, err := c.fallbackClient()
 	if err != nil {
 		return nil, err
@@ -734,13 +735,13 @@ func (c *RoutedClient) GetRateLimitSnapshot(ctx context.Context) (*RateLimitSnap
 	return snapshotter.GetRateLimitSnapshot(ctx)
 }
 
-func (c *RoutedClient) bypassNotificationReadRateReserve() bool {
+func (c *RoutedClient) InstallationAuthenticationActive() bool {
 	client, err := c.fallbackClient()
 	if err != nil {
 		return false
 	}
 	bypasser, ok := client.(notificationReadRateReserveBypasser)
-	return ok && bypasser.bypassNotificationReadRateReserve()
+	return ok && bypasser.InstallationAuthenticationActive()
 }
 
 func (c *RoutedClient) GetUser(ctx context.Context, login string) (*gh.User, error) {
@@ -875,7 +876,7 @@ func (c *RoutedClient) ListReviews(ctx context.Context, owner, repo string, numb
 	}
 	return client.ListReviews(ctx, owner, repo, number)
 }
-func (c *RoutedClient) ListPullRequestReviewThreads(ctx context.Context, owner, repo string, number int) ([]PullRequestReviewThread, error) {
+func (c *RoutedClient) ListPullRequestReviewThreads(ctx context.Context, owner, repo string, number int) ([]platformgithub.PullRequestReviewThread, error) {
 	client, err := c.routeForRepoContext(ctx, owner, repo)
 	if err != nil {
 		return nil, err
@@ -889,14 +890,14 @@ func (c *RoutedClient) ListCommits(ctx context.Context, owner, repo string, numb
 	}
 	return client.ListCommits(ctx, owner, repo, number)
 }
-func (c *RoutedClient) ListPullRequestTimelineEvents(ctx context.Context, owner, repo string, number int) ([]PullRequestTimelineEvent, error) {
+func (c *RoutedClient) ListPullRequestTimelineEvents(ctx context.Context, owner, repo string, number int) ([]platformgithub.PullRequestTimelineEvent, error) {
 	client, err := c.routeForRepoContext(ctx, owner, repo)
 	if err != nil {
 		return nil, err
 	}
 	return client.ListPullRequestTimelineEvents(ctx, owner, repo, number)
 }
-func (c *RoutedClient) ListForcePushEvents(ctx context.Context, owner, repo string, number int) ([]ForcePushEvent, error) {
+func (c *RoutedClient) ListForcePushEvents(ctx context.Context, owner, repo string, number int) ([]platformgithub.ForcePushEvent, error) {
 	client, err := c.routeForRepoContext(ctx, owner, repo)
 	if err != nil {
 		return nil, err
@@ -1015,7 +1016,7 @@ func (c *RoutedClient) MergePullRequest(ctx context.Context, owner, repo string,
 	}
 	return client.MergePullRequest(ctx, owner, repo, number, title, message, method, expectedSHA)
 }
-func (c *RoutedClient) EditPullRequest(ctx context.Context, owner, repo string, number int, opts EditPullRequestOpts) (*gh.PullRequest, error) {
+func (c *RoutedClient) EditPullRequest(ctx context.Context, owner, repo string, number int, opts platformgithub.EditPullRequestOpts) (*gh.PullRequest, error) {
 	client, err := c.routeForRepoContext(ctx, owner, repo)
 	if err != nil {
 		return nil, err
@@ -1062,7 +1063,7 @@ func (c *RoutedClient) ListRepoLabels(ctx context.Context, owner, repo string) (
 	if err != nil {
 		return nil, err
 	}
-	labels, ok := client.(githubLabelClient)
+	labels, ok := client.(platformgithub.LabelAPI)
 	if !ok {
 		return nil, fmt.Errorf("GitHub route for %s/%s does not support labels", owner, repo)
 	}
@@ -1074,7 +1075,7 @@ func (c *RoutedClient) ReplaceIssueLabels(ctx context.Context, owner, repo strin
 	if err != nil {
 		return nil, err
 	}
-	labels, ok := client.(githubLabelClient)
+	labels, ok := client.(platformgithub.LabelAPI)
 	if !ok {
 		return nil, fmt.Errorf("GitHub route for %s/%s does not support labels", owner, repo)
 	}
@@ -1086,7 +1087,7 @@ func (c *RoutedClient) ReplaceIssueAssignees(ctx context.Context, owner, repo st
 	if err != nil {
 		return nil, err
 	}
-	assignees, ok := client.(githubAssigneeClient)
+	assignees, ok := client.(platformgithub.AssigneeAPI)
 	if !ok {
 		return nil, fmt.Errorf("GitHub route for %s/%s does not support assignees", owner, repo)
 	}
@@ -1098,7 +1099,7 @@ func (c *RoutedClient) RequestPullRequestReviewers(ctx context.Context, owner, r
 	if err != nil {
 		return nil, err
 	}
-	reviewers, ok := client.(githubReviewerClient)
+	reviewers, ok := client.(platformgithub.ReviewerAPI)
 	if !ok {
 		return nil, fmt.Errorf("GitHub route for %s/%s does not support reviewers", owner, repo)
 	}
@@ -1110,7 +1111,7 @@ func (c *RoutedClient) RemovePullRequestReviewers(ctx context.Context, owner, re
 	if err != nil {
 		return err
 	}
-	reviewers, ok := client.(githubReviewerClient)
+	reviewers, ok := client.(platformgithub.ReviewerAPI)
 	if !ok {
 		return fmt.Errorf("GitHub route for %s/%s does not support reviewers", owner, repo)
 	}
@@ -1143,7 +1144,7 @@ func (c *RoutedClient) GetIssueIfChanged(ctx context.Context, owner, repo string
 	return conditional.GetIssueIfChanged(ctx, owner, repo, number, etag)
 }
 
-func (c *RoutedClient) ListIssueTimelineEvents(ctx context.Context, owner, repo string, number int) ([]PullRequestTimelineEvent, error) {
+func (c *RoutedClient) ListIssueTimelineEvents(ctx context.Context, owner, repo string, number int) ([]platformgithub.PullRequestTimelineEvent, error) {
 	client, err := c.routeForRepoContext(ctx, owner, repo)
 	if err != nil {
 		return nil, err

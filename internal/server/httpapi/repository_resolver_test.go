@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
 )
 
 func TestRepositoryResolverRejectsUnavailableStore(t *testing.T) {

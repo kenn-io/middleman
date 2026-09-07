@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,10 +20,10 @@ import (
 	"go.kenn.io/forge/internal/archive"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
 )
 
 type archiveFeatureClock struct {
@@ -213,7 +215,7 @@ func TestArchiveAPIRecoversWhenGitHubIssuesAreReenabledE2E(t *testing.T) {
 	syncer.Start(ctx)
 	t.Cleanup(syncer.Stop)
 
-	storedRepo, err := database.GetRepoByIdentity(ctx, platform.DBRepoIdentity(ref))
+	storedRepo, err := database.GetRepoByIdentity(ctx, platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(storedRepo)
 

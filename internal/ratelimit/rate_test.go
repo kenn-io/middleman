@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	platformpkg "go.kenn.io/forge/platform"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/db"
@@ -60,7 +62,7 @@ func TestRateTrackerMissingResetStaysUnknown(t *testing.T) {
 
 	// A provider response with an exhausted quota but no reset time must leave
 	// the reset unknown (nil), not a non-nil zero timestamp.
-	rt.UpdateFromRate(Rate{Limit: 600, Remaining: 0, Reset: time.Time{}})
+	rt.UpdateFromRate(platformpkg.Rate{Limit: 600, Remaining: 0, Reset: time.Time{}})
 
 	require.Nil(rt.ResetAt())
 
@@ -143,7 +145,7 @@ func TestRateTrackerBackoff(t *testing.T) {
 
 	// No backoff when remaining > 0
 	futureReset := time.Now().Add(30 * time.Minute)
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Remaining: 100,
 		Reset:     futureReset,
 	})
@@ -152,7 +154,7 @@ func TestRateTrackerBackoff(t *testing.T) {
 	assert.Zero(wait)
 
 	// Backoff when remaining == 0 with future reset
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Remaining: 0,
 		Reset:     futureReset,
 	})
@@ -171,7 +173,7 @@ func TestRateTrackerBackoff(t *testing.T) {
 
 	// No backoff when reset is in the past
 	pastReset := time.Now().Add(-1 * time.Minute)
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Remaining: 0,
 		Reset:     pastReset,
 	})
@@ -227,7 +229,7 @@ func TestRateTrackerThrottleFactor(t *testing.T) {
 
 	// >50% remaining: factor 1
 	futureReset := time.Now().Add(30 * time.Minute)
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 3000,
 		Reset:     futureReset,
@@ -238,7 +240,7 @@ func TestRateTrackerThrottleFactor(t *testing.T) {
 	assert.Equal(5000, rt.RateLimit())
 
 	// 25-50% remaining: factor 2
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 2000,
 		Reset:     futureReset,
@@ -246,7 +248,7 @@ func TestRateTrackerThrottleFactor(t *testing.T) {
 	assert.Equal(2, rt.ThrottleFactor())
 
 	// 10-25% remaining: factor 4
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 1000,
 		Reset:     futureReset,
@@ -254,7 +256,7 @@ func TestRateTrackerThrottleFactor(t *testing.T) {
 	assert.Equal(4, rt.ThrottleFactor())
 
 	// <10% remaining: factor 8
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 400,
 		Reset:     futureReset,
@@ -262,7 +264,7 @@ func TestRateTrackerThrottleFactor(t *testing.T) {
 	assert.Equal(8, rt.ThrottleFactor())
 
 	// At reserve buffer (200): paused
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 200,
 		Reset:     futureReset,
@@ -277,7 +279,7 @@ func TestRateTrackerStaleQuota(t *testing.T) {
 	rt := newGitHubRateTracker(d, "github.com", "rest")
 
 	pastReset := time.Now().Add(-1 * time.Minute)
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 100,
 		Reset:     pastReset,
@@ -294,7 +296,7 @@ func TestRateTrackerHydrateFromDB(t *testing.T) {
 
 	rt1 := newGitHubRateTracker(d, "github.com", "rest")
 	futureReset := time.Now().Add(30 * time.Minute)
-	rt1.UpdateFromRate(Rate{
+	rt1.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 2000,
 		Reset:     futureReset,
@@ -318,7 +320,7 @@ func TestRateTrackerWindowRolloverResetsQuota(t *testing.T) {
 	rt := newGitHubRateTracker(d, "github.com", "rest")
 
 	futureReset := time.Now().Add(30 * time.Minute)
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 100,
 		Reset:     futureReset,
@@ -348,7 +350,7 @@ func TestRateTrackerWindowResetResetsCounter(t *testing.T) {
 
 	// Use a future resetAt so requests accumulate normally.
 	reset1 := time.Now().Add(30 * time.Minute)
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 4000,
 		Reset:     reset1,
@@ -371,7 +373,7 @@ func TestRateTrackerWindowResetResetsCounter(t *testing.T) {
 	// GitHub window resets: remaining jumps up AND old resetAt
 	// has passed — both conditions met.
 	reset2 := time.Now().Add(1 * time.Hour)
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 4999,
 		Reset:     reset2,
@@ -387,7 +389,7 @@ func TestRateTrackerResetAtJitterDoesNotResetCounter(t *testing.T) {
 	rt := newGitHubRateTracker(d, "github.com", "rest")
 
 	reset1 := time.Now().Add(30 * time.Minute)
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 4000,
 		Reset:     reset1,
@@ -400,7 +402,7 @@ func TestRateTrackerResetAtJitterDoesNotResetCounter(t *testing.T) {
 	// resetAt jitters forward by 1s but remaining goes DOWN
 	// (normal within-window behavior). Counter must NOT reset.
 	reset2 := reset1.Add(1 * time.Second)
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 3990,
 		Reset:     reset2,
@@ -419,7 +421,7 @@ func TestRateTrackerSnapshotResetDoesNotRequireRemainingIncrease(t *testing.T) {
 	})
 
 	oldReset := time.Now().Add(30 * time.Minute)
-	rt.UpdateFromRate(Rate{
+	rt.UpdateFromRate(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 4999,
 		Reset:     oldReset,
@@ -431,7 +433,7 @@ func TestRateTrackerSnapshotResetDoesNotRequireRemainingIncrease(t *testing.T) {
 	pastReset := time.Now().Add(-1 * time.Minute)
 	rt.SetResetAtForTesting(pastReset)
 	newReset := time.Now().Add(time.Hour)
-	rt.UpdateFromSnapshot(Rate{
+	rt.UpdateFromSnapshot(platformpkg.Rate{
 		Limit:     5000,
 		Remaining: 4990,
 		Reset:     newReset,
@@ -458,7 +460,7 @@ func TestRateTrackerProductionFlow(t *testing.T) {
 	// Simulate 5 API calls (the trackRate pattern)
 	for i := range 5 {
 		rt.RecordRequest()
-		rt.UpdateFromRate(Rate{
+		rt.UpdateFromRate(platformpkg.Rate{
 			Limit:     5000,
 			Remaining: 4999 - i,
 			Reset:     futureReset,
@@ -485,7 +487,7 @@ func TestRateTrackerProductionFlow(t *testing.T) {
 	newReset := time.Now().Add(55 * time.Minute)
 	for i := range 3 {
 		rt.RecordRequest()
-		rt.UpdateFromRate(Rate{
+		rt.UpdateFromRate(platformpkg.Rate{
 			Limit:     5000,
 			Remaining: 4999 - i,
 			Reset:     newReset,

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 func bulkTestIssue(number int, repositoryURL string) *gh.Issue {
@@ -70,10 +70,9 @@ func TestGitHubListOpenIssuesRejectsMalformedBulkResults(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assert := assert.New(t)
 			require := require.New(t)
-			provider := &gitHubClientProvider{
-				host:   "github.com",
-				client: &mockClient{openIssues: tt.issues},
-			}
+			provider := newTestGitHubProvider(t, "github.com",
+				&mockClient{openIssues: tt.issues})
+
 			_, err := provider.ListOpenGitHubIssues(t.Context(), ref)
 			require.ErrorIs(err, platform.ErrProviderContract)
 			var typed *platform.Error
@@ -84,13 +83,12 @@ func TestGitHubListOpenIssuesRejectsMalformedBulkResults(t *testing.T) {
 	}
 
 	t.Run("well-formed list passes", func(t *testing.T) {
-		provider := &gitHubClientProvider{
-			host: "github.com",
-			client: &mockClient{openIssues: []*gh.Issue{
+		provider := newTestGitHubProvider(t, "github.com",
+			&mockClient{openIssues: []*gh.Issue{
 				bulkTestIssue(1, "https://api.github.com/repos/acme/widget"),
 				bulkTestIssue(2, ""),
-			}},
-		}
+			}})
+
 		issues, err := provider.ListOpenGitHubIssues(t.Context(), ref)
 		require.NoError(t, err)
 		assert.Len(t, issues, 2)
@@ -154,7 +152,7 @@ func TestGitHubLiveOpenIssueListsPreserveNilEntriesForValidation(t *testing.T) {
 	_, bulkErr := provider.ListOpenGitHubIssues(t.Context(), ref)
 	require.ErrorIs(bulkErr, platform.ErrProviderContract)
 
-	issues, hasMore, pageErr := provider.client.ListIssuesPage(
+	issues, hasMore, pageErr := provider.GitHubClient().ListIssuesPage(
 		t.Context(), "acme", "widget", "all", 1,
 	)
 	require.NoError(pageErr)

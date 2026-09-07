@@ -7,6 +7,7 @@ import (
 
 	"github.com/shurcooL/githubv4"
 	"github.com/stretchr/testify/require"
+	platformgithub "go.kenn.io/forge/platform/github"
 	"golang.org/x/oauth2"
 )
 
@@ -24,7 +25,7 @@ func TestLiveGraphQLQueriesValidateAgainstGitHub(t *testing.T) {
 	)
 	client := githubv4.NewClient(httpClient)
 
-	var prQuery gqlPRQuery[gqlPR]
+	var prQuery gqlPRQuery[platformgithub.GraphQLPR]
 	vars := map[string]any{
 		"owner":    githubv4.String("kenn-io"),
 		"name":     githubv4.String("middleman"),
@@ -36,7 +37,7 @@ func TestLiveGraphQLQueriesValidateAgainstGitHub(t *testing.T) {
 
 	type prDetailQuery struct {
 		Repository struct {
-			PullRequest *gqlPR `graphql:"pullRequest(number: $number)"`
+			PullRequest *platformgithub.GraphQLPR `graphql:"pullRequest(number: $number)"`
 		} `graphql:"repository(owner: $owner, name: $name)"`
 	}
 	var detailQuery prDetailQuery
@@ -66,34 +67,4 @@ func TestLiveGraphQLQueriesValidateAgainstGitHub(t *testing.T) {
 	err = client.Query(ctx, &issueQuery, vars)
 	require.NoError(err, "bulk issue GraphQL query should validate against GitHub")
 
-	reviewClient := &liveClient{
-		httpClient:      httpClient,
-		platformHost:    "github.com",
-		graphQLEndpoint: graphQLEndpointForHost("github.com"),
-	}
-	threads, _, _, err := reviewClient.ListInventoryReviewThreadsPage(
-		ctx, "github.com", "kenn-io", "forge", 830, "",
-	)
-	require.NoError(err, "review-thread GraphQL query should validate against GitHub")
-	require.NotEmpty(threads, "live review fixture should contain a review thread")
-	require.NotEmpty(threads[0].Comments, "live review fixture should contain a review comment")
-	require.False(threads[0].Comments[0].CreatedAt.IsZero(),
-		"review-thread GraphQL query should return comment creation time")
-	require.False(threads[0].Comments[0].UpdatedAt.IsZero(),
-		"review-thread GraphQL query should return comment update time")
-
-	comments, _, _, err := reviewClient.listReviewThreadCommentsPage(
-		ctx, "kenn-io", "forge", 830,
-		githubArchiveReviewCursor{
-			Host: "github.com", Owner: "kenn-io", Repo: "forge", Number: 830,
-			Phase: "comments", Thread: archiveReviewThreadCursor(threads[0]),
-		},
-	)
-	require.NoError(err, "review-thread comment GraphQL query should validate against GitHub")
-	require.NotEmpty(comments, "live review fixture should return its review thread")
-	require.NotEmpty(comments[0].Comments, "live review fixture should contain a review comment")
-	require.False(comments[0].Comments[0].CreatedAt.IsZero(),
-		"paginated review-comment query should return creation time")
-	require.False(comments[0].Comments[0].UpdatedAt.IsZero(),
-		"paginated review-comment query should return update time")
 }

@@ -24,13 +24,13 @@ import (
 	"go.kenn.io/forge/internal/fleet"
 	ghclient "go.kenn.io/forge/internal/github"
 	"go.kenn.io/forge/internal/mcpserver"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/providerplane"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/server/httpapi"
 	"go.kenn.io/forge/internal/server/pullapi"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/federationtest"
+	"go.kenn.io/forge/platform"
 )
 
 const (

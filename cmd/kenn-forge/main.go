@@ -29,7 +29,6 @@ import (
 	ghclient "go.kenn.io/forge/internal/github"
 	"go.kenn.io/forge/internal/githubapp"
 	"go.kenn.io/forge/internal/mcpserver"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/profiler"
 	"go.kenn.io/forge/internal/ptyowner"
 	"go.kenn.io/forge/internal/runtimelock"
@@ -40,6 +39,7 @@ import (
 	"go.kenn.io/forge/internal/telemetry"
 	"go.kenn.io/forge/internal/tokenauth"
 	"go.kenn.io/forge/internal/web"
+	"go.kenn.io/forge/platform"
 	"go.kenn.io/kit/daemon"
 	oteltelemetry "go.kenn.io/kit/telemetry"
 )

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	platformpkg "go.kenn.io/forge/platform"
+
 	"go.kenn.io/forge/internal/db"
 )
 
@@ -21,14 +23,6 @@ var throttleSteps = []throttleStep{
 	{0.25, 2},
 	{0.10, 4},
 	{0.00, 8},
-}
-
-// Rate describes the provider-neutral rate limit state observed on an API
-// response.
-type Rate struct {
-	Limit     int
-	Remaining int
-	Reset     time.Time
 }
 
 // RateTracker records per-provider/host API request counts and rate limit
@@ -155,18 +149,18 @@ func (rt *RateTracker) SetOnWindowReset(fn func()) {
 // UpdateFromRate updates remaining/limit/reset from provider response data. If
 // the reset time moved forward, the provider started a new rate window and the
 // request counter resets to stay aligned with that window.
-func (rt *RateTracker) UpdateFromRate(rate Rate) {
+func (rt *RateTracker) UpdateFromRate(rate platformpkg.Rate) {
 	rt.updateFromRate(rate, 1, false)
 }
 
 // UpdateFromSnapshot updates remaining/limit/reset from provider snapshot data
 // that does not itself represent a counted API request.
-func (rt *RateTracker) UpdateFromSnapshot(rate Rate) {
+func (rt *RateTracker) UpdateFromSnapshot(rate platformpkg.Rate) {
 	rt.updateFromRate(rate, 0, true)
 }
 
 func (rt *RateTracker) updateFromRate(
-	rate Rate,
+	rate platformpkg.Rate,
 	resetWindowCount int,
 	resetExpiredWindow bool,
 ) {

@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	appfiles "go.kenn.io/forge/internal/githubapp"
 	"strings"
 	"time"
 
+	"go.kenn.io/forge/githubapp"
 	"go.kenn.io/forge/internal/config"
-	"go.kenn.io/forge/internal/githubapp"
 )
 
 // loadConfig uses the GitHub App management entry point so every command
@@ -98,7 +99,7 @@ func selectApp(
 }
 
 func appJWT(app config.GitHubAppConfig, now time.Time) (string, error) {
-	key, err := githubapp.LoadPrivateKey(app.PrivateKeyPath)
+	key, err := appfiles.LoadPrivateKey(app.PrivateKeyPath)
 	if err != nil {
 		return "", err
 	}

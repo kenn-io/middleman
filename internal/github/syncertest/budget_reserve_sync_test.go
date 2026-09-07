@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	"go.kenn.io/forge/internal/platform/gitlab"
+	"go.kenn.io/forge/platform"
+	"go.kenn.io/forge/platform/gitlab"
 )
 
 // TestEssentialReserveKeepsDiscoveryAliveAfterOptionalExhaustion proves the
@@ -80,8 +80,7 @@ func TestEssentialReserveKeepsDiscoveryAliveAfterOptionalExhaustion(t *testing.T
 			"gitlab.example.com", staticGitLabToken("token"),
 			gitlab.WithBaseURLForTesting(server.URL+"/api/v4"),
 			gitlab.WithoutRetriesForTesting(),
-			gitlab.WithSyncBudget(budget),
-		)
+			gitlab.WithTransport(ghclient.WrapSyncBudgetTransport(http.DefaultTransport, budget)))
 		require.NoError(err)
 		registry, err := ghclient.NewProviderRegistry(nil, client)
 		require.NoError(err)

@@ -15,9 +15,9 @@ import (
 	"strings"
 
 	"go.kenn.io/forge/internal/db"
-	platformpkg "go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/procutil"
-	"go.kenn.io/kit/git/env"
+	platformpkg "go.kenn.io/forge/platform"
+	gitenv "go.kenn.io/kit/git/env"
 )
 
 type KnownPlatformHost struct {

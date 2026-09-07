@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/pem"
 	"fmt"
+	"go.kenn.io/forge/internal/platformdb"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,10 +18,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/procutil"
 	"go.kenn.io/forge/internal/runtimelock"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
 )
 
 func TestArchiveCommandE2E(t *testing.T) {
@@ -77,7 +78,7 @@ token_env = "KENN_FORGE_ARCHIVE_E2E_TOKEN"
 		Platform: platform.KindGitLab, Host: host, Owner: "owner",
 		Name: "archive", RepoPath: "owner/archive", PlatformExternalID: "1",
 	}
-	repoID, err := database.UpsertRepo(t.Context(), platform.DBRepoIdentity(ref))
+	repoID, err := database.UpsertRepo(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NoError(database.EnsureDiscoveryArchives(t.Context(), []int64{repoID}, now))
 	require.NoError(database.ReconcileArchiveCoverage(t.Context(), repoID, db.ArchiveCoverageSet{

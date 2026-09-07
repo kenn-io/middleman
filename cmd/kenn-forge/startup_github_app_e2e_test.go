@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	appfiles "go.kenn.io/forge/internal/githubapp"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"go.kenn.io/forge/githubapp"
 	"go.kenn.io/forge/internal/config"
-	"go.kenn.io/forge/internal/githubapp"
 	"go.kenn.io/forge/internal/githubapp/githubapptest"
 	"go.kenn.io/forge/internal/tokenauth"
 )
@@ -34,7 +35,7 @@ func TestCollectProviderTokensMintsGitHubAppToken(t *testing.T) {
 
 	// Register an app + installation on the fake GitHub the way the
 	// kenn-forge-github-app CLI would have.
-	manifest, err := githubapp.NewManifest(
+	manifest, err := appfiles.NewManifest(
 		"kenn-forge-startup", "", "http://127.0.0.1:1/callback",
 	)
 	require.NoError(err)
@@ -93,7 +94,7 @@ repository_selection = "all"
 		GitHubApp: func(
 			ctx context.Context, candidate tokenauth.Candidate,
 		) (string, time.Time, error) {
-			key, err := githubapp.LoadPrivateKey(candidate.FilePath)
+			key, err := appfiles.LoadPrivateKey(candidate.FilePath)
 			if err != nil {
 				return "", time.Time{}, err
 			}

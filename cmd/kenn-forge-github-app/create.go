@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	appfiles "go.kenn.io/forge/internal/githubapp"
 	"io"
 	"net"
 	"net/http"
@@ -20,8 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"go.kenn.io/forge/githubapp"
 	"go.kenn.io/forge/internal/config"
-	"go.kenn.io/forge/internal/githubapp"
 	"go.kenn.io/forge/internal/githubapp/ui"
 )
 
@@ -84,7 +85,7 @@ func runCreate(args []string, env *appEnv) error {
 
 	appName := strings.TrimSpace(*name)
 	if appName == "" {
-		appName, err = githubapp.RandomAppName()
+		appName, err = appfiles.RandomAppName()
 		if err != nil {
 			return err
 		}
@@ -338,7 +339,7 @@ func (f *flowServer) handleCallback(w http.ResponseWriter, r *http.Request) {
 func (env *appEnv) runManifestFlow(
 	ctx context.Context, flow *flowServer, opts manifestFlowOptions,
 ) (*githubapp.AppCredentials, error) {
-	manifest, err := githubapp.NewManifest(
+	manifest, err := appfiles.NewManifest(
 		opts.name, opts.homepage, flow.localBase+flow.callbackPath,
 	)
 	if err != nil {

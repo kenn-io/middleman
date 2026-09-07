@@ -33,7 +33,6 @@ import (
 	"go.kenn.io/forge/internal/gitclone"
 	ghclient "go.kenn.io/forge/internal/github"
 	katacatalog "go.kenn.io/forge/internal/kata"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/projects"
 	"go.kenn.io/forge/internal/providerplane"
 	"go.kenn.io/forge/internal/ptyowner"
@@ -52,6 +51,7 @@ import (
 	"go.kenn.io/forge/internal/tokenauth"
 	"go.kenn.io/forge/internal/workspace"
 	"go.kenn.io/forge/internal/workspace/localruntime"
+	"go.kenn.io/forge/platform"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 

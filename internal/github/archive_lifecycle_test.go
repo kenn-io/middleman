@@ -13,14 +13,16 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	gh "github.com/google/go-github/v89/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"go.kenn.io/forge/internal/archive"
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
 )
 
 type blockingArchiveRunner struct {
@@ -328,7 +330,7 @@ func testArchiveHydrationMissingGitHubIssueBecomesTerminalInSQLite(
 	require.NoError(service.RunEligible(t.Context())) // pull-request inventory
 	require.NoError(service.RunEligible(t.Context())) // issue hydration
 
-	repo, err := database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	progress, err := database.GetDatasetProgress(
@@ -412,7 +414,7 @@ func TestArchiveHydrationKeepsIncompleteMergedGitHubPRFailed(t *testing.T) {
 	}
 	require.ErrorContains(service.RunEligible(t.Context()), "files_changed")
 
-	repo, err := database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	progress, err := database.GetDatasetProgress(
@@ -467,7 +469,7 @@ func TestArchivePreemptedItemRecordsNoFailureAndCompletesOnNextPass(t *testing.T
 	require.NoError(service.RunEligible(t.Context())) // issue inventory
 	require.NoError(service.RunEligible(t.Context())) // merge-request inventory
 
-	repo, err := database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 
@@ -578,7 +580,7 @@ func TestArchiveDisabledIssueInventoryCompletesUnsupportedWithoutBlockingMergeRe
 	assert.Greater(issueCalls.Load(), issueInventoryCalls.Load(),
 		"maintenance must verify the provider stream despite the inventory cooldown")
 	assert.GreaterOrEqual(mergeRequestCalls.Load(), int32(1))
-	repo, err := database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	states, err := database.ListArchiveRepoStates(t.Context(), []int64{repo.ID})
@@ -688,7 +690,7 @@ func newDisabledArchiveHydrationFixture(t *testing.T) *disabledArchiveHydrationF
 func (f *disabledArchiveHydrationFixture) progress(t *testing.T) db.ArchiveDatasetProgress {
 	t.Helper()
 	require := require.New(t)
-	repo, err := f.database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(f.ref))
+	repo, err := f.database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(f.ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	progress, err := f.database.GetDatasetProgress(
@@ -831,7 +833,7 @@ func TestArchiveWorkerAdvancesRealServiceAfterStart(t *testing.T) {
 	syncer.Start(t.Context())
 	t.Cleanup(syncer.Stop)
 
-	repo, err := database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	deadline := time.Now().Add(2 * time.Second)
@@ -896,7 +898,7 @@ func TestSetReposSeedsActiveArchiveForArchivedRepo(t *testing.T) {
 	require.NoError(syncer.SetReposWithContext(t.Context(), []RepoRef{ref}, false))
 
 	repo, err := database.GetRepoByIdentity(
-		t.Context(), platform.DBRepoIdentity(platformRepoRef(ref)),
+		t.Context(), platformdb.DBRepoIdentity(platformRepoRef(ref)),
 	)
 	require.NoError(err)
 	require.NotNil(repo)

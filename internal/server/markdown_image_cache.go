@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 	"golang.org/x/sync/singleflight"
 )
 

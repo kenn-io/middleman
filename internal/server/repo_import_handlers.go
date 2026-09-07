@@ -14,8 +14,8 @@ import (
 	gh "github.com/google/go-github/v89/github"
 	"go.kenn.io/forge/internal/config"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/httpapi"
+	"go.kenn.io/forge/platform"
 )
 
 type repoPreviewInput struct {

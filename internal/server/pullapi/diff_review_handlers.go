@@ -14,9 +14,9 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"go.kenn.io/forge/internal/db"
-	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/httpapi"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 func (s *Handler) getDiffReviewDraft(
@@ -214,7 +214,7 @@ func (s *Handler) applyReviewSuggestions(
 			map[string]any{"reason": "not_open"},
 		)
 	}
-	if repoProviderKind(*repo) == platform.KindGitHub && ghclient.ParseHeadRepoFullName(mr.HeadRepoCloneURL) == "" {
+	if repoProviderKind(*repo) == platform.KindGitHub && platformgithub.ParseHeadRepoFullName(mr.HeadRepoCloneURL) == "" {
 		return nil, httpapi.Conflict(
 			httpapi.CodeConflict,
 			"pull request head repository is unknown",

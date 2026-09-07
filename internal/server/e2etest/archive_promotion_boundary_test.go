@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,10 +20,10 @@ import (
 	"go.kenn.io/forge/internal/archive"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
 )
 
 type archivePromotionClock struct{ now time.Time }
@@ -203,7 +205,7 @@ func TestArchiveAPIPromotionMaintainsFromDiscoveryBoundaryE2E(t *testing.T) {
 	require.NoError(archiveService.RunEligible(ctx))
 	require.NoError(archiveService.RunEligible(ctx))
 
-	repo, err := database.GetRepoByIdentity(ctx, platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(ctx, platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	states, err := database.ListArchiveRepoStates(ctx, []int64{repo.ID})

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.kenn.io/forge/internal/db"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 // nativeStackObservationTTL bounds how long a cached stack whose membership
@@ -39,11 +40,11 @@ type GitHubNativeStackSyncResult struct {
 	generation uint64
 }
 
-func nativeStackHintsFromBulk(result *RepoBulkResult) map[int]*NativeStackHint {
+func nativeStackHintsFromBulk(result *RepoBulkResult) map[int]*platformgithub.NativeStackHint {
 	if result == nil {
 		return nil
 	}
-	hints := make(map[int]*NativeStackHint, len(result.PullRequests))
+	hints := make(map[int]*platformgithub.NativeStackHint, len(result.PullRequests))
 	for i := range result.PullRequests {
 		bulk := &result.PullRequests[i]
 		hints[bulk.PR.GetNumber()] = bulk.NativeStack
@@ -82,7 +83,7 @@ func (s *Syncer) refreshGitHubNativeStackCache(
 	ctx context.Context,
 	repo RepoRef,
 	repoID int64,
-	hints map[int]*NativeStackHint,
+	hints map[int]*platformgithub.NativeStackHint,
 	listUnchanged bool,
 ) *GitHubNativeStackSyncResult {
 	result := &GitHubNativeStackSyncResult{
@@ -195,7 +196,7 @@ func (s *Syncer) refreshGitHubNativeStackCache(
 		result.ConfirmedNumbers = sortedStackNumbers(confirmed)
 		return result
 	}
-	nativeClient, ok := client.(NativeStackClient)
+	nativeClient, ok := client.(platformgithub.NativeStackClient)
 	if !ok {
 		result.ConfirmedNumbers = sortedStackNumbers(confirmed)
 		return result
@@ -205,7 +206,7 @@ func (s *Syncer) refreshGitHubNativeStackCache(
 	for len(targets) > 0 {
 		page, err := nativeClient.ListNativeStacksPage(ctx, repo.Owner, repo.Name, pageNumber)
 		if err != nil {
-			if githubStatusCode(err) == http.StatusNotFound {
+			if platformgithub.StatusCode(err) == http.StatusNotFound {
 				return result
 			}
 			slog.Warn("refresh github native stack cache failed",
@@ -229,7 +230,7 @@ func (s *Syncer) refreshGitHubNativeStackCache(
 			// pass cannot account for, exactly like a fetch failure: the stack is
 			// still out there and may share pull requests with the stacks that did
 			// confirm, so the refresh is partial however the row was rejected.
-			if err := validateNativeStack(stack); err != nil {
+			if err := platformgithub.ValidateNativeStack(stack); err != nil {
 				slog.Warn("ignore malformed github native stack",
 					"platform", repoPlatform(repo), "host", repoHost(repo),
 					"repo", repo.Owner+"/"+repo.Name,
@@ -299,7 +300,7 @@ func (s *Syncer) refreshGitHubNativeStackCache(
 	return result
 }
 
-func nativeStackMatchesCurrentHints(stack NativeStack, hints map[int]*NativeStackHint) bool {
+func nativeStackMatchesCurrentHints(stack platformgithub.NativeStack, hints map[int]*platformgithub.NativeStackHint) bool {
 	for prNumber, hint := range hints {
 		if hint == nil || hint.Number != stack.Number {
 			continue
@@ -336,7 +337,7 @@ func nativeStackMatchesCurrentHints(stack NativeStack, hints map[int]*NativeStac
 // keeps the projection from diverging indefinitely while preserving the cache
 // for stacks whose members are all observable.
 func nativeStackObservationExpired(
-	stack db.GitHubNativeStack, hints map[int]*NativeStackHint, now time.Time,
+	stack db.GitHubNativeStack, hints map[int]*platformgithub.NativeStackHint, now time.Time,
 ) bool {
 	if !cachedStackHasUnobservableMember(stack, hints) {
 		return false
@@ -349,7 +350,7 @@ func nativeStackObservationExpired(
 // Such a stack can drift without any hint disagreeing, so its confirmation must
 // age out instead of surviving every 304.
 func cachedStackHasUnobservableMember(
-	stack db.GitHubNativeStack, hints map[int]*NativeStackHint,
+	stack db.GitHubNativeStack, hints map[int]*platformgithub.NativeStackHint,
 ) bool {
 	for _, member := range stack.Members {
 		if _, observed := hints[member.PullRequestNumber]; !observed {
@@ -360,7 +361,7 @@ func cachedStackHasUnobservableMember(
 }
 
 func nativeStackHasUnobservableMember(
-	stack NativeStack, hints map[int]*NativeStackHint,
+	stack platformgithub.NativeStack, hints map[int]*platformgithub.NativeStackHint,
 ) bool {
 	for _, member := range stack.Members {
 		if _, observed := hints[member.PullRequestNumber]; !observed {
@@ -370,7 +371,7 @@ func nativeStackHasUnobservableMember(
 	return false
 }
 
-func cachedStackMatchesHint(stack db.GitHubNativeStack, prNumber int, hint NativeStackHint) bool {
+func cachedStackMatchesHint(stack db.GitHubNativeStack, prNumber int, hint platformgithub.NativeStackHint) bool {
 	if !stack.IsOpen || stack.Number != hint.Number || stack.Size != hint.Size || stack.BaseRef != hint.BaseRef {
 		return false
 	}
@@ -382,7 +383,7 @@ func cachedStackMatchesHint(stack db.GitHubNativeStack, prNumber int, hint Nativ
 	return false
 }
 
-func cachedStackMatchesCurrentHints(stack db.GitHubNativeStack, hints map[int]*NativeStackHint) bool {
+func cachedStackMatchesCurrentHints(stack db.GitHubNativeStack, hints map[int]*platformgithub.NativeStackHint) bool {
 	if !stack.IsOpen || len(stack.Members) != stack.Size {
 		return false
 	}
@@ -411,12 +412,12 @@ func sortedStackNumbers(numbers map[int]bool) []int {
 	return result
 }
 
-func dbGitHubNativeStack(repoID int64, stack NativeStack, observedAt time.Time) db.GitHubNativeStack {
+func dbGitHubNativeStack(repoID int64, stack platformgithub.NativeStack, observedAt time.Time) db.GitHubNativeStack {
 	result := db.GitHubNativeStack{
 		RepoID: repoID, GitHubID: stack.ID, Number: stack.Number,
 		Size: len(stack.Members), BaseRef: stack.BaseRef, IsOpen: stack.Open,
 		GitHubCreatedAt:    stack.CreatedAt.UTC(),
-		ContentFingerprint: nativeStackFingerprint(stack),
+		ContentFingerprint: platformgithub.NativeStackFingerprint(stack),
 		LastObservedAt:     observedAt,
 		Members:            make([]db.GitHubNativeStackMember, 0, len(stack.Members)),
 	}

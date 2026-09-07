@@ -18,8 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 func openTestDB(t *testing.T) *db.DB {
@@ -92,16 +93,16 @@ func (m *mockClient) ListIssueCommentsIfChanged(context.Context, string, string,
 func (m *mockClient) ListReviews(context.Context, string, string, int) ([]*gh.PullRequestReview, error) {
 	return nil, nil
 }
-func (m *mockClient) ListPullRequestReviewThreads(context.Context, string, string, int) ([]ghclient.PullRequestReviewThread, error) {
+func (m *mockClient) ListPullRequestReviewThreads(context.Context, string, string, int) ([]platformgithub.PullRequestReviewThread, error) {
 	return nil, nil
 }
 func (m *mockClient) ListCommits(context.Context, string, string, int) ([]*gh.RepositoryCommit, error) {
 	return nil, nil
 }
-func (m *mockClient) ListPullRequestTimelineEvents(context.Context, string, string, int) ([]ghclient.PullRequestTimelineEvent, error) {
+func (m *mockClient) ListPullRequestTimelineEvents(context.Context, string, string, int) ([]platformgithub.PullRequestTimelineEvent, error) {
 	return nil, nil
 }
-func (m *mockClient) ListForcePushEvents(context.Context, string, string, int) ([]ghclient.ForcePushEvent, error) {
+func (m *mockClient) ListForcePushEvents(context.Context, string, string, int) ([]platformgithub.ForcePushEvent, error) {
 	return nil, nil
 }
 func (m *mockClient) GetCombinedStatus(context.Context, string, string, string) (*gh.CombinedStatus, error) {
@@ -166,7 +167,7 @@ func (m *mockClient) DismissReview(context.Context, string, string, int, int64, 
 func (m *mockClient) MergePullRequest(context.Context, string, string, int, string, string, string, string) (*gh.PullRequestMergeResult, error) {
 	return nil, nil
 }
-func (m *mockClient) EditPullRequest(context.Context, string, string, int, ghclient.EditPullRequestOpts) (*gh.PullRequest, error) {
+func (m *mockClient) EditPullRequest(context.Context, string, string, int, platformgithub.EditPullRequestOpts) (*gh.PullRequest, error) {
 	return nil, nil
 }
 func (m *mockClient) EditIssue(context.Context, string, string, int, string) (*gh.Issue, error) {
@@ -450,9 +451,9 @@ type cancelDuringSyncMockClient struct {
 	entered chan struct{}
 }
 
-func (c *cancelDuringSyncMockClient) ListOpenPullRequests(
+func (c *cancelDuringSyncMockClient) GetRepository(
 	ctx context.Context, _, _ string,
-) ([]*gh.PullRequest, error) {
+) (*gh.Repository, error) {
 	select {
 	case c.entered <- struct{}{}:
 	default:
@@ -490,7 +491,7 @@ func TestRunOnceCancelDuringSyncRepoDoesNotReportSuccess(t *testing.T) {
 	select {
 	case <-mc.entered:
 	case <-time.After(2 * time.Second):
-		require.Fail("worker did not enter ListOpenPullRequests")
+		require.Fail("worker did not enter GetRepository")
 	}
 
 	cancel()

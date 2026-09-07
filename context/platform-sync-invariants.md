@@ -18,7 +18,7 @@ combining repository-owned history
 - `platform` is the provider kind named in the canonical provider list in
   `CLAUDE.md`.
 - `platform_host` is the normalized host for that provider. Preserve ports.
-- Gitea `base_url` changes API transport only; `platform_host` remains identity, and repository reads plus every authenticated Git path reject mismatched or unacknowledged plain-HTTP clone URLs (`internal/platform/gitea/client.go::validateRepositoryCloneURL`, `internal/gitclone/clone.go::validateRemoteTransport`).
+- Gitea `base_url` changes API transport only; `platform_host` remains identity, and repository reads plus every authenticated Git path reject mismatched or unacknowledged plain-HTTP clone URLs (`platform/gitea/client.go::validateRepositoryCloneURL`, `internal/gitclone/clone.go::validateRemoteTransport`).
 - `owner` and `name` are provider-canonical display/config fields.
 - `repo_path` carries the full provider path when `owner/name` is not enough.
 - `platform_repo_id` / provider external IDs are stable provider identities;
@@ -102,7 +102,7 @@ GitHub repositories can continue to omit `repo_path` when the path is exactly
 
 Forgejo and Gitea use GitHub-like two-segment repository paths. Preserve
 provider-canonical repository-path casing unless provider metadata explicitly
-opts into case folding (`internal/platform/metadata.go::LowercaseRepoNames`).
+opts into case folding (`platform/metadata.go::LowercaseRepoNames`).
 `repo_path` is normally `owner/name` and is primarily a canonicalization aid for
 URL-parsed config or provider responses.
 
@@ -214,7 +214,7 @@ review suggestion application, or ready-for-review.
 
 kenn-forge reads repositories, merge requests, issues, releases, tags, CI, and
 timeline/comment-like events through provider capability interfaces in
-`internal/platform`. Providers implement only supported optional interfaces;
+`platform`. Providers implement only supported optional interfaces;
 registry helpers return typed errors for missing providers or capabilities.
 
 - A PR reference is historical evidence that a provider observed a pull or merge
@@ -238,18 +238,18 @@ registry helpers return typed errors for missing providers or capabilities.
 - Missing optional capabilities should degrade that feature with a typed
   platform error, not break unrelated sync work.
 - Never put foreground deadlines on a shared provider HTTP client; scope them to
-  the operation context (`internal/platform/gitlab/client.go::NewClient`).
+  the operation context (`platform/gitlab/client.go::NewClient`).
 - Provider clients with a local sync budget must use the shared transport; duplicate
   wrappers can lose refusal-window identity and make sync status provider-dependent
   (`internal/github/budget_transport.go::WrapSyncBudgetTransport`).
 - Resolve opaque provider repo IDs by `repo_path` before numeric-only operations
-  (`internal/platform/gitlab/client.go::projectScopedArg`).
+  (`platform/gitlab/client.go::projectScopedArg`).
 - `priority_repo` reorders a full run; `only_repo` restricts every repo-derived
   phase and must not delay full-run cadence. Resolve both by full identity, and
   never fall back from invalid exclusive scope. (`internal/github/sync.go::runOnce`)
 - Every issue or merge-request read boundary that can receive a disabled-feature
   candidate must route through definitive classification: GitHub's disabled 410,
-  or GitLab/Gitea/Forgejo repository metadata confirmation. (`internal/platform/gitlab/feature_disabled.go::Client.repositoryFeatureError`, `internal/platform/gitealike/feature_disabled.go::Provider.ClassifyRepositoryFeatureError`)
+  or GitLab/Gitea/Forgejo repository metadata confirmation. (`platform/gitlab/feature_disabled.go::Client.repositoryFeatureError`, `platform/gitealike/feature_disabled.go::Provider.ClassifyRepositoryFeatureError`)
 - Locked pull requests retain their upstream state for detail and sync, but list
   filters and repository counts classify them as closed because they cannot enter
   an open interaction workflow; detail presents only the Locked chip, not the
@@ -261,7 +261,7 @@ registry helpers return typed errors for missing providers or capabilities.
 - Review suggestion application is a provider capability
   (`review_suggestion_application` + `mutation_head_binding` +
   `read_review_threads`, via
-  `internal/platform/client.go::ReviewSuggestionApplier`): an all-or-nothing
+  `platform/client.go::ReviewSuggestionApplier`): an all-or-nothing
   batch apply against the expected head. Partial success is invalid.
 - The server rebuilds each suggestion from persisted review-thread metadata and
   only accepts replacement text matching a stored suggestion fence (opaque
@@ -281,7 +281,7 @@ registry helpers return typed errors for missing providers or capabilities.
   target); live branch or SHA movement → `stale_state`. The live re-check
   before mutation is best-effort — no provider offers commit-only-if-open — so
   expected-head binding is the final integrity check
-  (`internal/server/pullapi/diff_review_handlers.go::Handler.applyReviewSuggestions`, `internal/github/client.go::ensureReviewSuggestionPullMutable`).
+  (`internal/server/pullapi/diff_review_handlers.go::Handler.applyReviewSuggestions`, `platform/github/client.go::Client.ensureReviewSuggestionPullMutable`).
 - Post-apply refresh goes through the detail-sync broadcaster and must rerun
   after any in-flight sync for the same PR — that sync may predate the commit
   (`internal/server/detail_sync.go::enqueueDetailSyncOrRerun`).
@@ -312,7 +312,7 @@ registry helpers return typed errors for missing providers or capabilities.
   the provider error mapper so reads and mutations retain typed platform errors.
   Workflow approval and ready-for-review must remain hidden or return typed
   `unsupported_capability` errors until proven per provider.
-- Gitea 1.24 timeline responses encode `label` as one object while the SDK expects an array; normalize that field at the HTTP boundary so detail sync remains usable at the supported version floor. (`internal/platform/gitea/timeline_transport.go::timelineLabelTransport`)
+- Gitea 1.24 timeline responses encode `label` as one object while the SDK expects an array; normalize that field at the HTTP boundary so detail sync remains usable at the supported version floor. (`platform/gitea/timeline_transport.go::timelineLabelTransport`)
 - GitHub GraphQL bulk fetch, ETag recovery, and detailed diff behavior are
   GitHub-only optimizations. Keep them optional around the neutral persistence
   path.
@@ -325,17 +325,17 @@ registry helpers return typed errors for missing providers or capabilities.
   empty forever, which silently degrades the worktree diff sampler to a bare
   HEAD diff (0/0 sidebar stats).
 - Child datasets and detail/CI/diff freshness writes are fenced to the parent snapshot revision. Complete comments and inline review sets replace; submitted reviews remain additive. (`internal/db/queries_snapshot_children.go::CommitMergeRequestChildSnapshot`)
-- Merge-request assignee omission remains unknown; only a provider-confirmed empty set counts as unassigned, so incomplete snapshots cannot claim that an item has no owner. (`internal/platform/persist.go::MarshalUserNamesJSON`, `internal/db/queries_assignees.go::unassignedCondition`)
+- Merge-request assignee omission remains unknown; only a provider-confirmed empty set counts as unassigned, so incomplete snapshots cannot claim that an item has no owner. (`internal/platformdb/persist.go::MarshalUserNamesJSON`, `internal/db/queries_assignees.go::unassignedCondition`)
 
 ## Historical Archive
 
 - Archive is a scheduling and progress mode over normal sync, not a second sync engine; completeness is repository and item progress scoped by full repository identity. (`internal/db/queries_archive.go::GetArchiveProgress`)
-- Created-order inventory calls require the historical capability; updated-order maintenance traversal does not. Each returns one bounded identity page with an advancing opaque cursor or explicit exhaustion. (`internal/platform/reader_validation.go::pageReaderValidation.prepare`)
+- Created-order inventory calls require the historical capability; updated-order maintenance traversal does not. Each returns one bounded identity page with an advancing opaque cursor or explicit exhaustion. (`platform/reader_validation.go::pageReaderValidation.prepare`)
 - Hydration admits one item and invokes canonical item sync; only a successful complete
   sync records an archive outcome, and provider finalizers run after that commit so they
   observe lifecycle reactivation. (`internal/archive/hydrate.go::hydrateItem`)
-- Only parent lookups explicitly classified as removed, moved, or inaccessible are terminal. Generic and child-dataset not-found responses remain retries; a successful non-GitHub feature-metadata confirmation doubles as repository-accessibility evidence and must not be repeated before marking the parent absent. Canonical item content stays untouched. (`internal/archive/hydrate.go::archiveTerminalSyncOutcome`, `internal/platform/gitealike/feature_disabled.go::Provider.repositoryItemLookupError`,
-  `internal/platform/gitlab/feature_disabled.go::Client.repositoryItemLookupError`)
+- Only parent lookups explicitly classified as removed, moved, or inaccessible are terminal. Generic and child-dataset not-found responses remain retries; a successful non-GitHub feature-metadata confirmation doubles as repository-accessibility evidence and must not be repeated before marking the parent absent. Canonical item content stays untouched. (`internal/archive/hydrate.go::archiveTerminalSyncOutcome`, `platform/gitealike/feature_disabled.go::Provider.repositoryItemLookupError`,
+  `platform/gitlab/feature_disabled.go::Client.repositoryItemLookupError`)
 - Removed-upstream parents stay stored for rediscovery but are excluded from public
   item list/detail reads and archive reports; inaccessible rows remain visible because
   authorization loss does not prove removal. (`internal/db/queries_archive_report.go::archiveReportActivityQuery`)
@@ -396,15 +396,15 @@ response omits it. GitLab Notes are the explicit exception: derive
 `parent URL + #note_<id>` because Notes do not expose a browser URL
 (`internal/db/queries.go::DB.UpsertMREvents`,
 `internal/db/queries.go::DB.UpsertIssueEvents`,
-`internal/platform/gitlab/normalize.go::noteDirectURL`).
+`platform/gitlab/normalize.go::noteDirectURL`).
 
 ## GitLab Shape
 
 GitLab note IDs identify comments; discussion IDs identify reply and resolution
 targets. Reads supporting threaded mutations must preserve Discussions
 grouping rather than flattening it into Notes
-(`internal/platform/gitlab/pages.go::Client.listMergeRequestDiscussionsPage`,
-`internal/platform/gitlab/normalize.go::NormalizeMergeRequestDiscussions`).
+(`platform/gitlab/pages.go::Client.listMergeRequestDiscussionsPage`,
+`platform/gitlab/normalize.go::NormalizeMergeRequestDiscussions`).
 
 GitLab API calls address projects by numeric id or URL-escaped path with
 slashes. kenn-forge should prefer the stored provider id after resolution and
@@ -412,7 +412,7 @@ preserve `path_with_namespace` as `repo_path`.
 
 GitLab private Markdown upload web URLs do not accept API-token authentication.
 Translate only repo-scoped upload URLs to the authenticated project-upload API;
-never proxy arbitrary provider URLs. (`internal/platform/gitlab/markdown_images.go::GetMarkdownImage`)
+never proxy arbitrary provider URLs. (`platform/gitlab/markdown_images.go::GetMarkdownImage`)
 
 The markdown image cache is keyed by stable repository identity, never the owner/name
 route, so a replacement occupant of a reused route cannot receive the previous
@@ -423,15 +423,15 @@ GitLab merge request and issue `iid` values are repo-scoped numbers. Persist
 provider object ids separately from user-visible numbers, and scope events by
 provider identity so equal GitHub/GitLab ids do not collide.
 
-GitLab archive discussions normalize as ordinary or inline comments. Do not synthesize submitted reviews from notes or current approvals; without stable historical actions, that dataset stays unsupported and coverage stays partial. (`internal/platform/gitlab/client.go::Capabilities`)
+GitLab archive discussions normalize as ordinary or inline comments. Do not synthesize submitted reviews from notes or current approvals; without stable historical actions, that dataset stays unsupported and coverage stays partial. (`platform/gitlab/client.go::Capabilities`)
 
-GitLab issue event hydration preserves authored close and reopen system notes, while ordinary-comment reads exclude system notes. (`internal/platform/gitlab/client.go::Client.ListIssueEvents`, `internal/platform/gitlab/normalize.go::normalizeIssueSystemNote`)
+GitLab issue event hydration preserves authored close and reopen system notes, while ordinary-comment reads exclude system notes. (`platform/gitlab/client.go::Client.ListIssueEvents`, `platform/gitlab/normalize.go::normalizeIssueSystemNote`)
 
-GitLab historical merge-request inventory is unsupported because project merge requests expose only offset pagination and cannot guarantee completeness across equal-`created_at` ties. Coverage remains partial while supported issue history and discussion datasets continue. (`internal/platform/gitlab/client.go::Capabilities`, `internal/platform/gitlab/pages.go::ListMergeRequestsPage`)
+GitLab historical merge-request inventory is unsupported because project merge requests expose only offset pagination and cannot guarantee completeness across equal-`created_at` ties. Coverage remains partial while supported issue history and discussion datasets continue. (`platform/gitlab/client.go::Capabilities`, `platform/gitlab/pages.go::ListMergeRequestsPage`)
 
-GitLab maintenance inventories walk mutable `updated_at` results newest-first. Updates then move toward the consumed prefix; rows that move ahead before consumption remain eligible under the next scan's inclusive watermark. (`internal/platform/gitlab/pages.go::listInventoryIssuesPage`, `internal/platform/gitlab/pages.go::listInventoryMergeRequestsPage`)
+GitLab maintenance inventories walk mutable `updated_at` results newest-first. Updates then move toward the consumed prefix; rows that move ahead before consumption remain eligible under the next scan's inclusive watermark. (`platform/gitlab/pages.go::listInventoryIssuesPage`, `platform/gitlab/pages.go::listInventoryMergeRequestsPage`)
 
-GitLab merge reports use `merge_commit_sha`, falling back to `squash_commit_sha` when no merge commit exists. (`internal/platform/gitlab/normalize.go::normalizeMergeRequest`)
+GitLab merge reports use `merge_commit_sha`, falling back to `squash_commit_sha` when no merge commit exists. (`platform/gitlab/normalize.go::normalizeMergeRequest`)
 
 ## Forgejo And Gitea Shape
 
@@ -448,7 +448,7 @@ Forgejo pull-request JSON is authoritative for merge metrics: its SDK drops
 those fields, so raw-response capture must preserve values and field presence
 with head/base binding before neutral normalization; omitted counters preserve
 stored values while explicit zero replaces them
-(`internal/platform/gitealike/mergeable_capture.go::MetricsForPullRequest`).
+(`platform/gitealike/mergeable_capture.go::MetricsForPullRequest`).
 
 Actions/CI parity is provider-specific. Forgejo reads Actions runs through the
 shared gitealike provider. Gitea reads repository workflow runs only when the
@@ -461,7 +461,7 @@ tests prove those exact operations.
 
 Archive access probes preserve transient and rate-limit failures for retry. Only
 authoritative repository permission or not-found responses may become permanent
-inaccessibility. (`internal/platform/gitealike/pages.go::classifyLookupOutcome`)
+inaccessibility. (`platform/gitealike/pages.go::classifyLookupOutcome`)
 
 Inline review hydration is complete-or-error: drain every review page and every
 per-review comment before revision-fenced dataset replacement. Never publish a

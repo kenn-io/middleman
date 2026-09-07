@@ -12,7 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 func pagesTestRef() platform.RepoRef {
@@ -45,7 +46,7 @@ func TestGitHubRepositoryFeatureDisabled(t *testing.T) {
 				Response: &http.Response{StatusCode: tt.status},
 				Message:  tt.message,
 			}
-			classified := githubRepositoryFeatureDisabled("github.example.com", tt.capability, err)
+			classified := platformgithub.RepositoryFeatureDisabled("github.example.com", tt.capability, err)
 			if !tt.want {
 				assert.NoError(classified)
 				return
@@ -133,7 +134,7 @@ func TestGitHubArchiveMergeRequestInventoryClassifiesIssueOnlyRepository(t *test
 			}
 			require.Error(err)
 			require.NotErrorIs(err, platform.ErrRepositoryFeatureDisabled)
-			assert.Equal(http.StatusNotFound, githubStatusCode(err))
+			assert.Equal(http.StatusNotFound, platformgithub.StatusCode(err))
 		})
 	}
 }
@@ -253,11 +254,11 @@ func TestGitHubArchiveDestinationIgnoresRepoCasing(t *testing.T) {
 		RepoPath: "MixedOwner/MixedName",
 	}
 
-	assert.Nil(githubArchiveDestination(
+	assert.Nil(platformgithub.ArchiveDestination(
 		ref,
 		"https://api.github.com/repos/mixedowner/mixedname",
 	))
-	destination := githubArchiveDestination(
+	destination := platformgithub.ArchiveDestination(
 		ref,
 		"https://api.github.com/repos/OtherOwner/OtherName",
 	)

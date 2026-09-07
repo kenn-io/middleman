@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/stacks"
+	"go.kenn.io/forge/platform"
 )
 
 // swapGitHubNativeStackPreferenceLocked publishes the preference while the

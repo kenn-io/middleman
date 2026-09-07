@@ -14,15 +14,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/config"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 type routeRecordingClient struct {
 	Client
 	marker         string
 	calls          []string
-	snapshot       *RateLimitSnapshot
+	snapshot       *platformgithub.RateLimitSnapshot
 	snapshotErr    error
 	snapshotSource tokenauth.Source
 	snapshotToken  string
@@ -126,7 +127,7 @@ func (c *routeRecordingClient) MarkNotificationThreadRead(
 	return nil
 }
 
-func (c *routeRecordingClient) GetRateLimitSnapshot(ctx context.Context) (*RateLimitSnapshot, error) {
+func (c *routeRecordingClient) GetRateLimitSnapshot(ctx context.Context) (*platformgithub.RateLimitSnapshot, error) {
 	c.calls = append(c.calls, "snapshot")
 	if c.snapshotSource != nil {
 		token, err := c.snapshotSource.Token(ctx)
@@ -141,7 +142,7 @@ func (c *routeRecordingClient) GetRateLimitSnapshot(ctx context.Context) (*RateL
 	if c.snapshot != nil {
 		return c.snapshot, nil
 	}
-	return &RateLimitSnapshot{}, nil
+	return &platformgithub.RateLimitSnapshot{}, nil
 }
 
 func TestGitHubProviderPreservesRepositoryAwareNotificationRouting(t *testing.T) {
@@ -157,7 +158,7 @@ func TestGitHubProviderPreservesRepositoryAwareNotificationRouting(t *testing.T)
 	require.NoError(err)
 	routed, err := NewRoutedClient(router)
 	require.NoError(err)
-	provider := &gitHubClientProvider{client: routed, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", routed)
 
 	getter, ok := any(provider).(routedNotificationThreadGetter)
 	require.True(ok, "the platform wrapper must preserve repository-aware thread reads")
@@ -192,7 +193,7 @@ func TestGitHubProviderRoutesMarkdownImagesByRepositoryCredential(t *testing.T) 
 	require.NoError(err)
 	routed, err := NewRoutedClient(router)
 	require.NoError(err)
-	provider := &gitHubClientProvider{client: routed, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", routed)
 
 	require.True(provider.Capabilities().ReadMarkdownImages,
 		"a routed GitHub host must keep private markdown image previews")
@@ -314,7 +315,7 @@ func TestSyncerRateSnapshotScopesAppRouteToOwner(t *testing.T) {
 	tracker := NewRateTracker(database, "github.com", "installation:2", "rest")
 	client := &routeRecordingClient{
 		snapshotSource: source,
-		snapshot:       &RateLimitSnapshot{Core: &Rate{Limit: 5000, Remaining: 4000}},
+		snapshot:       &platformgithub.RateLimitSnapshot{Core: &Rate{Limit: 5000, Remaining: 4000}},
 	}
 	router, err := NewHostRouter("github.com", &Route{
 		Key: RouteKey{Host: "github.com", Owner: "acme"}, Client: client,
@@ -336,7 +337,7 @@ func TestSyncerRateSnapshotScopesAppRouteToOwner(t *testing.T) {
 	assert.Equal(4000, tracker.Remaining())
 }
 
-func (c *routeRecordingClient) bypassNotificationReadRateReserve() bool {
+func (c *routeRecordingClient) InstallationAuthenticationActive() bool {
 	return c.marker == "fallback"
 }
 
@@ -409,20 +410,20 @@ func TestHostRouterReturnsSafeMissingRouteError(t *testing.T) {
 // it to a failed type assertion.
 type routedNativeStackClient struct {
 	*routeRecordingClient
-	hints map[int]*NativeStackHint
-	page  NativeStackPage
+	hints map[int]*platformgithub.NativeStackHint
+	page  platformgithub.NativeStackPage
 }
 
 func (c *routedNativeStackClient) ListOpenPullRequestsWithNativeStackHints(
 	_ context.Context, owner, repo string,
-) ([]*gh.PullRequest, map[int]*NativeStackHint, error) {
+) ([]*gh.PullRequest, map[int]*platformgithub.NativeStackHint, error) {
 	c.calls = append(c.calls, "native-hints:"+owner+"/"+repo)
 	return nil, c.hints, nil
 }
 
 func (c *routedNativeStackClient) ListNativeStacksPage(
 	_ context.Context, owner, repo string, page int,
-) (NativeStackPage, error) {
+) (platformgithub.NativeStackPage, error) {
 	c.calls = append(c.calls, fmt.Sprintf("native-page:%s/%s:%d", owner, repo, page))
 	return c.page, nil
 }
@@ -430,13 +431,13 @@ func (c *routedNativeStackClient) ListNativeStacksPage(
 func TestRoutedClientServesNativeStacksThroughSelectedRoute(t *testing.T) {
 	require := require.New(t)
 	assert := assert.New(t)
-	hints := map[int]*NativeStackHint{
+	hints := map[int]*platformgithub.NativeStackHint{
 		101: {Number: 42, Size: 2, Position: 1, BaseRef: "main"},
 	}
 	ownerClient := &routedNativeStackClient{
 		routeRecordingClient: &routeRecordingClient{marker: "owner"},
 		hints:                hints,
-		page: NativeStackPage{Stacks: []NativeStack{{
+		page: platformgithub.NativeStackPage{Stacks: []platformgithub.NativeStack{{
 			ID: 9001, Number: 42, BaseRef: "main", Open: true,
 		}}},
 	}
@@ -450,7 +451,7 @@ func TestRoutedClientServesNativeStacksThroughSelectedRoute(t *testing.T) {
 	client, err := NewRoutedClient(router)
 	require.NoError(err)
 
-	native, ok := any(client).(NativeStackClient)
+	native, ok := any(client).(platformgithub.NativeStackClient)
 	require.True(ok, "a routed client must expose the preview stack surface")
 	_, gotHints, err := native.ListOpenPullRequestsWithNativeStackHints(t.Context(), "acme", "widget")
 	require.NoError(err)
@@ -546,7 +547,7 @@ func TestRoutedClientDelegatesByRepositoryOwnerAndFallback(t *testing.T) {
 	assert.Contains(ownerClient.calls, "mark-read:456")
 	_, err = client.GetRateLimitSnapshot(t.Context())
 	require.NoError(err)
-	assert.True(client.bypassNotificationReadRateReserve())
+	assert.True(client.InstallationAuthenticationActive())
 }
 
 func TestRoutedClientDiscoveryMergesPATAndSelectedAppResults(t *testing.T) {
@@ -654,12 +655,12 @@ func TestRoutedClientPreservesAndRoutesArchiveInventory(t *testing.T) {
 	require.NoError(err)
 	routed, err := NewRoutedClient(router)
 	require.NoError(err)
-	paged, ok := any(routed).(pageClient)
+	paged, ok := any(routed).(platformgithub.InventoryAPI)
 	require.True(ok, "routed GitHub clients must preserve archive inventory support")
 	if !ok {
 		return
 	}
-	provider := &gitHubClientProvider{host: "github.com", client: routed}
+	provider := newTestGitHubProvider(t, "github.com", routed)
 	assert.Equal(platform.ArchiveCapabilities{
 		HistoricalIssues: true, HistoricalMergeRequests: true,
 		OrdinaryComments: true, SubmittedReviews: true, InlineReviewComments: true,
@@ -693,7 +694,7 @@ func TestRoutedClientPreservesAndRoutesArchiveInventory(t *testing.T) {
 	require.NoError(err)
 	unsupported, err := NewRoutedClient(unsupportedRouter)
 	require.NoError(err)
-	unsupportedPaged, ok := any(unsupported).(pageClient)
+	unsupportedPaged, ok := any(unsupported).(platformgithub.InventoryAPI)
 	require.True(ok)
 	if !ok {
 		return
@@ -1090,11 +1091,11 @@ func TestSyncerRefreshesRateSnapshotsPerIdentityRoute(t *testing.T) {
 	gql123 := NewRateTracker(database, "github.com", "user:123", "graphql")
 	rest456 := NewRateTracker(database, "github.com", "user:456", "rest")
 	gql456 := NewRateTracker(database, "github.com", "user:456", "graphql")
-	client123 := &routeRecordingClient{snapshot: &RateLimitSnapshot{
+	client123 := &routeRecordingClient{snapshot: &platformgithub.RateLimitSnapshot{
 		Core:    &Rate{Limit: 5000, Remaining: 4100},
 		GraphQL: &Rate{Limit: 5000, Remaining: 4200},
 	}}
-	client456 := &routeRecordingClient{snapshot: &RateLimitSnapshot{
+	client456 := &routeRecordingClient{snapshot: &platformgithub.RateLimitSnapshot{
 		Core:    &Rate{Limit: 5000, Remaining: 3100},
 		GraphQL: &Rate{Limit: 5000, Remaining: 3200},
 	}}
@@ -1139,7 +1140,7 @@ func TestSyncerRateSnapshotTriesHealthyRouteForSharedIdentity(t *testing.T) {
 	identity := IdentityKey{Host: "github.com", Principal: "user:123"}
 	rest := NewRateTracker(database, "github.com", "user:123", "rest")
 	failed := &routeRecordingClient{snapshotErr: fmt.Errorf("expired token")}
-	healthy := &routeRecordingClient{snapshot: &RateLimitSnapshot{
+	healthy := &routeRecordingClient{snapshot: &platformgithub.RateLimitSnapshot{
 		Core: &Rate{Limit: 5000, Remaining: 4200},
 	}}
 	router, err := NewHostRouter(
@@ -1173,10 +1174,10 @@ func TestSyncerRefreshesWriteOnlyIdentityRateSnapshot(t *testing.T) {
 	appREST := NewRateTracker(database, "github.com", "installation:789", "rest")
 	userREST := NewRateTracker(database, "github.com", "user:123", "rest")
 	userGQL := NewRateTracker(database, "github.com", "user:123", "graphql")
-	appClient := &routeRecordingClient{snapshot: &RateLimitSnapshot{
+	appClient := &routeRecordingClient{snapshot: &platformgithub.RateLimitSnapshot{
 		Core: &Rate{Limit: 5000, Remaining: 4100},
 	}}
-	userClient := &routeRecordingClient{snapshot: &RateLimitSnapshot{
+	userClient := &routeRecordingClient{snapshot: &platformgithub.RateLimitSnapshot{
 		Core:    &Rate{Limit: 5000, Remaining: 3100},
 		GraphQL: &Rate{Limit: 5000, Remaining: 3200},
 	}}

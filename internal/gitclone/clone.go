@@ -19,9 +19,9 @@ import (
 	"sync"
 	"time"
 
-	providerplatform "go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/procutil"
 	"go.kenn.io/forge/internal/tokenauth"
+	providerplatform "go.kenn.io/forge/platform"
 	gitcmd "go.kenn.io/kit/git/cmd"
 	gitremote "go.kenn.io/kit/git/remote"
 	"golang.org/x/sync/singleflight"

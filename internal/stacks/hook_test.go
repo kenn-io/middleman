@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	realdb "go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 func TestSyncCompletedHookUsesProviderQualifiedRepoIdentity(t *testing.T) {

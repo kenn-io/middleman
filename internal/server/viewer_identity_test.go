@@ -7,12 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
 )
 
 type viewerIdentityProvider struct {
@@ -71,7 +73,7 @@ func newViewerIdentityTestServer(
 	refs := make([]ghclient.RepoRef, 0, len(repos))
 	repoIDs := make(map[string]int64, len(repos))
 	for _, repo := range repos {
-		id, err := database.UpsertRepo(t.Context(), platform.DBRepoIdentity(repo))
+		id, err := database.UpsertRepo(t.Context(), platformdb.DBRepoIdentity(repo))
 		require.NoError(t, err)
 		repoIDs[repo.RepoPath] = id
 		refs = append(refs, ghclient.RepoRef{
@@ -232,7 +234,7 @@ func TestResolveAuthenticatedViewerLoginsKeepsUnkeyedGitHubReposSeparate(t *test
 		{Platform: platform.KindGitHub, PlatformHost: "github.com", Owner: "other", Name: "tool", RepoPath: "other/tool", PlatformExternalID: "repo-tool"},
 	}
 	for _, ref := range refs {
-		_, err := database.UpsertRepo(t.Context(), platform.DBRepoIdentity(platform.RepoRef{
+		_, err := database.UpsertRepo(t.Context(), platformdb.DBRepoIdentity(platform.RepoRef{
 			Platform: ref.Platform, Host: ref.PlatformHost, Owner: ref.Owner, Name: ref.Name,
 			RepoPath: ref.RepoPath, PlatformExternalID: ref.PlatformExternalID,
 		}))

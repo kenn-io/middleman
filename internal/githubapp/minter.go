@@ -3,6 +3,8 @@ package githubapp
 import (
 	"context"
 	"time"
+
+	"go.kenn.io/forge/githubapp"
 )
 
 // MintInstallationToken signs an app JWT with the key at keyPath and
@@ -16,7 +18,7 @@ func MintInstallationToken(
 	keyPath string,
 	installationID int64,
 ) (string, time.Time, error) {
-	return mintInstallationToken(ctx, APIBaseForHost(host), appID, keyPath, installationID)
+	return mintInstallationToken(ctx, githubapp.APIBaseForHost(host), appID, keyPath, installationID)
 }
 
 func mintInstallationToken(
@@ -30,11 +32,11 @@ func mintInstallationToken(
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	appJWT, err := SignAppJWT(appID, key, time.Now())
+	appJWT, err := githubapp.SignAppJWT(appID, key, time.Now())
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	token, err := NewClientWithBase(apiBase).CreateInstallationToken(ctx, appJWT, installationID)
+	token, err := githubapp.NewClientWithBase(apiBase).CreateInstallationToken(ctx, appJWT, installationID)
 	if err != nil {
 		return "", time.Time{}, err
 	}

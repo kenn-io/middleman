@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 )
 
 func (s *Handler) lookupRepoMap(ctx context.Context) (map[int64]db.Repo, error) {

@@ -23,11 +23,11 @@ import (
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/gitclone"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	platformgitlab "go.kenn.io/forge/internal/platform/gitlab"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
+	platformgitlab "go.kenn.io/forge/platform/gitlab"
 	gitcmd "go.kenn.io/kit/git/cmd"
 )
 
@@ -127,8 +127,7 @@ func TestGitLabNormalSyncEnablesHeadBoundMutations(t *testing.T) {
 	client, err := platformgitlab.NewClient(
 		"gitlab.com",
 		staticGitLabTokenSource("token"),
-		platformgitlab.WithBaseURLForTesting(api.URL+"/api/v4"),
-	)
+		platformgitlab.WithBaseURLForTesting(api.URL+"/api/v4"), platformgitlab.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := platform.NewRegistry(client)
 	require.NoError(err)

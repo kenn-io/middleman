@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -16,10 +18,10 @@ import (
 	"go.kenn.io/forge/internal/archive"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
+	"go.kenn.io/forge/platform"
 )
 
 // A configured repository that archive seeding skipped stays in the syncer's
@@ -128,7 +130,7 @@ func TestArchiveWorkerSkipsUnresolvableTrackedRepoE2E(t *testing.T) {
 	require.NoError(archiveService.RunEligible(t.Context()))
 	require.NoError(archiveService.RunEligible(t.Context()))
 
-	repo, err := database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(healthy))
+	repo, err := database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(healthy))
 	require.NoError(err)
 	require.NotNil(repo)
 	states, err := database.ListArchiveRepoStates(t.Context(), []int64{repo.ID})

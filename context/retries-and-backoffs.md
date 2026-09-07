@@ -115,10 +115,10 @@ Follow-on lanes after index completion must acquire a fresh probe; clearing the 
 generation does not authorize an unchanged-list comment refresh. (`internal/github/sync.go::refreshRepoPRComments`)
 Classify repository-disabled reads before generic fallback or detail handling. GitHub
 uses its definitive disabled 410; other providers confirm candidate 403/404/410 failures
-against repository metadata and preserve unconfirmed errors. (`internal/platform/gitealike/feature_disabled.go::Provider.repositoryFeatureError`)
+against repository metadata and preserve unconfirmed errors. (`platform/gitealike/feature_disabled.go::Provider.repositoryFeatureError`)
 Custom GitHub GraphQL timeline transports must preserve structured non-2xx errors before
 closing the body so disabled-feature classification can inspect 410 responses.
-(`internal/github/client.go::ListPullRequestTimelineEvents`)
+(`platform/github/client.go::Client.ListPullRequestTimelineEvents`)
 Recording a disabled result must preserve any earlier same-scope item failure so retry
 and ETag invalidation state survives the cooldown. (`internal/github/sync.go::indexSyncRepo`)
 Apply the gate before shared budget exhaustion so suppressed work cannot starve

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.kenn.io/forge/internal/platformdb"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,10 +20,10 @@ import (
 	"go.kenn.io/forge/internal/archive/report"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/server/httpapi"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
 )
 
 func TestAPIArchiveRoutesRemainRegisteredWithoutController(t *testing.T) {
@@ -71,7 +72,7 @@ func TestAPIArchiveStartPauseStatusAndReport(t *testing.T) {
 	assert.Equal((*started.JSON200)[0].Status, (*startedAgain.JSON200)[0].Status)
 
 	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
-	repo, err := database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	issueResult, err := database.WriteDB().ExecContext(t.Context(), `
@@ -200,7 +201,7 @@ func TestAPIArchiveReportExcludesOnlyRemovedUpstreamParents(t *testing.T) {
 	ctx := t.Context()
 
 	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
-	repo, err := database.GetRepoByIdentity(ctx, platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(ctx, platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 
@@ -327,7 +328,7 @@ func TestAPIArchiveValidationAndLimitProblemDetails(t *testing.T) {
 	require.NoError(err)
 	require.NotNil(mixedMutation.ApplicationproblemJSONDefault)
 	assert.Equal(generated.BadRequest, mixedMutation.ApplicationproblemJSONDefault.Code)
-	repo, err := database.GetRepoByIdentity(t.Context(), platform.DBRepoIdentity(ref))
+	repo, err := database.GetRepoByIdentity(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	require.NotNil(repo)
 	states, err := database.ListArchiveRepoStates(t.Context(), []int64{repo.ID})
@@ -482,7 +483,7 @@ func setupArchiveTestServer(
 		Platform: platform.KindGitHub, Host: "github.test", Owner: "owner",
 		Name: "repo", RepoPath: "owner/repo", PlatformExternalID: "repo-owner-repo",
 	}
-	_, err := database.UpsertRepo(t.Context(), platform.DBRepoIdentity(ref))
+	_, err := database.UpsertRepo(t.Context(), platformdb.DBRepoIdentity(ref))
 	require.NoError(t, err)
 	provider := &archiveAPITestProvider{}
 	wakeCount := &atomic.Int32{}

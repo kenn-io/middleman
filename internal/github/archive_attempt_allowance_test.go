@@ -11,8 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.kenn.io/forge/internal/platform"
-	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
 )
 
 // countingRoundTripper records wire attempts and returns a fixed status so a
@@ -67,10 +66,10 @@ func TestArchiveAttemptAllowanceBoundsAuthRetries(t *testing.T) {
 	// budgetTransport sits beneath AuthTransport, exactly as the production
 	// clients layer it, so an authentication retry is a second wire attempt
 	// that must draw from the same admitted allowance.
-	authRT := tokenauth.AuthTransport{
+	authRT := platform.AuthTransport{
 		Source:              newMutableRuntimeAuthTokenSource("first-token"),
 		Base:                WrapSyncBudgetTransport(base, budget),
-		SetHeader:           tokenauth.BearerAuthHeader,
+		SetHeader:           platform.BearerAuthHeader,
 		RetryOnUnauthorized: true,
 	}
 	ctx := WithArchiveAttemptAllowance(WithArchiveSyncBudget(t.Context()), 1)

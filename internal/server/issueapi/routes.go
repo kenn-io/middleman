@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"strings"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"go.kenn.io/forge/internal/db"
 	"go.kenn.io/forge/internal/federationauth"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/httpapi"
 	"go.kenn.io/forge/internal/server/workspaceapi"
 )
@@ -136,7 +137,7 @@ func (s *Handler) createIssue(ctx context.Context, input *createIssueInput) (*cr
 	if err != nil {
 		return nil, httpapi.ProviderMutationProblem(err, string(httpapi.ProviderKind(*repo)), httpapi.ProviderHost(*repo))
 	}
-	issue := platform.DBIssue(repo.ID, providerIssue)
+	issue := platformdb.DBIssue(repo.ID, providerIssue)
 	issueID, err := s.db.UpsertIssue(ctx, issue)
 	if err != nil {
 		return nil, createIssuePersistenceProblem(*repo)

@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/stretchr/testify/require"
@@ -19,9 +21,9 @@ import (
 	"go.kenn.io/forge/internal/apiclient/generated"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/httpapi"
 	"go.kenn.io/forge/internal/testutil/dbtest"
+	"go.kenn.io/forge/platform"
 )
 
 type deferredMergeProviderBase struct {
@@ -303,7 +305,7 @@ func newDeferredMergeRouteServer(
 	registry, err := platform.NewRegistry(provider)
 	require.NoError(t, err)
 	database := dbtest.Open(t)
-	repoID, err := database.UpsertRepo(ctx, platform.DBRepoIdentity(ref))
+	repoID, err := database.UpsertRepo(ctx, platformdb.DBRepoIdentity(ref))
 	require.NoError(t, err)
 	_, err = database.UpsertMergeRequest(ctx, &db.MergeRequest{
 		RepoID:          repoID,
@@ -407,7 +409,7 @@ func TestDeferMergeEndpointQueuesMergeAndBroadcastsCompletion(t *testing.T) {
 	registry, err := platform.NewRegistry(provider)
 	require.NoError(err)
 	database := dbtest.Open(t)
-	repoID, err := database.UpsertRepo(ctx, platform.DBRepoIdentity(ref))
+	repoID, err := database.UpsertRepo(ctx, platformdb.DBRepoIdentity(ref))
 	require.NoError(err)
 	_, err = database.UpsertMergeRequest(ctx, &db.MergeRequest{
 		RepoID:          repoID,

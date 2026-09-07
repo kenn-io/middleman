@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"go.kenn.io/forge/internal/federation"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
 	gitremote "go.kenn.io/kit/git/remote"
 )
 

@@ -13,9 +13,14 @@ import (
 
 	gh "github.com/google/go-github/v89/github"
 	"github.com/shurcooL/githubv4"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
+
+func gqlCommentVisibility(comment *platformgithub.GraphQLComment) platformgithub.CommentVisibility {
+	return commentVisibility(comment.IsMinimized, comment.MinimizedReason)
+}
 
 // topLevelPageSize is the number of PRs fetched per GraphQL
 // query page. Kept conservative to stay under GitHub's 500k
@@ -33,345 +38,17 @@ type gqlPRQuery[T any] struct {
 		PullRequests struct {
 			TotalCount int
 			Nodes      []T
-			PageInfo   pageInfo
+			PageInfo   platformgithub.GraphQLPageInfo
 		} `graphql:"pullRequests(first: $pageSize, states: OPEN, after: $cursor)"`
 	} `graphql:"repository(owner: $owner, name: $name)"`
-}
-
-type gqlPR struct {
-	DatabaseId     int64 `graphql:"databaseId"`
-	Number         int
-	Title          string
-	State          string
-	IsDraft        bool
-	Locked         bool
-	Body           string
-	URL            string
-	Author         struct{ Login string }
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	MergedAt       *time.Time
-	MergedBy       *struct{ Login string }
-	ClosedAt       *time.Time
-	Additions      int
-	Deletions      int
-	Mergeable      string
-	ReviewDecision string
-	HeadRefName    string
-	BaseRefName    string
-	HeadRefOid     string `graphql:"headRefOid"`
-	BaseRefOid     string `graphql:"baseRefOid"`
-	HeadRepository *struct {
-		URL string
-	}
-	Labels struct {
-		Nodes []gqlLabel
-	} `graphql:"labels(first: 100)"`
-	Assignees struct {
-		Nodes []gqlAssigneeID
-	} `graphql:"assignees(first: 100)"`
-	ReviewRequests struct {
-		Nodes []gqlReviewRequest
-	} `graphql:"reviewRequests(first: 100)"`
-	Comments struct {
-		Nodes    []gqlComment
-		PageInfo pageInfo
-	} `graphql:"comments(first: 100)"`
-	ReviewThreads struct {
-		Nodes    []gqlReviewThread
-		PageInfo pageInfo
-	} `graphql:"reviewThreads(first: 100)"`
-	Reviews struct {
-		Nodes    []gqlReview
-		PageInfo pageInfo
-	} `graphql:"reviews(first: 100)"`
-	AllCommits struct {
-		Nodes    []gqlCommitNode
-		PageInfo pageInfo
-	} `graphql:"allCommits: commits(first: 100)"`
-	LastCommit struct {
-		Nodes []struct {
-			Commit struct {
-				StatusCheckRollup *struct {
-					Contexts struct {
-						Nodes    []gqlCheckContext
-						PageInfo pageInfo
-					} `graphql:"contexts(first: 100)"`
-				}
-			}
-		}
-	} `graphql:"lastCommit: commits(last: 1)"`
-	TimelineItems struct {
-		Nodes    []gqlPullRequestTimelineItem
-		PageInfo pageInfo
-	} `graphql:"timelineItems(itemTypes: [HEAD_REF_FORCE_PUSHED_EVENT, COMMENT_DELETED_EVENT, CROSS_REFERENCED_EVENT, RENAMED_TITLE_EVENT, BASE_REF_CHANGED_EVENT, ASSIGNED_EVENT, UNASSIGNED_EVENT, MERGED_EVENT, CLOSED_EVENT, REOPENED_EVENT], first: 100)"`
-}
-
-// gqlPRWithNativeStacks is a distinct query shape so preview-only fields are
-// absent from GraphQL requests while the setting is disabled. An @include
-// directive would still make servers without the preview schema validate the
-// unknown fields.
-type gqlPRWithNativeStacks struct {
-	gqlPR
-	Stack      *gqlNativeStack
-	StackEntry *struct{ Position int }
-}
-
-type gqlNativeStack struct {
-	ID          githubv4.ID
-	Number      int
-	Size        int
-	BaseRefName string
-}
-
-// gqlReviewRequest carries the requested reviewer of a pending review
-// request. Team review requests are intentionally skipped: kenn-forge only
-// tracks user review requests.
-type gqlReviewRequest struct {
-	RequestedReviewer struct {
-		Typename  string        `graphql:"__typename"`
-		User      gqlAssigneeID `graphql:"... on User"`
-		Mannequin gqlAssigneeID `graphql:"... on Mannequin"`
-	} `graphql:"requestedReviewer"`
-}
-
-func (r gqlReviewRequest) Login() string {
-	switch r.RequestedReviewer.Typename {
-	case "User":
-		return r.RequestedReviewer.User.Login
-	case "Mannequin":
-		return r.RequestedReviewer.Mannequin.Login
-	default:
-		return ""
-	}
-}
-
-type gqlComment struct {
-	DatabaseId      int64
-	FullDatabaseId  graphQLInt64
-	Author          struct{ Login string }
-	Body            string
-	URL             string `graphql:"url"`
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	IsMinimized     bool
-	MinimizedReason *githubv4.ReportedContentClassifiers
-}
-
-type gqlCommentVisibilityNode struct {
-	DatabaseId      int64
-	FullDatabaseId  graphQLInt64
-	IsMinimized     bool
-	MinimizedReason *githubv4.ReportedContentClassifiers
-}
-
-type gqlReviewThread struct {
-	ID                githubv4.ID `graphql:"id"`
-	IsResolved        bool
-	IsOutdated        bool
-	Path              string
-	Line              int
-	OriginalLine      int
-	StartLine         *int
-	OriginalStartLine *int
-	DiffSide          string
-	Comments          struct {
-		Nodes    []gqlReviewThreadComment
-		PageInfo pageInfo
-	} `graphql:"comments(first: 100)"`
-}
-
-type gqlReviewThreadComment struct {
-	ID             githubv4.ID `graphql:"id"`
-	DatabaseId     int64
-	FullDatabaseId graphQLInt64
-	Body           string
-	Path           string
-	Line           int
-	OriginalLine   int
-	SubjectType    string
-	DiffHunk       string
-	URL            string `graphql:"url"`
-	Author         struct{ Login string }
-	Commit         *struct {
-		OID string `graphql:"oid"`
-	}
-	OriginalCommit *struct {
-		OID string `graphql:"oid"`
-	}
-	PullRequestReview *struct {
-		DatabaseId int64
-	}
-	IsMinimized     bool
-	MinimizedReason *githubv4.ReportedContentClassifiers
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-}
-
-type gqlReview struct {
-	DatabaseId  int64
-	Author      struct{ Login string }
-	Body        string
-	State       string
-	SubmittedAt time.Time
-}
-
-type gqlCommitNode struct {
-	Commit gqlCommit
-}
-
-type gqlCommit struct {
-	OID     string `graphql:"oid"`
-	Message string
-	Author  struct {
-		Name string
-		Date *time.Time
-		User *struct{ Login string }
-	}
-	Committer struct {
-		Name string
-		Date *time.Time
-		User *struct{ Login string }
-	}
-}
-
-type gqlPullRequestTimelineItem struct {
-	Typename                string                     `graphql:"__typename"`
-	Node                    gqlNodeFragment            `graphql:"... on Node"`
-	HeadRefForcePushedEvent gqlHeadRefForcePushedEvent `graphql:"... on HeadRefForcePushedEvent"`
-	CommentDeletedEvent     gqlCommentDeletedEvent     `graphql:"... on CommentDeletedEvent"`
-	CrossReferencedEvent    gqlCrossReferencedEvent    `graphql:"... on CrossReferencedEvent"`
-	RenamedTitleEvent       gqlRenamedTitleEvent       `graphql:"... on RenamedTitleEvent"`
-	BaseRefChangedEvent     gqlBaseRefChangedEvent     `graphql:"... on BaseRefChangedEvent"`
-	AssignedEvent           gqlAssignedEvent           `graphql:"... on AssignedEvent"`
-	UnassignedEvent         gqlAssignedEvent           `graphql:"... on UnassignedEvent"`
-	MergedEvent             gqlLifecycleEvent          `graphql:"... on MergedEvent"`
-	ClosedEvent             gqlLifecycleEvent          `graphql:"... on ClosedEvent"`
-	ReopenedEvent           gqlLifecycleEvent          `graphql:"... on ReopenedEvent"`
-}
-
-type gqlIssueTimelineItem struct {
-	Typename             string                  `graphql:"__typename"`
-	Node                 gqlNodeFragment         `graphql:"... on Node"`
-	CrossReferencedEvent gqlCrossReferencedEvent `graphql:"... on CrossReferencedEvent"`
-	AssignedEvent        gqlAssignedEvent        `graphql:"... on AssignedEvent"`
-	UnassignedEvent      gqlAssignedEvent        `graphql:"... on UnassignedEvent"`
-	ClosedEvent          gqlLifecycleEvent       `graphql:"... on ClosedEvent"`
-	ReopenedEvent        gqlLifecycleEvent       `graphql:"... on ReopenedEvent"`
-}
-
-type gqlNodeFragment struct {
-	ID string
-}
-
-type gqlActorRef struct {
-	Login string
-}
-
-type gqlHeadRefForcePushedEvent struct {
-	Actor        *gqlActorRef
-	BeforeCommit *struct {
-		OID string `graphql:"oid"`
-	}
-	AfterCommit *struct {
-		OID string `graphql:"oid"`
-	}
-	CreatedAt time.Time
-	Ref       *struct {
-		Name string
-	}
-}
-
-type gqlCommentDeletedEvent struct {
-	Actor                *gqlActorRef
-	CreatedAt            time.Time
-	DeletedCommentAuthor *gqlActorRef
-}
-
-type gqlCrossReferencedEvent struct {
-	Actor             *gqlActorRef
-	CreatedAt         time.Time
-	IsCrossRepository bool
-	WillCloseTarget   bool
-	Source            gqlReferencedSubject
-}
-
-type gqlReferencedSubject struct {
-	Typename    string                 `graphql:"__typename"`
-	Issue       gqlReferencedIssueOrPR `graphql:"... on Issue"`
-	PullRequest gqlReferencedIssueOrPR `graphql:"... on PullRequest"`
-}
-
-type gqlReferencedIssueOrPR struct {
-	Number     int
-	Title      string
-	URL        string `graphql:"url"`
-	Repository struct {
-		Owner struct {
-			Login string
-		}
-		Name string
-	}
-}
-
-type gqlRenamedTitleEvent struct {
-	Actor         *gqlActorRef
-	CreatedAt     time.Time
-	PreviousTitle string
-	CurrentTitle  string
-}
-
-type gqlBaseRefChangedEvent struct {
-	Actor           *gqlActorRef
-	CreatedAt       time.Time
-	PreviousRefName string
-	CurrentRefName  string
-}
-
-type gqlAssignedEvent struct {
-	Actor     *gqlActorRef
-	Assignee  gqlAssignee
-	CreatedAt time.Time
-}
-
-type gqlLifecycleEvent struct {
-	Actor     *gqlActorRef
-	CreatedAt time.Time
-}
-
-type gqlAssignee struct {
-	Typename     string        `graphql:"__typename"`
-	Bot          gqlAssigneeID `graphql:"... on Bot"`
-	Mannequin    gqlAssigneeID `graphql:"... on Mannequin"`
-	Organization gqlAssigneeID `graphql:"... on Organization"`
-	User         gqlAssigneeID `graphql:"... on User"`
-}
-
-type gqlAssigneeID struct {
-	Login string
-}
-
-func (a gqlAssignee) Login() string {
-	switch a.Typename {
-	case "Bot":
-		return a.Bot.Login
-	case "Mannequin":
-		return a.Mannequin.Login
-	case "Organization":
-		return a.Organization.Login
-	case "User":
-		return a.User.Login
-	default:
-		return ""
-	}
 }
 
 type gqlIssueQuery struct {
 	Repository struct {
 		Issues struct {
 			TotalCount int
-			Nodes      []gqlIssue
-			PageInfo   pageInfo
+			Nodes      []platformgithub.GraphQLIssue
+			PageInfo   platformgithub.GraphQLPageInfo
 		} `graphql:"issues(first: $pageSize, states: OPEN, after: $cursor)"`
 	} `graphql:"repository(owner: $owner, name: $name)"`
 }
@@ -380,8 +57,8 @@ type gqlPRCommentPageQuery struct {
 	Repository struct {
 		PullRequest *struct {
 			Comments struct {
-				Nodes    []gqlComment
-				PageInfo pageInfo
+				Nodes    []platformgithub.GraphQLComment
+				PageInfo platformgithub.GraphQLPageInfo
 			} `graphql:"comments(first: 100, after: $cursor)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $name)"`
@@ -391,8 +68,8 @@ type gqlPRCommentVisibilityPageQuery struct {
 	Repository struct {
 		PullRequest *struct {
 			Comments struct {
-				Nodes    []gqlCommentVisibilityNode
-				PageInfo pageInfo
+				Nodes    []platformgithub.GraphQLCommentVisibilityNode
+				PageInfo platformgithub.GraphQLPageInfo
 			} `graphql:"comments(first: 100, after: $cursor)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $name)"`
@@ -402,143 +79,17 @@ type gqlIssueCommentPageQuery struct {
 	Repository struct {
 		Issue *struct {
 			Comments struct {
-				Nodes    []gqlCommentVisibilityNode
-				PageInfo pageInfo
+				Nodes    []platformgithub.GraphQLCommentVisibilityNode
+				PageInfo platformgithub.GraphQLPageInfo
 			} `graphql:"comments(first: 100, after: $cursor)"`
 		} `graphql:"issue(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $name)"`
 }
 
-type gqlIssue struct {
-	DatabaseId int64 `graphql:"databaseId"`
-	Number     int
-	Title      string
-	State      string
-	Body       string
-	URL        string `graphql:"url"`
-	Author     gqlIssueAuthor
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	ClosedAt   *time.Time
-	Labels     struct {
-		Nodes []gqlLabel
-	} `graphql:"labels(first: 100)"`
-	Comments struct {
-		TotalCount int
-		Nodes      []gqlComment
-		PageInfo   pageInfo
-	} `graphql:"comments(first: 100)"`
-	Assignees struct {
-		Nodes []gqlAssigneeID
-	} `graphql:"assignees(first: 100)"`
-	TimelineItems struct {
-		Nodes    []gqlIssueTimelineItem
-		PageInfo pageInfo
-	} `graphql:"timelineItems(itemTypes: [ASSIGNED_EVENT, UNASSIGNED_EVENT, CROSS_REFERENCED_EVENT, CLOSED_EVENT, REOPENED_EVENT], first: 100)"`
-}
-
-type gqlIssueAuthor struct {
-	Login    string
-	Typename string `graphql:"__typename"`
-}
-
-type gqlLabel struct {
-	Name        string
-	Color       string
-	Description string
-	IsDefault   bool
-}
-
-type gqlCheckContext struct {
-	Typename      string                 `graphql:"__typename"`
-	CheckRun      gqlCheckRunFields      `graphql:"... on CheckRun"`
-	StatusContext gqlStatusContextFields `graphql:"... on StatusContext"`
-}
-
-type gqlCheckRunFields struct {
-	Name        string
-	Status      string
-	Conclusion  string
-	DetailsURL  string `graphql:"detailsUrl"`
-	StartedAt   *time.Time
-	CompletedAt *time.Time
-	CheckSuite  struct {
-		CreatedAt *time.Time
-		App       struct {
-			Name string
-		}
-	}
-}
-
-type gqlStatusContextFields struct {
-	Context   string
-	State     string
-	TargetURL string `graphql:"targetUrl"`
-}
-
 // --- Adapter functions ---
 
-func adaptPR(gql *gqlPR) *gh.PullRequest {
-	state := stateToREST(gql.State)
-	pr := &gh.PullRequest{
-		ID:        new(gql.DatabaseId),
-		Number:    new(gql.Number),
-		Title:     new(gql.Title),
-		State:     new(state),
-		Draft:     new(gql.IsDraft),
-		Locked:    new(gql.Locked),
-		Body:      new(gql.Body),
-		HTMLURL:   new(gql.URL),
-		Additions: new(gql.Additions),
-		Deletions: new(gql.Deletions),
-		User:      &gh.User{Login: new(gql.Author.Login)},
-		Head: &gh.PullRequestBranch{
-			Ref: new(gql.HeadRefName),
-			SHA: new(gql.HeadRefOid),
-		},
-		Base: &gh.PullRequestBranch{
-			Ref: new(gql.BaseRefName),
-			SHA: new(gql.BaseRefOid),
-		},
-		MergeableState: new(mergeableToREST(gql.Mergeable)),
-	}
-
-	created := gh.Timestamp{Time: gql.CreatedAt}
-	updated := gh.Timestamp{Time: gql.UpdatedAt}
-	pr.CreatedAt = &created
-	pr.UpdatedAt = &updated
-
-	if gql.MergedAt != nil {
-		t := gh.Timestamp{Time: *gql.MergedAt}
-		pr.MergedAt = &t
-		pr.Merged = new(true)
-	}
-	if gql.MergedBy != nil {
-		pr.MergedBy = &gh.User{Login: new(gql.MergedBy.Login)}
-	}
-	if gql.ClosedAt != nil {
-		t := gh.Timestamp{Time: *gql.ClosedAt}
-		pr.ClosedAt = &t
-	}
-	pr.Labels = adaptLabels(gql.Labels.Nodes)
-	pr.Assignees = adaptAssignees(gql.Assignees.Nodes)
-	pr.RequestedReviewers = adaptRequestedReviewers(gql.ReviewRequests.Nodes)
-
-	if gql.HeadRepository != nil {
-		cloneURL := gql.HeadRepository.URL
-		if !strings.HasSuffix(cloneURL, ".git") {
-			cloneURL += ".git"
-		}
-		pr.Head.Repo = &gh.Repository{
-			CloneURL: new(cloneURL),
-		}
-	}
-
-	return pr
-}
-
-func adaptIssue(gql *gqlIssue) *gh.Issue {
-	state := stateToREST(gql.State)
+func adaptIssue(gql *platformgithub.GraphQLIssue) *gh.Issue {
+	state := platformgithub.StateToREST(gql.State)
 	authorLogin := gql.Author.Login
 	if gql.Author.Typename == "Bot" && !strings.HasSuffix(authorLogin, "[bot]") {
 		authorLogin += "[bot]"
@@ -563,73 +114,17 @@ func adaptIssue(gql *gqlIssue) *gh.Issue {
 		t := gh.Timestamp{Time: *gql.ClosedAt}
 		issue.ClosedAt = &t
 	}
-	issue.Labels = adaptLabels(gql.Labels.Nodes)
-	issue.Assignees = adaptAssignees(gql.Assignees.Nodes)
+	issue.Labels = platformgithub.AdaptLabels(gql.Labels.Nodes)
+	issue.Assignees = platformgithub.AdaptAssignees(gql.Assignees.Nodes)
 
 	return issue
 }
 
-func adaptRequestedReviewers(nodes []gqlReviewRequest) []*gh.User {
-	out := make([]*gh.User, 0, len(nodes))
-	for _, n := range nodes {
-		login := n.Login()
-		if login == "" {
-			continue
-		}
-		out = append(out, &gh.User{Login: &login})
-	}
-	return out
-}
-
-func adaptAssignees(nodes []gqlAssigneeID) []*gh.User {
-	out := make([]*gh.User, 0, len(nodes))
-	for _, n := range nodes {
-		login := n.Login
-		out = append(out, &gh.User{Login: &login})
-	}
-	return out
-}
-
-func adaptLabels(labels []gqlLabel) []*gh.Label {
-	out := make([]*gh.Label, 0, len(labels))
-	for _, label := range labels {
-		out = append(out, &gh.Label{
-			Name:        new(label.Name),
-			Color:       new(label.Color),
-			Description: new(label.Description),
-			Default:     new(label.IsDefault),
-		})
-	}
-	return out
-}
-
-func stateToREST(graphqlState string) string {
-	switch graphqlState {
-	case "MERGED":
-		return "closed"
-	case "CLOSED":
-		return "closed"
-	default:
-		return "open"
-	}
-}
-
-func mergeableToREST(mergeable string) string {
-	switch mergeable {
-	case "MERGEABLE":
-		return "clean"
-	case "CONFLICTING":
-		return "dirty"
-	default:
-		return "unknown"
-	}
-}
-
-func adaptComment(gql *gqlComment) *gh.IssueComment {
+func adaptComment(gql *platformgithub.GraphQLComment) *gh.IssueComment {
 	created := gh.Timestamp{Time: gql.CreatedAt}
 	updated := gh.Timestamp{Time: gql.UpdatedAt}
 	return &gh.IssueComment{
-		ID:        new(firstPositiveInt64(int64(gql.FullDatabaseId), gql.DatabaseId)),
+		ID:        new(platformgithub.FirstPositiveInt64(int64(gql.FullDatabaseId), gql.DatabaseId)),
 		Body:      new(gql.Body),
 		HTMLURL:   new(gql.URL),
 		User:      &gh.User{Login: new(gql.Author.Login)},
@@ -638,7 +133,7 @@ func adaptComment(gql *gqlComment) *gh.IssueComment {
 	}
 }
 
-func adaptReview(gql *gqlReview) *gh.PullRequestReview {
+func adaptReview(gql *platformgithub.GraphQLReview) *gh.PullRequestReview {
 	submitted := gh.Timestamp{Time: gql.SubmittedAt}
 	return &gh.PullRequestReview{
 		ID:          new(gql.DatabaseId),
@@ -649,7 +144,7 @@ func adaptReview(gql *gqlReview) *gh.PullRequestReview {
 	}
 }
 
-func adaptCommit(gql *gqlCommitNode) *gh.RepositoryCommit {
+func adaptCommit(gql *platformgithub.GraphQLCommitNode) *gh.RepositoryCommit {
 	c := &gh.RepositoryCommit{
 		SHA: new(gql.Commit.OID),
 		Commit: &gh.Commit{
@@ -673,7 +168,7 @@ func adaptCommit(gql *gqlCommitNode) *gh.RepositoryCommit {
 	return c
 }
 
-func splitCheckContexts(contexts []gqlCheckContext) ([]*gh.CheckRun, []*gh.RepoStatus) {
+func splitCheckContexts(contexts []platformgithub.GraphQLCheckContext) ([]*gh.CheckRun, []*gh.RepoStatus) {
 	var checks []*gh.CheckRun
 	var statuses []*gh.RepoStatus
 	for i := range contexts {
@@ -688,7 +183,7 @@ func splitCheckContexts(contexts []gqlCheckContext) ([]*gh.CheckRun, []*gh.RepoS
 	return checks, statuses
 }
 
-func adaptCheckRun(gql *gqlCheckRunFields) *gh.CheckRun {
+func adaptCheckRun(gql *platformgithub.GraphQLCheckRunFields) *gh.CheckRun {
 	url := sanitizeURL(gql.DetailsURL)
 	return &gh.CheckRun{
 		Name:        new(gql.Name),
@@ -703,7 +198,7 @@ func adaptCheckRun(gql *gqlCheckRunFields) *gh.CheckRun {
 	}
 }
 
-func adaptStatusContext(gql *gqlStatusContextFields) *gh.RepoStatus {
+func adaptStatusContext(gql *platformgithub.GraphQLStatusContextFields) *gh.RepoStatus {
 	return &gh.RepoStatus{
 		Context:   new(gql.Context),
 		State:     new(toLower(gql.State)),
@@ -749,8 +244,8 @@ type RepoBulkResult struct {
 type BulkIssue struct {
 	Issue             *gh.Issue
 	Comments          []*gh.IssueComment
-	CommentVisibility map[int64]CommentVisibility
-	TimelineEvents    []PullRequestTimelineEvent
+	CommentVisibility map[int64]platformgithub.CommentVisibility
+	TimelineEvents    []platformgithub.PullRequestTimelineEvent
 	CommentsComplete  bool
 	TimelineComplete  bool
 }
@@ -763,7 +258,7 @@ type BulkPR struct {
 	PR *gh.PullRequest
 	// NativeStack is present only when the preview setting was enabled and
 	// GitHub reported authoritative membership for this PR.
-	NativeStack *NativeStackHint
+	NativeStack *platformgithub.NativeStackHint
 	// ReviewDecision is GitHub's authoritative aggregate review decision for
 	// the PR (raw GraphQL enum: APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED,
 	// or empty when the repository enforces no decision). It is computed by the
@@ -771,11 +266,11 @@ type BulkPR struct {
 	// Reviews connection being complete.
 	ReviewDecision        string
 	Comments              []*gh.IssueComment
-	CommentVisibility     map[int64]CommentVisibility
+	CommentVisibility     map[int64]platformgithub.CommentVisibility
 	Reviews               []*gh.PullRequestReview
 	ReviewThreads         []platform.MergeRequestReviewThread
 	Commits               []*gh.RepositoryCommit
-	TimelineEvents        []PullRequestTimelineEvent
+	TimelineEvents        []platformgithub.PullRequestTimelineEvent
 	CheckRuns             []*gh.CheckRun
 	Statuses              []*gh.RepoStatus
 	CommentsComplete      bool
@@ -786,34 +281,11 @@ type BulkPR struct {
 	CIComplete            bool
 }
 
-// CommentVisibility carries GitHub GraphQL-only moderation state alongside
-// the REST-shaped comment objects used by the existing sync pipeline.
-type CommentVisibility struct {
-	Hidden bool
-	Reason string
-}
-
-func gqlCommentVisibility(comment *gqlComment) CommentVisibility {
-	return commentVisibility(comment.IsMinimized, comment.MinimizedReason)
-}
-
-func gqlReviewThreadsComplete(threads []gqlReviewThread, hasNextPage bool) bool {
-	if hasNextPage {
-		return false
-	}
-	for i := range threads {
-		if threads[i].Comments.PageInfo.HasNextPage {
-			return false
-		}
-	}
-	return true
-}
-
-func platformReviewThreadsFromGQL(threads []gqlReviewThread) []platform.MergeRequestReviewThread {
+func platformReviewThreadsFromGQL(threads []platformgithub.GraphQLReviewThread) []platform.MergeRequestReviewThread {
 	var out []platform.MergeRequestReviewThread
 	for i := range threads {
 		thread := &threads[i]
-		normalizedThread := PullRequestReviewThread{
+		normalizedThread := platformgithub.PullRequestReviewThread{
 			NodeID:            fmt.Sprint(thread.ID),
 			IsResolved:        thread.IsResolved,
 			IsOutdated:        thread.IsOutdated,
@@ -830,9 +302,9 @@ func platformReviewThreadsFromGQL(threads []gqlReviewThread) []platform.MergeReq
 			if comment.MinimizedReason != nil {
 				reason = string(*comment.MinimizedReason)
 			}
-			normalizedComment := PullRequestReviewThreadComment{
+			normalizedComment := platformgithub.PullRequestReviewThreadComment{
 				NodeID:          fmt.Sprint(comment.ID),
-				DatabaseID:      firstPositiveInt64(int64(comment.FullDatabaseId), comment.DatabaseId),
+				DatabaseID:      platformgithub.FirstPositiveInt64(int64(comment.FullDatabaseId), comment.DatabaseId),
 				SubjectType:     comment.SubjectType,
 				Body:            comment.Body,
 				AuthorLogin:     comment.Author.Login,
@@ -855,7 +327,7 @@ func platformReviewThreadsFromGQL(threads []gqlReviewThread) []platform.MergeReq
 			if comment.PullRequestReview != nil {
 				normalizedComment.ReviewDatabaseID = comment.PullRequestReview.DatabaseId
 			}
-			out = append(out, githubReviewThreadComment(normalizedThread, normalizedComment))
+			out = append(out, platformgithub.GithubReviewThreadComment(normalizedThread, normalizedComment))
 		}
 	}
 	return out
@@ -864,21 +336,21 @@ func platformReviewThreadsFromGQL(threads []gqlReviewThread) []platform.MergeReq
 func commentVisibility(
 	isMinimized bool,
 	minimizedReason *githubv4.ReportedContentClassifiers,
-) CommentVisibility {
+) platformgithub.CommentVisibility {
 	if !isMinimized {
-		return CommentVisibility{}
+		return platformgithub.CommentVisibility{}
 	}
 	reason := ""
 	if minimizedReason != nil {
 		reason = string(*minimizedReason)
 	}
-	return CommentVisibility{Hidden: true, Reason: reason}
+	return platformgithub.CommentVisibility{Hidden: true, Reason: reason}
 }
 
-func convertGQLIssue(gql *gqlIssue) BulkIssue {
+func convertGQLIssue(gql *platformgithub.GraphQLIssue) BulkIssue {
 	bulk := BulkIssue{
 		Issue:             adaptIssue(gql),
-		CommentVisibility: make(map[int64]CommentVisibility),
+		CommentVisibility: make(map[int64]platformgithub.CommentVisibility),
 		CommentsComplete:  !gql.Comments.PageInfo.HasNextPage,
 		TimelineComplete:  !gql.TimelineItems.PageInfo.HasNextPage,
 	}
@@ -886,7 +358,7 @@ func convertGQLIssue(gql *gqlIssue) BulkIssue {
 	for i := range gql.Comments.Nodes {
 		comment := &gql.Comments.Nodes[i]
 		bulk.Comments = append(bulk.Comments, adaptComment(comment))
-		bulk.CommentVisibility[firstPositiveInt64(
+		bulk.CommentVisibility[platformgithub.FirstPositiveInt64(
 			int64(comment.FullDatabaseId), comment.DatabaseId,
 		)] = gqlCommentVisibility(comment)
 	}
@@ -1026,13 +498,13 @@ func NewGraphQLFetcher(
 			identity: resolvedOptions.readIdentity, resource: QuotaResourceGraphQL,
 		}
 	}
-	authRT := tokenauth.AuthTransport{
+	authRT := platform.AuthTransport{
 		Source:              source,
 		Base:                readBase,
-		SetHeader:           tokenauth.BearerAuthHeader,
+		SetHeader:           platform.BearerAuthHeader,
 		RetryOnUnauthorized: true,
 		AllowedOrigin:       graphQLEndpointForHost(platformHost),
-		GitHubOwner:         githubOwnerFromRequest,
+		TokenContext:        githubCredentialContext,
 	}
 	var base http.RoundTripper = authRT
 	if rateTracker != nil {
@@ -1147,7 +619,7 @@ func (g *GraphQLFetcher) fetchRepoPRsWithPageSize(
 	}, "graphql")
 	result := &RepoBulkResult{NativeStacksQueried: includeNativeStacks}
 	if includeNativeStacks {
-		gqlPRs, err := fetchGraphQLPullRequestPages[gqlPRWithNativeStacks](
+		gqlPRs, err := fetchGraphQLPullRequestPages[platformgithub.GraphQLPRWithNativeStacks](
 			ctx, g.client, owner, name, pageSize, progress,
 		)
 		if err != nil {
@@ -1156,13 +628,13 @@ func (g *GraphQLFetcher) fetchRepoPRsWithPageSize(
 		result.PullRequests = make([]BulkPR, 0, len(gqlPRs))
 		for i := range gqlPRs {
 			bulk := convertGQLPRWithNativeStacks(&gqlPRs[i])
-			if err := g.completePRComments(ctx, owner, name, &gqlPRs[i].gqlPR, &bulk); err != nil {
+			if err := g.completePRComments(ctx, owner, name, &gqlPRs[i].GraphQLPR, &bulk); err != nil {
 				return nil, err
 			}
 			result.PullRequests = append(result.PullRequests, bulk)
 		}
 	} else {
-		gqlPRs, err := fetchGraphQLPullRequestPages[gqlPR](
+		gqlPRs, err := fetchGraphQLPullRequestPages[platformgithub.GraphQLPR](
 			ctx, g.client, owner, name, pageSize, progress,
 		)
 		if err != nil {
@@ -1190,7 +662,7 @@ func fetchGraphQLPullRequestPages[T any](
 ) ([]T, error) {
 	return fetchAllPagesWithProgress(ctx, func(
 		ctx context.Context, cursor *string,
-	) ([]T, pageInfo, error) {
+	) ([]T, platformgithub.GraphQLPageInfo, error) {
 		var q gqlPRQuery[T]
 		vars := map[string]any{
 			"owner":    githubv4.String(owner),
@@ -1199,7 +671,7 @@ func fetchGraphQLPullRequestPages[T any](
 			"cursor":   cursorVar(cursor),
 		}
 		if err := client.Query(ctx, &q, vars); err != nil {
-			return nil, pageInfo{}, err
+			return nil, platformgithub.GraphQLPageInfo{}, err
 		}
 		progress.setTotal(q.Repository.PullRequests.TotalCount)
 		return q.Repository.PullRequests.Nodes,
@@ -1236,7 +708,7 @@ func (g *GraphQLFetcher) fetchRepoIssuesWithPageSize(
 	}, "graphql")
 	gqlIssues, err := fetchAllPagesWithProgress(ctx, func(
 		ctx context.Context, cursor *string,
-	) ([]gqlIssue, pageInfo, error) {
+	) ([]platformgithub.GraphQLIssue, platformgithub.GraphQLPageInfo, error) {
 		var q gqlIssueQuery
 		vars := map[string]any{
 			"owner":    githubv4.String(owner),
@@ -1245,7 +717,7 @@ func (g *GraphQLFetcher) fetchRepoIssuesWithPageSize(
 			"cursor":   cursorVar(cursor),
 		}
 		if err := g.client.Query(ctx, &q, vars); err != nil {
-			return nil, pageInfo{}, err
+			return nil, platformgithub.GraphQLPageInfo{}, err
 		}
 		progress.setTotal(q.Repository.Issues.TotalCount)
 		return q.Repository.Issues.Nodes,
@@ -1272,7 +744,7 @@ func (g *GraphQLFetcher) fetchRepoIssuesWithPageSize(
 func (g *GraphQLFetcher) completePRComments(
 	ctx context.Context,
 	owner, name string,
-	pr *gqlPR,
+	pr *platformgithub.GraphQLPR,
 	bulk *BulkPR,
 ) error {
 	if bulk.CommentsComplete {
@@ -1281,17 +753,17 @@ func (g *GraphQLFetcher) completePRComments(
 	startAfter := nonEmptyCursor(pr.Comments.PageInfo.EndCursor)
 	comments, err := fetchAllPages(ctx, func(
 		ctx context.Context, cursor *string,
-	) ([]gqlComment, pageInfo, error) {
+	) ([]platformgithub.GraphQLComment, platformgithub.GraphQLPageInfo, error) {
 		var q gqlPRCommentPageQuery
 		err := g.client.Query(ctx, &q, map[string]any{
 			"owner": githubv4.String(owner), "name": githubv4.String(name),
 			"number": githubv4.Int(pr.Number), "cursor": commentVisibilityCursor(startAfter, cursor),
 		})
 		if err != nil {
-			return nil, pageInfo{}, err
+			return nil, platformgithub.GraphQLPageInfo{}, err
 		}
 		if q.Repository.PullRequest == nil {
-			return nil, pageInfo{}, fmt.Errorf("fetch comments for pull request #%d: missing pull request", pr.Number)
+			return nil, platformgithub.GraphQLPageInfo{}, fmt.Errorf("fetch comments for pull request #%d: missing pull request", pr.Number)
 		}
 		return q.Repository.PullRequest.Comments.Nodes,
 			q.Repository.PullRequest.Comments.PageInfo, nil
@@ -1302,7 +774,7 @@ func (g *GraphQLFetcher) completePRComments(
 	for i := range comments {
 		comment := &comments[i]
 		bulk.Comments = append(bulk.Comments, adaptComment(comment))
-		bulk.CommentVisibility[firstPositiveInt64(
+		bulk.CommentVisibility[platformgithub.FirstPositiveInt64(
 			int64(comment.FullDatabaseId), comment.DatabaseId,
 		)] = gqlCommentVisibility(comment)
 	}
@@ -1317,7 +789,7 @@ func (g *GraphQLFetcher) FetchPullRequestCommentVisibility(
 	ctx context.Context,
 	owner, name string,
 	number int,
-) (map[int64]CommentVisibility, error) {
+) (map[int64]platformgithub.CommentVisibility, error) {
 	ctx = tokenauth.WithGitHubOwner(ctx, owner)
 	return g.fetchPRCommentVisibility(ctx, owner, name, number, nil)
 }
@@ -1327,20 +799,20 @@ func (g *GraphQLFetcher) fetchPRCommentVisibility(
 	owner, name string,
 	number int,
 	startAfter *string,
-) (map[int64]CommentVisibility, error) {
+) (map[int64]platformgithub.CommentVisibility, error) {
 	comments, err := fetchAllPages(ctx, func(
 		ctx context.Context, cursor *string,
-	) ([]gqlCommentVisibilityNode, pageInfo, error) {
+	) ([]platformgithub.GraphQLCommentVisibilityNode, platformgithub.GraphQLPageInfo, error) {
 		var q gqlPRCommentVisibilityPageQuery
 		err := g.client.Query(ctx, &q, map[string]any{
 			"owner": githubv4.String(owner), "name": githubv4.String(name),
 			"number": githubv4.Int(number), "cursor": commentVisibilityCursor(startAfter, cursor),
 		})
 		if err != nil {
-			return nil, pageInfo{}, err
+			return nil, platformgithub.GraphQLPageInfo{}, err
 		}
 		if q.Repository.PullRequest == nil {
-			return nil, pageInfo{}, fmt.Errorf("fetch comments for pull request #%d: missing pull request", number)
+			return nil, platformgithub.GraphQLPageInfo{}, fmt.Errorf("fetch comments for pull request #%d: missing pull request", number)
 		}
 		return q.Repository.PullRequest.Comments.Nodes,
 			q.Repository.PullRequest.Comments.PageInfo, nil
@@ -1348,7 +820,7 @@ func (g *GraphQLFetcher) fetchPRCommentVisibility(
 	if err != nil {
 		return nil, err
 	}
-	visibility := make(map[int64]CommentVisibility, len(comments))
+	visibility := make(map[int64]platformgithub.CommentVisibility, len(comments))
 	mergeCommentVisibility(visibility, comments)
 	return visibility, nil
 }
@@ -1356,7 +828,7 @@ func (g *GraphQLFetcher) fetchPRCommentVisibility(
 func (g *GraphQLFetcher) completeIssueCommentVisibility(
 	ctx context.Context,
 	owner, name string,
-	issue *gqlIssue,
+	issue *platformgithub.GraphQLIssue,
 	bulk *BulkIssue,
 ) error {
 	if bulk.CommentsComplete {
@@ -1378,7 +850,7 @@ func (g *GraphQLFetcher) FetchIssueCommentVisibility(
 	ctx context.Context,
 	owner, name string,
 	number int,
-) (map[int64]CommentVisibility, error) {
+) (map[int64]platformgithub.CommentVisibility, error) {
 	ctx = tokenauth.WithGitHubOwner(ctx, owner)
 	return g.fetchIssueCommentVisibility(ctx, owner, name, number, nil)
 }
@@ -1388,20 +860,20 @@ func (g *GraphQLFetcher) fetchIssueCommentVisibility(
 	owner, name string,
 	number int,
 	startAfter *string,
-) (map[int64]CommentVisibility, error) {
+) (map[int64]platformgithub.CommentVisibility, error) {
 	comments, err := fetchAllPages(ctx, func(
 		ctx context.Context, cursor *string,
-	) ([]gqlCommentVisibilityNode, pageInfo, error) {
+	) ([]platformgithub.GraphQLCommentVisibilityNode, platformgithub.GraphQLPageInfo, error) {
 		var q gqlIssueCommentPageQuery
 		err := g.client.Query(ctx, &q, map[string]any{
 			"owner": githubv4.String(owner), "name": githubv4.String(name),
 			"number": githubv4.Int(number), "cursor": commentVisibilityCursor(startAfter, cursor),
 		})
 		if err != nil {
-			return nil, pageInfo{}, err
+			return nil, platformgithub.GraphQLPageInfo{}, err
 		}
 		if q.Repository.Issue == nil {
-			return nil, pageInfo{}, fmt.Errorf("fetch comments for issue #%d: missing issue", number)
+			return nil, platformgithub.GraphQLPageInfo{}, fmt.Errorf("fetch comments for issue #%d: missing issue", number)
 		}
 		return q.Repository.Issue.Comments.Nodes,
 			q.Repository.Issue.Comments.PageInfo, nil
@@ -1409,7 +881,7 @@ func (g *GraphQLFetcher) fetchIssueCommentVisibility(
 	if err != nil {
 		return nil, err
 	}
-	visibility := make(map[int64]CommentVisibility, len(comments))
+	visibility := make(map[int64]platformgithub.CommentVisibility, len(comments))
 	mergeCommentVisibility(visibility, comments)
 	return visibility, nil
 }
@@ -1429,18 +901,18 @@ func commentVisibilityCursor(startAfter, cursor *string) *githubv4.String {
 }
 
 func mergeCommentVisibilityMap(
-	dst, src map[int64]CommentVisibility,
+	dst, src map[int64]platformgithub.CommentVisibility,
 ) {
 	maps.Copy(dst, src)
 }
 
 func mergeCommentVisibility(
-	visibility map[int64]CommentVisibility,
-	comments []gqlCommentVisibilityNode,
+	visibility map[int64]platformgithub.CommentVisibility,
+	comments []platformgithub.GraphQLCommentVisibilityNode,
 ) {
 	for i := range comments {
 		comment := &comments[i]
-		visibility[firstPositiveInt64(
+		visibility[platformgithub.FirstPositiveInt64(
 			int64(comment.FullDatabaseId), comment.DatabaseId,
 		)] = commentVisibility(comment.IsMinimized, comment.MinimizedReason)
 	}
@@ -1454,14 +926,14 @@ func cursorVar(cursor *string) *githubv4.String {
 	return &s
 }
 
-func convertGQLPR(gql *gqlPR) BulkPR {
+func convertGQLPR(gql *platformgithub.GraphQLPR) BulkPR {
 	bulk := BulkPR{
-		PR:                adaptPR(gql),
+		PR:                platformgithub.AdaptPR(gql),
 		ReviewDecision:    gql.ReviewDecision,
-		CommentVisibility: make(map[int64]CommentVisibility),
+		CommentVisibility: make(map[int64]platformgithub.CommentVisibility),
 		CommentsComplete:  !gql.Comments.PageInfo.HasNextPage,
 		ReviewsComplete:   !gql.Reviews.PageInfo.HasNextPage,
-		ReviewThreadsComplete: gqlReviewThreadsComplete(
+		ReviewThreadsComplete: platformgithub.GraphQLReviewThreadsComplete(
 			gql.ReviewThreads.Nodes, gql.ReviewThreads.PageInfo.HasNextPage,
 		),
 		CommitsComplete:  !gql.AllCommits.PageInfo.HasNextPage,
@@ -1471,7 +943,7 @@ func convertGQLPR(gql *gqlPR) BulkPR {
 	for i := range gql.Comments.Nodes {
 		comment := &gql.Comments.Nodes[i]
 		bulk.Comments = append(bulk.Comments, adaptComment(comment))
-		bulk.CommentVisibility[firstPositiveInt64(
+		bulk.CommentVisibility[platformgithub.FirstPositiveInt64(
 			int64(comment.FullDatabaseId), comment.DatabaseId,
 		)] = gqlCommentVisibility(comment)
 	}
@@ -1503,10 +975,10 @@ func convertGQLPR(gql *gqlPR) BulkPR {
 	return bulk
 }
 
-func convertGQLPRWithNativeStacks(gql *gqlPRWithNativeStacks) BulkPR {
-	bulk := convertGQLPR(&gql.gqlPR)
+func convertGQLPRWithNativeStacks(gql *platformgithub.GraphQLPRWithNativeStacks) BulkPR {
+	bulk := convertGQLPR(&gql.GraphQLPR)
 	if gql.Stack != nil && gql.StackEntry != nil {
-		bulk.NativeStack = &NativeStackHint{
+		bulk.NativeStack = &platformgithub.NativeStackHint{
 			Number: gql.Stack.Number, Size: gql.Stack.Size,
 			Position: gql.StackEntry.Position, BaseRef: gql.Stack.BaseRefName,
 		}
@@ -1514,11 +986,11 @@ func convertGQLPRWithNativeStacks(gql *gqlPRWithNativeStacks) BulkPR {
 	return bulk
 }
 
-func adaptIssueTimelineEvent(gql *gqlIssueTimelineItem) (PullRequestTimelineEvent, bool) {
+func adaptIssueTimelineEvent(gql *platformgithub.GraphQLIssueTimelineItem) (platformgithub.PullRequestTimelineEvent, bool) {
 	if gql == nil {
-		return PullRequestTimelineEvent{}, false
+		return platformgithub.PullRequestTimelineEvent{}, false
 	}
-	event := PullRequestTimelineEvent{NodeID: gql.Node.ID}
+	event := platformgithub.PullRequestTimelineEvent{NodeID: gql.Node.ID}
 	switch gql.Typename {
 	case "CrossReferencedEvent":
 		copyCrossReferencedEvent(&event, gql.CrossReferencedEvent)
@@ -1531,16 +1003,16 @@ func adaptIssueTimelineEvent(gql *gqlIssueTimelineItem) (PullRequestTimelineEven
 	case "ReopenedEvent":
 		copyLifecycleEvent(&event, "reopened", gql.ReopenedEvent)
 	default:
-		return PullRequestTimelineEvent{}, false
+		return platformgithub.PullRequestTimelineEvent{}, false
 	}
 	return event, true
 }
 
-func adaptPullRequestTimelineEvent(gql *gqlPullRequestTimelineItem) (PullRequestTimelineEvent, bool) {
+func adaptPullRequestTimelineEvent(gql *platformgithub.GraphQLPullRequestTimelineItem) (platformgithub.PullRequestTimelineEvent, bool) {
 	if gql == nil {
-		return PullRequestTimelineEvent{}, false
+		return platformgithub.PullRequestTimelineEvent{}, false
 	}
-	event := PullRequestTimelineEvent{NodeID: gql.Node.ID}
+	event := platformgithub.PullRequestTimelineEvent{NodeID: gql.Node.ID}
 	switch gql.Typename {
 	case "HeadRefForcePushedEvent":
 		src := gql.HeadRefForcePushedEvent
@@ -1599,12 +1071,12 @@ func adaptPullRequestTimelineEvent(gql *gqlPullRequestTimelineItem) (PullRequest
 	case "ReopenedEvent":
 		copyLifecycleEvent(&event, "reopened", gql.ReopenedEvent)
 	default:
-		return PullRequestTimelineEvent{}, false
+		return platformgithub.PullRequestTimelineEvent{}, false
 	}
 	return event, true
 }
 
-func copyAssignmentEvent(event *PullRequestTimelineEvent, eventType string, src gqlAssignedEvent) {
+func copyAssignmentEvent(event *platformgithub.PullRequestTimelineEvent, eventType string, src platformgithub.GraphQLAssignedEvent) {
 	event.EventType = eventType
 	event.Assignee = src.Assignee.Login()
 	event.CreatedAt = src.CreatedAt
@@ -1613,7 +1085,7 @@ func copyAssignmentEvent(event *PullRequestTimelineEvent, eventType string, src 
 	}
 }
 
-func copyLifecycleEvent(event *PullRequestTimelineEvent, eventType string, src gqlLifecycleEvent) {
+func copyLifecycleEvent(event *platformgithub.PullRequestTimelineEvent, eventType string, src platformgithub.GraphQLLifecycleEvent) {
 	event.EventType = eventType
 	event.CreatedAt = src.CreatedAt
 	if src.Actor != nil {
@@ -1621,7 +1093,7 @@ func copyLifecycleEvent(event *PullRequestTimelineEvent, eventType string, src g
 	}
 }
 
-func copyCrossReferencedEvent(event *PullRequestTimelineEvent, src gqlCrossReferencedEvent) {
+func copyCrossReferencedEvent(event *platformgithub.PullRequestTimelineEvent, src platformgithub.GraphQLCrossReferencedEvent) {
 	event.EventType = "cross_referenced"
 	event.CreatedAt = src.CreatedAt
 	event.IsCrossRepository = src.IsCrossRepository
@@ -1638,7 +1110,7 @@ func copyCrossReferencedEvent(event *PullRequestTimelineEvent, src gqlCrossRefer
 	}
 }
 
-func copyReferencedSubject(event *PullRequestTimelineEvent, source gqlReferencedIssueOrPR) {
+func copyReferencedSubject(event *platformgithub.PullRequestTimelineEvent, source platformgithub.GraphQLReferencedIssueOrPR) {
 	event.SourceNumber = source.Number
 	event.SourceTitle = source.Title
 	event.SourceURL = source.URL

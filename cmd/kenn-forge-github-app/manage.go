@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"go.kenn.io/forge/githubapp"
 	"go.kenn.io/forge/internal/config"
-	"go.kenn.io/forge/internal/githubapp"
 )
 
 func runInstall(args []string, env *appEnv) error {

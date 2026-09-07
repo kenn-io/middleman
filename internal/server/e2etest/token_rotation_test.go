@@ -15,19 +15,21 @@ import (
 	"testing"
 	"time"
 
+	"go.kenn.io/forge/internal/platformdb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/config"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
-	platformforgejo "go.kenn.io/forge/internal/platform/forgejo"
-	platformgitea "go.kenn.io/forge/internal/platform/gitea"
-	platformgitlab "go.kenn.io/forge/internal/platform/gitlab"
 	"go.kenn.io/forge/internal/server"
 	"go.kenn.io/forge/internal/testutil/dbtest"
 	"go.kenn.io/forge/internal/testutil/servertest"
 	"go.kenn.io/forge/internal/tokenauth"
+	"go.kenn.io/forge/platform"
+	platformforgejo "go.kenn.io/forge/platform/forgejo"
+	platformgitea "go.kenn.io/forge/platform/gitea"
+	platformgitlab "go.kenn.io/forge/platform/gitlab"
 )
 
 func TestTokenFileRotationE2EConfigStartupAndHTTPSync(t *testing.T) {
@@ -98,8 +100,7 @@ token_file = %q
 	client, err := platformgitlab.NewClient(
 		"gitlab.example.com",
 		source,
-		platformgitlab.WithBaseURLForTesting(gitlabAPI.URL+"/api/v4"),
-	)
+		platformgitlab.WithBaseURLForTesting(gitlabAPI.URL+"/api/v4"), platformgitlab.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := platform.NewRegistry(client)
 	require.NoError(err)
@@ -117,7 +118,7 @@ token_file = %q
 		CloneURL:           "https://gitlab.example.com/group/project.git",
 		DefaultBranch:      "main",
 	}
-	repoID, err := database.UpsertRepo(ctx, platform.DBRepoIdentity(platform.RepoRef{
+	repoID, err := database.UpsertRepo(ctx, platformdb.DBRepoIdentity(platform.RepoRef{
 		Platform:           platform.KindGitLab,
 		Host:               "gitlab.example.com",
 		Owner:              "group",
@@ -660,14 +661,14 @@ func TestSharedHostCloneAuthFollowsSurvivingProviderTokenE2E(t *testing.T) {
 	t.Cleanup(forgeAPI.Close)
 	forgejoClient, err := platformforgejo.NewClient(
 		"code.example.com", forgejoSource,
-		platformforgejo.WithBaseURLForTesting(forgeAPI.URL),
+		platformforgejo.WithBaseURLForTesting(forgeAPI.URL), platformforgejo.
+			WithTransport(http.DefaultTransport),
 	)
 	require.NoError(err)
 	giteaClient, err := platformgitea.NewClient(
 		"code.example.com", giteaSource,
 		platformgitea.WithBaseURL(forgeAPI.URL, true),
-		platformgitea.WithServerVersionForTesting("1.26.0"),
-	)
+		platformgitea.WithServerVersion("1.26.0"), platformgitea.WithTransport(http.DefaultTransport))
 	require.NoError(err)
 	registry, err := platform.NewRegistry(forgejoClient, giteaClient)
 	require.NoError(err)
@@ -770,14 +771,13 @@ func startGitLabTokenSyncServer(
 	client, err := platformgitlab.NewClient(
 		"gitlab.example.com",
 		source,
-		platformgitlab.WithBaseURLForTesting(gitlabBaseURL),
-	)
+		platformgitlab.WithBaseURLForTesting(gitlabBaseURL), platformgitlab.WithTransport(http.DefaultTransport))
 	require.NoError(t, err)
 	registry, err := platform.NewRegistry(client)
 	require.NoError(t, err)
 	database := dbtest.Open(t)
 	ref := gitLabTokenRepoRef()
-	repoID, err := database.UpsertRepo(t.Context(), platform.DBRepoIdentity(platform.RepoRef{
+	repoID, err := database.UpsertRepo(t.Context(), platformdb.DBRepoIdentity(platform.RepoRef{
 		Platform:           platform.KindGitLab,
 		Host:               "gitlab.example.com",
 		Owner:              "group",

@@ -18,15 +18,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/forge/internal/db"
-	"go.kenn.io/forge/internal/platform"
+	"go.kenn.io/forge/platform"
+	platformgithub "go.kenn.io/forge/platform/github"
 )
 
 type nativeStackSyncTestClient struct {
 	*mockClient
 	mu        sync.Mutex
 	pulls     []*gh.PullRequest
-	hints     map[int]*NativeStackHint
-	pages     map[int]NativeStackPage
+	hints     map[int]*platformgithub.NativeStackHint
+	pages     map[int]platformgithub.NativeStackPage
 	errors    map[int]error
 	pageCalls []int
 	// listErrors is consumed one entry per open-PR list call so a test can model
@@ -40,7 +41,7 @@ type nativeStackSyncTestClient struct {
 
 func (c *nativeStackSyncTestClient) ListOpenPullRequestsWithNativeStackHints(
 	context.Context, string, string,
-) ([]*gh.PullRequest, map[int]*NativeStackHint, error) {
+) ([]*gh.PullRequest, map[int]*platformgithub.NativeStackHint, error) {
 	c.listCalls.Add(1)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -67,7 +68,7 @@ func notModified() error {
 
 func (c *nativeStackSyncTestClient) ListNativeStacksPage(
 	_ context.Context, _, _ string, page int,
-) (NativeStackPage, error) {
+) (platformgithub.NativeStackPage, error) {
 	if c.onPage != nil {
 		c.onPage()
 	}
@@ -75,7 +76,7 @@ func (c *nativeStackSyncTestClient) ListNativeStacksPage(
 	defer c.mu.Unlock()
 	c.pageCalls = append(c.pageCalls, page)
 	if err := c.errors[page]; err != nil {
-		return NativeStackPage{}, err
+		return platformgithub.NativeStackPage{}, err
 	}
 	return c.pages[page], nil
 }
@@ -101,7 +102,7 @@ func TestRefreshGitHubNativeStackCacheReusesConsistentCache(t *testing.T) {
 
 	result := syncer.refreshGitHubNativeStackCache(t.Context(), RepoRef{
 		Owner: "acme", Name: "widgets", PlatformHost: "github.com",
-	}, repoID, map[int]*NativeStackHint{
+	}, repoID, map[int]*platformgithub.NativeStackHint{
 		101: {Number: 42, Size: 2, Position: 1, BaseRef: "main"},
 		102: {Number: 42, Size: 2, Position: 2, BaseRef: "main"},
 	}, false)
@@ -117,11 +118,11 @@ func TestRefreshGitHubNativeStackCacheReusesConsistentCache(t *testing.T) {
 
 func TestRefreshGitHubNativeStackCacheStopsAfterTargetIsFoundOrPassed(t *testing.T) {
 	now := time.Date(2026, time.July, 24, 12, 0, 0, 0, time.UTC)
-	stack := func(number int) NativeStack {
-		return NativeStack{
+	stack := func(number int) platformgithub.NativeStack {
+		return platformgithub.NativeStack{
 			ID: int64(1000 + number), Number: number, BaseRef: "main",
 			Open: true, CreatedAt: now,
-			Members: []NativeStackMember{
+			Members: []platformgithub.NativeStackMember{
 				{Position: 1, PullRequestNumber: 101, State: "open", HeadRef: "a", HeadSHA: "aaa"},
 				{Position: 2, PullRequestNumber: 102, State: "open", HeadRef: "b", HeadSHA: "bbb"},
 			},
@@ -129,7 +130,7 @@ func TestRefreshGitHubNativeStackCacheStopsAfterTargetIsFoundOrPassed(t *testing
 	}
 	cases := []struct {
 		name              string
-		page              NativeStackPage
+		page              platformgithub.NativeStackPage
 		hintSize          int
 		wantConfirmed     []int
 		wantCached        int
@@ -137,14 +138,14 @@ func TestRefreshGitHubNativeStackCacheStopsAfterTargetIsFoundOrPassed(t *testing
 	}{
 		{
 			name: "target found on first page",
-			page: NativeStackPage{Stacks: []NativeStack{
+			page: platformgithub.NativeStackPage{Stacks: []platformgithub.NativeStack{
 				stack(50), stack(42), stack(40),
 			}, NextPage: 2},
 			wantConfirmed: []int{42}, wantCached: 1,
 		},
 		{
 			name: "target passed on first page",
-			page: NativeStackPage{Stacks: []NativeStack{
+			page: platformgithub.NativeStackPage{Stacks: []platformgithub.NativeStack{
 				stack(50), stack(41),
 			}, NextPage: 2},
 			wantConfirmed: []int{}, wantCached: 0,
@@ -153,7 +154,7 @@ func TestRefreshGitHubNativeStackCacheStopsAfterTargetIsFoundOrPassed(t *testing
 			// A rejected row leaves the target unaccounted for, so the pass is
 			// partial: nothing projects and the next sync must re-list.
 			name:     "target resource disagrees with pull request size",
-			page:     NativeStackPage{Stacks: []NativeStack{stack(42)}},
+			page:     platformgithub.NativeStackPage{Stacks: []platformgithub.NativeStack{stack(42)}},
 			hintSize: 3, wantConfirmed: nil, wantCached: 0, wantInvalidations: 1,
 		},
 	}
@@ -165,7 +166,7 @@ func TestRefreshGitHubNativeStackCacheStopsAfterTargetIsFoundOrPassed(t *testing
 			repoID, err := database.UpsertRepo(t.Context(), verifiedGitHubRepoIdentity("github.com", "acme", "widgets"))
 			require.NoError(err)
 			client := &nativeStackSyncTestClient{
-				mockClient: &mockClient{}, pages: map[int]NativeStackPage{1: tc.page},
+				mockClient: &mockClient{}, pages: map[int]platformgithub.NativeStackPage{1: tc.page},
 			}
 			syncer := NewSyncer(map[string]Client{"github.com": client}, database, nil, nil, time.Minute, nil, nil)
 			syncer.now = func() time.Time { return now }
@@ -176,7 +177,7 @@ func TestRefreshGitHubNativeStackCacheStopsAfterTargetIsFoundOrPassed(t *testing
 
 			result := syncer.refreshGitHubNativeStackCache(t.Context(), RepoRef{
 				Owner: "acme", Name: "widgets", PlatformHost: "github.com",
-			}, repoID, map[int]*NativeStackHint{
+			}, repoID, map[int]*platformgithub.NativeStackHint{
 				101: {Number: 42, Size: hintSize, Position: 1, BaseRef: "main"},
 				102: {Number: 42, Size: hintSize, Position: 2, BaseRef: "main"},
 			}, false)
@@ -204,7 +205,7 @@ func TestRefreshGitHubNativeStackCacheTreatsPreviewNotFoundAsFallback(t *testing
 
 	result := syncer.refreshGitHubNativeStackCache(t.Context(), RepoRef{
 		Owner: "acme", Name: "widgets", PlatformHost: "github.com",
-	}, repoID, map[int]*NativeStackHint{
+	}, repoID, map[int]*platformgithub.NativeStackHint{
 		101: {Number: 42, Size: 2, Position: 1, BaseRef: "main"},
 	}, false)
 
@@ -235,7 +236,7 @@ func TestRefreshGitHubNativeStackCacheDoesNotReconfirmSuspectCacheAfterNotModifi
 	syncer := NewSyncer(map[string]Client{"github.com": client}, database, nil, nil, time.Minute, nil, nil)
 	repo := RepoRef{Owner: "acme", Name: "widgets", PlatformHost: "github.com"}
 
-	failed := syncer.refreshGitHubNativeStackCache(t.Context(), repo, repoID, map[int]*NativeStackHint{
+	failed := syncer.refreshGitHubNativeStackCache(t.Context(), repo, repoID, map[int]*platformgithub.NativeStackHint{
 		101: {Number: 42, Size: 3, Position: 1, BaseRef: "main"},
 	}, false)
 	assert.Empty(t, failed.ConfirmedNumbers)
@@ -280,9 +281,9 @@ func TestRefreshGitHubNativeStackCacheRefetchesUnobservableMembersOnSchedule(t *
 			}))
 			client := &nativeStackSyncTestClient{
 				mockClient: &mockClient{},
-				pages: map[int]NativeStackPage{1: {Stacks: []NativeStack{{
+				pages: map[int]platformgithub.NativeStackPage{1: {Stacks: []platformgithub.NativeStack{{
 					ID: 900, Number: 42, BaseRef: "main", Open: true, CreatedAt: now,
-					Members: []NativeStackMember{
+					Members: []platformgithub.NativeStackMember{
 						{Position: 1, PullRequestNumber: 100, State: "merged", HeadRef: "a", HeadSHA: "aaa"},
 						{Position: 2, PullRequestNumber: 101, State: "open", HeadRef: "b", HeadSHA: "bbb"},
 					},
@@ -293,7 +294,7 @@ func TestRefreshGitHubNativeStackCacheRefetchesUnobservableMembersOnSchedule(t *
 
 			result := syncer.refreshGitHubNativeStackCache(t.Context(), RepoRef{
 				Owner: "acme", Name: "widgets", PlatformHost: "github.com",
-			}, repoID, map[int]*NativeStackHint{
+			}, repoID, map[int]*platformgithub.NativeStackHint{
 				101: {Number: 42, Size: 2, Position: 2, BaseRef: "main"},
 			}, false)
 
@@ -344,7 +345,7 @@ func TestRefreshGitHubNativeStackCacheExpiresConfirmationsReusedByNotModified(t 
 			syncer.now = func() time.Time { return clock }
 			repo := RepoRef{Owner: "acme", Name: "widgets", PlatformHost: "github.com"}
 
-			seeded := syncer.refreshGitHubNativeStackCache(t.Context(), repo, repoID, map[int]*NativeStackHint{
+			seeded := syncer.refreshGitHubNativeStackCache(t.Context(), repo, repoID, map[int]*platformgithub.NativeStackHint{
 				101: {Number: 42, Size: 2, Position: 2, BaseRef: "main"},
 			}, false)
 			require.Equal([]int{42}, seeded.ConfirmedNumbers)
@@ -383,7 +384,7 @@ func TestRefreshGitHubNativeStackCacheKeepsDeadlineTiedToStackObservation(t *tes
 
 	// An unrelated 200 response reconfirms the stack from cache without
 	// refetching the catalog.
-	seeded := syncer.refreshGitHubNativeStackCache(t.Context(), repo, repoID, map[int]*NativeStackHint{
+	seeded := syncer.refreshGitHubNativeStackCache(t.Context(), repo, repoID, map[int]*platformgithub.NativeStackHint{
 		101: {Number: 42, Size: 2, Position: 2, BaseRef: "main"},
 	}, false)
 	require.Equal([]int{42}, seeded.ConfirmedNumbers)
@@ -431,7 +432,7 @@ func TestRunOnceWithdrawsAgedNativeStacksFromProjectionInput(t *testing.T) {
 	client := &nativeStackSyncTestClient{
 		mockClient: &mockClient{},
 		pulls:      []*gh.PullRequest{tip},
-		hints: map[int]*NativeStackHint{
+		hints: map[int]*platformgithub.NativeStackHint{
 			101: {Number: 42, Size: 2, Position: 2, BaseRef: "main"},
 		},
 		// A second sync finds the open-PR list byte-identical.
@@ -485,9 +486,9 @@ func TestRefreshGitHubNativeStackCacheMarksFailedPersistenceIncomplete(t *testin
 	ctx, cancel := context.WithCancel(t.Context())
 	client := &nativeStackSyncTestClient{
 		mockClient: &mockClient{},
-		pages: map[int]NativeStackPage{1: {Stacks: []NativeStack{{
+		pages: map[int]platformgithub.NativeStackPage{1: {Stacks: []platformgithub.NativeStack{{
 			ID: 900, Number: 42, BaseRef: "main", Open: true, CreatedAt: now,
-			Members: []NativeStackMember{
+			Members: []platformgithub.NativeStackMember{
 				{Position: 1, PullRequestNumber: 101, State: "open", HeadRef: "a", HeadSHA: "aaa"},
 				{Position: 2, PullRequestNumber: 102, State: "open", HeadRef: "b", HeadSHA: "bbb"},
 			},
@@ -499,7 +500,7 @@ func TestRefreshGitHubNativeStackCacheMarksFailedPersistenceIncomplete(t *testin
 	syncer := NewSyncer(map[string]Client{"github.com": client}, database, nil, nil, time.Minute, nil, nil)
 	syncer.now = func() time.Time { return now }
 	repo := RepoRef{Owner: "acme", Name: "widgets", PlatformHost: "github.com"}
-	hints := map[int]*NativeStackHint{
+	hints := map[int]*platformgithub.NativeStackHint{
 		101: {Number: 42, Size: 2, Position: 1, BaseRef: "main"},
 		102: {Number: 42, Size: 2, Position: 2, BaseRef: "main"},
 	}
@@ -533,9 +534,9 @@ func TestRefreshGitHubNativeStackCacheRejectsMemberClaimedByAnotherStack(t *test
 	client := &nativeStackSyncTestClient{
 		mockClient: &mockClient{},
 		// The refetch of stack 42 still reports the reopened PR as closed.
-		pages: map[int]NativeStackPage{1: {Stacks: []NativeStack{{
+		pages: map[int]platformgithub.NativeStackPage{1: {Stacks: []platformgithub.NativeStack{{
 			ID: 900, Number: 42, BaseRef: "main", Open: true, CreatedAt: now,
-			Members: []NativeStackMember{
+			Members: []platformgithub.NativeStackMember{
 				{Position: 1, PullRequestNumber: 101, State: "open", HeadRef: "a", HeadSHA: "aaa"},
 				{Position: 2, PullRequestNumber: 103, State: "closed", HeadRef: "c", HeadSHA: "ccc"},
 			},
@@ -547,7 +548,7 @@ func TestRefreshGitHubNativeStackCacheRejectsMemberClaimedByAnotherStack(t *test
 	// PR 103 is open again and GitHub now reports it in stack 43.
 	result := syncer.refreshGitHubNativeStackCache(t.Context(), RepoRef{
 		Owner: "acme", Name: "widgets", PlatformHost: "github.com",
-	}, repoID, map[int]*NativeStackHint{
+	}, repoID, map[int]*platformgithub.NativeStackHint{
 		101: {Number: 42, Size: 2, Position: 1, BaseRef: "main"},
 		103: {Number: 43, Size: 2, Position: 2, BaseRef: "main"},
 	}, false)
@@ -582,7 +583,7 @@ func TestRefreshGitHubNativeStackCacheDoesNotReuseIncompleteRefreshAfterNotModif
 	repo := RepoRef{Owner: "acme", Name: "widgets", PlatformHost: "github.com"}
 	// Stack 42 is confirmable from cache, while PR 103 points at an uncached
 	// stack whose catalog fetch fails: a partial refresh.
-	hints := map[int]*NativeStackHint{
+	hints := map[int]*platformgithub.NativeStackHint{
 		101: {Number: 42, Size: 2, Position: 1, BaseRef: "main"},
 		102: {Number: 42, Size: 2, Position: 2, BaseRef: "main"},
 		103: {Number: 43, Size: 1, Position: 1, BaseRef: "main"},
@@ -614,14 +615,14 @@ func TestRunOnceDropsNativeStacksDisabledDuringSync(t *testing.T) {
 	client := &nativeStackSyncTestClient{
 		mockClient: &mockClient{},
 		pulls:      []*gh.PullRequest{first, second},
-		hints: map[int]*NativeStackHint{
+		hints: map[int]*platformgithub.NativeStackHint{
 			101: {Number: 42, Size: 2, Position: 1, BaseRef: "main"},
 			102: {Number: 42, Size: 2, Position: 2, BaseRef: "main"},
 		},
-		pages: map[int]NativeStackPage{1: {
-			Stacks: []NativeStack{{
+		pages: map[int]platformgithub.NativeStackPage{1: {
+			Stacks: []platformgithub.NativeStack{{
 				ID: 9001, Number: 42, BaseRef: "main", Open: true, CreatedAt: now,
-				Members: []NativeStackMember{
+				Members: []platformgithub.NativeStackMember{
 					{Position: 1, PullRequestNumber: 101, State: "open", HeadRef: "feature/a", HeadSHA: "aaa"},
 					{Position: 2, PullRequestNumber: 102, State: "open", HeadRef: "feature/b", HeadSHA: "bbb"},
 				},
@@ -677,14 +678,14 @@ func TestRunOnceKeepsRESTHintsWhenGraphQLRejectsNativeStackFields(t *testing.T) 
 	client := &nativeStackSyncTestClient{
 		mockClient: &mockClient{},
 		pulls:      []*gh.PullRequest{first, second},
-		hints: map[int]*NativeStackHint{
+		hints: map[int]*platformgithub.NativeStackHint{
 			101: {Number: 42, Size: 2, Position: 1, BaseRef: "main"},
 			102: {Number: 42, Size: 2, Position: 2, BaseRef: "main"},
 		},
-		pages: map[int]NativeStackPage{1: {
-			Stacks: []NativeStack{{
+		pages: map[int]platformgithub.NativeStackPage{1: {
+			Stacks: []platformgithub.NativeStack{{
 				ID: 9001, Number: 42, BaseRef: "main", Open: true, CreatedAt: now,
-				Members: []NativeStackMember{
+				Members: []platformgithub.NativeStackMember{
 					{Position: 1, PullRequestNumber: 101, State: "open", HeadRef: "feature/a", HeadSHA: "aaa"},
 					{Position: 2, PullRequestNumber: 102, State: "open", HeadRef: "feature/b", HeadSHA: "bbb"},
 				},
@@ -779,14 +780,14 @@ func TestRunOncePublishesConfirmedNativeStackNumbers(t *testing.T) {
 	client := &nativeStackSyncTestClient{
 		mockClient: &mockClient{},
 		pulls:      []*gh.PullRequest{first, second},
-		hints: map[int]*NativeStackHint{
+		hints: map[int]*platformgithub.NativeStackHint{
 			101: {Number: 42, Size: 2, Position: 1, BaseRef: "main"},
 			102: {Number: 42, Size: 2, Position: 2, BaseRef: "main"},
 		},
-		pages: map[int]NativeStackPage{1: {
-			Stacks: []NativeStack{{
+		pages: map[int]platformgithub.NativeStackPage{1: {
+			Stacks: []platformgithub.NativeStack{{
 				ID: 9001, Number: 42, BaseRef: "main", Open: true, CreatedAt: now,
-				Members: []NativeStackMember{
+				Members: []platformgithub.NativeStackMember{
 					{Position: 1, PullRequestNumber: 101, State: "open", HeadRef: "feature/a", HeadSHA: "aaa"},
 					{Position: 2, PullRequestNumber: 102, State: "open", HeadRef: "feature/b", HeadSHA: "bbb"},
 				},
@@ -878,7 +879,11 @@ func TestListOpenPullRequestsWithNativeStackHintsSurvivesUnreadableHint(t *testi
 	defer srv.Close()
 	ghClient, err := newEnterpriseGHClient(srv.Client(), srv.URL+"/api/v3/", srv.URL+"/api/uploads/")
 	require.NoError(err)
-	client := &liveClient{gh: ghClient, platformHost: "github.com"}
+	client, err := platformgithub.NewClient(platformgithub.ClientConfig{
+		Host: "github.com", Read: ghClient.Client(), Write: ghClient.Client(), Notifications: ghClient.Client(),
+		Clock: time.Now, APIBase: ghClient.BaseURL(),
+	})
+	require.NoError(err)
 
 	prs, hints, err := client.ListOpenPullRequestsWithNativeStackHints(t.Context(), "acme", "widget")
 
@@ -911,7 +916,7 @@ func TestNativeStackHintListingClassifiesDisabledPullRequests(t *testing.T) {
 	}
 	client := &nativeStackSyncTestClient{mockClient: &mockClient{}}
 	client.listErrors = []error{disabled}
-	provider := &gitHubClientProvider{client: client, host: "github.com"}
+	provider := newTestGitHubProvider(t, "github.com", client)
 
 	_, _, err := provider.ListOpenMergeRequestsWithNativeStackHints(
 		t.Context(), platform.RepoRef{
@@ -945,7 +950,7 @@ func TestRunOncePersistsPullRequestsWhenHintIsUnclaimed(t *testing.T) {
 		pulls:      []*gh.PullRequest{first, second},
 		// 101 is claimed by no stack; 102's hint was rejected at decode and is
 		// indistinguishable from that. Neither may cost the pull request itself.
-		hints: map[int]*NativeStackHint{101: nil, 102: nil},
+		hints: map[int]*platformgithub.NativeStackHint{101: nil, 102: nil},
 	}
 	repo := RepoRef{
 		Owner: "owner", Name: "repo", PlatformHost: "github.com",

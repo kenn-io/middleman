@@ -13,8 +13,8 @@ import (
 	"go.kenn.io/forge/internal/archive/report"
 	"go.kenn.io/forge/internal/db"
 	ghclient "go.kenn.io/forge/internal/github"
-	"go.kenn.io/forge/internal/platform"
 	"go.kenn.io/forge/internal/server/httpapi"
+	"go.kenn.io/forge/platform"
 )
 
 type archiveRepositoryRef struct {
