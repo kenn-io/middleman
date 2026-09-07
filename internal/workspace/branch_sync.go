@@ -27,7 +27,7 @@ type branchUpstream struct {
 // networkedBranchGit runs a branch-sync git command that contacts the remote
 // (fetch, push, or ls-remote) in the worktree dir. Successful stdout is used
 // only for explicit read queries and is never returned through the API.
-type networkedBranchGit func(ctx context.Context, dir string, args ...string) (string, error)
+type networkedBranchGit func(ctx context.Context, dir, remote string, args ...string) (string, error)
 
 // branchSyncGit returns the runner used for the networked steps of branch
 // push/pull. With clone management configured it routes fetch and push through
@@ -40,7 +40,7 @@ func (m *Manager) branchSyncGit(
 	platformName, platformHost, owner, name string,
 ) networkedBranchGit {
 	if m.clones == nil {
-		return func(ctx context.Context, dir string, args ...string) (string, error) {
+		return func(ctx context.Context, dir, _ string, args ...string) (string, error) {
 			cmd := workspaceGitCommand(ctx, dir, args...)
 			out, err := procutil.Output(ctx, cmd, "git subprocess capacity")
 			if err == nil {
@@ -55,10 +55,10 @@ func (m *Manager) branchSyncGit(
 			return string(out), err
 		}
 	}
-	return func(ctx context.Context, dir string, args ...string) (string, error) {
+	return func(ctx context.Context, dir, remote string, args ...string) (string, error) {
 		out, err := m.clones.RunGitForNamedRemote(
 			ctx, platformName, platformHost, owner, name,
-			"origin", dir, args...,
+			remote, dir, args...,
 		)
 		return string(out), err
 	}
@@ -207,7 +207,7 @@ func remoteBranchExists(
 	upstream branchUpstream,
 ) (bool, error) {
 	ref := "refs/heads/" + upstream.branch
-	out, err := run(ctx, dir, "ls-remote", "--heads", upstream.remote, ref)
+	out, err := run(ctx, dir, upstream.remote, "ls-remote", "--heads", upstream.remote, ref)
 	if err != nil {
 		return false, fmt.Errorf("check remote branch: %w", err)
 	}
@@ -230,8 +230,8 @@ func branchUpstreamExists(ctx context.Context, dir string, upstream branchUpstre
 	return strings.TrimSpace(out) == ref, nil
 }
 
-// WorktreeBranchUpstreamMissing reports whether the current branch has an
-// origin upstream configured but its local remote-tracking ref does not exist.
+// WorktreeBranchUpstreamMissing reports whether the current branch has a
+// named upstream configured but its local remote-tracking ref does not exist.
 func WorktreeBranchUpstreamMissing(ctx context.Context, dir string) (bool, error) {
 	upstream, err := currentBranchUpstream(ctx, dir)
 	if err != nil {
@@ -248,7 +248,7 @@ func pushBranch(ctx context.Context, run networkedBranchGit, dir string, upstrea
 	// Writes stay on the user's own credential chain so the pushed commits
 	// are attributed to the user instead of a GitHub App bot.
 	if _, err := run(
-		tokenauth.WithMutationAuth(ctx), dir,
+		tokenauth.WithMutationAuth(ctx), dir, upstream.remote,
 		"push", upstream.remote, "HEAD:"+upstream.branch,
 	); err != nil {
 		return fmt.Errorf("git push: %w", err)
@@ -319,7 +319,7 @@ func currentBranchUpstream(ctx context.Context, dir string) (branchUpstream, err
 	if upstream.remote == "" || upstream.branch == "" {
 		return branchUpstream{}, fmt.Errorf("%w: branch %s", ErrWorktreeNoUpstream, branch)
 	}
-	if upstream.remote != "origin" {
+	if upstream.remote == "." {
 		return branchUpstream{}, fmt.Errorf(
 			"%w: branch %s tracks unsupported remote %s",
 			ErrWorktreeNoUpstream, branch, upstream.remote,
@@ -332,7 +332,7 @@ func refreshBranchUpstream(
 	ctx context.Context, run networkedBranchGit, dir string, upstream branchUpstream,
 ) error {
 	refspec := "+refs/heads/" + upstream.branch + ":refs/remotes/" + upstream.remote + "/" + upstream.branch
-	if _, err := run(ctx, dir, "fetch", "--prune", upstream.remote, refspec); err != nil {
+	if _, err := run(ctx, dir, upstream.remote, "fetch", "--prune", upstream.remote, refspec); err != nil {
 		return fmt.Errorf("git fetch %s %s: %w", upstream.remote, upstream.branch, err)
 	}
 	return nil

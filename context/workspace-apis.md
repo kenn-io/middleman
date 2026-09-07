@@ -68,8 +68,8 @@ embedder protocol for arbitrary host state.
   (`internal/workspace/manager.go::ValidateWorktreeBasePath`).
 - Configured bases resolve and authenticate their read remote by repository identity,
   rejecting ambiguous matches or tracking-namespace overlap.
-- Credentialed named-remote operations validate every URL and authenticate `origin`'s
-  repository. A first push may create a missing fork branch but never force-update it
+- Branch sync validates every URL and selects credentials for the configured remote.
+  A first push may create a missing fork branch but never force-update it
   (`internal/gitclone/clone.go::RunGitForNamedRemote`, `internal/workspace/branch_sync.go::pushWorktreeBranch`).
 
 ## Endpoint Intent
